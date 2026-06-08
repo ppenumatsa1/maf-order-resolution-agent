@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: maf_workflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d maf_workflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  mock-mcp:
+    build:
+      context: ./backend
+    command: uvicorn scripts.mcp.mock_mcp_server:app --host 0.0.0.0 --port 8011
+    environment:
+      MOCK_MCP_API_KEY: demo-api-key
+      MOCK_MCP_BEARER_TOKEN: demo-bearer-token
+    ports:
+      - "8011:8011"
+    volumes:
+      - ./:/app
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-mcp:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: docker
+      OTEL_SERVICE_NAME: maf-customer-resolution
+      MCP_SERVER_URL: http://mock-mcp:8011/mcp
+      MCP_API_KEY: demo-api-key
+      MCP_BEARER_TOKEN: demo-bearer-token
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/maf_workflow
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE: http://localhost:8000
+      VITE_PROXY_TARGET: http://backend:8000
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    profiles: ["test"]
+    depends_on:
+      - backend
+      - frontend
+    working_dir: /workspace/scripts/playwright
+    environment:
+      PLAYWRIGHT_BASE_URL: http://frontend:5173
+    volumes:
+      - ./:/workspace
+    command: bash -lc "npm install && npx playwright install --with-deps && npm run test:e2e"
+
+volumes:
+  postgres-data:

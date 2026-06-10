@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tools.policy_catalog import get_policy_for_issue
+
 
 @dataclass
 class OrderStatus:
@@ -17,12 +19,7 @@ def fetch_order_status(order_id: str) -> OrderStatus:
 
 
 def fetch_policy(issue_type: str) -> str:
-    policies = {
-        "late_delivery": "refund_allowed_if_delay_exceeds_3_days",
-        "damaged_item": "replacement_or_full_refund_with_photo_proof",
-        "wrong_item": "free_replacement_and_return_label",
-    }
-    return policies.get(issue_type, "manual_review_required")
+    return get_policy_for_issue(issue_type)
 
 
 def submit_resolution(action: str, order_id: str) -> str:

@@ -106,6 +106,7 @@ export default function WorkflowHistorySidebar({
         page={page}
         pageSize={pageSize}
         total={total}
+        visibleCount={runs.length}
         isLoading={isLoading}
         onPrevious={onPreviousPage}
         onNext={onNextPage}

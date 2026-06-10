@@ -5,8 +5,10 @@ from typing import Any
 from uuid import uuid4
 
 from app.db import postgres_db
+from psycopg.rows import dict_row
 from app.models import (
     PendingApproval,
+    SessionMessage,
     WorkflowEvent,
     WorkflowRunDetailsResponse,
     WorkflowRunListItem,
@@ -43,20 +45,39 @@ class WorkflowRunRepository:
         postgres_db.ensure_schema()
         self._pool = postgres_db.get_pool()
 
-    def create_workflow_run(self, thread_id: str, input_text: str) -> dict[str, Any]:
+    def create_workflow_run(
+        self,
+        thread_id: str,
+        input_text: str,
+        session_id: str | None = None,
+        customer_id: str | None = None,
+    ) -> dict[str, Any]:
         now = _utc_now_iso()
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
+                if session_id:
+                    cur.execute(
+                        """
+                        INSERT INTO sessions (session_id, customer_id, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (session_id)
+                        DO UPDATE SET
+                            customer_id = COALESCE(EXCLUDED.customer_id, sessions.customer_id),
+                            updated_at = EXCLUDED.updated_at
+                        """,
+                        (session_id, customer_id, now, now),
+                    )
                 cur.execute(
                     """
                     INSERT INTO workflow_runs (
-                        thread_id, status, input, input_summary,
+                        thread_id, session_id, status, input, input_summary,
                         created_at, updated_at, started_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (thread_id) DO NOTHING
                     """,
                     (
                         thread_id,
+                        session_id,
                         "running",
                         input_text,
                         self._summarize_input(input_text),
@@ -67,7 +88,7 @@ class WorkflowRunRepository:
                 )
                 cur.execute(
                     """
-                    SELECT thread_id, status, input, input_summary,
+                    SELECT thread_id, session_id, status, input, input_summary,
                            created_at, updated_at
                     FROM workflow_runs
                     WHERE thread_id = %s
@@ -79,6 +100,7 @@ class WorkflowRunRepository:
                     raise RuntimeError(f"Failed to create workflow run: {thread_id}")
                 return {
                     "thread_id": row["thread_id"],
+                    "session_id": row["session_id"],
                     "status": row["status"],
                     "input": row["input"],
                     "input_summary": row["input_summary"],
@@ -94,13 +116,14 @@ class WorkflowRunRepository:
     ) -> tuple[list[WorkflowRunListItem], int]:
         offset = (page - 1) * page_size
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 if status:
                     cur.execute(
                         "SELECT COUNT(*) AS total FROM workflow_runs WHERE status = %s",
                         (status,),
                     )
-                    total = int(cur.fetchone()["total"])
+                    total_row = cur.fetchone()
+                    total = int(total_row["total"]) if total_row else 0
                     cur.execute(
                         """
                         SELECT thread_id, status, input_summary, created_at, updated_at
@@ -113,7 +136,8 @@ class WorkflowRunRepository:
                     )
                 else:
                     cur.execute("SELECT COUNT(*) AS total FROM workflow_runs")
-                    total = int(cur.fetchone()["total"])
+                    total_row = cur.fetchone()
+                    total = int(total_row["total"]) if total_row else 0
                     cur.execute(
                         """
                         SELECT thread_id, status, input_summary, created_at, updated_at
@@ -138,9 +162,106 @@ class WorkflowRunRepository:
         ]
         return items, total
 
+    def list_workflow_events(
+        self,
+        thread_id: str,
+        limit: int,
+        cursor: str | None = None,
+    ) -> tuple[list[WorkflowEvent], str | None, bool]:
+        query = """
+            SELECT id, type, thread_id, timestamp, payload
+            FROM workflow_events
+            WHERE thread_id = %s
+        """
+        params: list[Any] = [thread_id]
+        if cursor:
+            try:
+                cursor_timestamp, cursor_id = cursor.split("|", 1)
+            except ValueError:
+                cursor_timestamp, cursor_id = "", ""
+            if cursor_timestamp and cursor_id:
+                query += """
+                    AND (
+                        timestamp > %s::timestamptz
+                        OR (timestamp = %s::timestamptz AND id > %s::uuid)
+                    )
+                """
+                params.extend([cursor_timestamp, cursor_timestamp, cursor_id])
+        query += """
+            ORDER BY timestamp ASC, id ASC
+            LIMIT %s
+        """
+        params.append(limit + 1)
+
+        with self._pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        events = [
+            WorkflowEvent(
+                id=str(row["id"]),
+                type=row["type"],
+                thread_id=row["thread_id"],
+                timestamp=_as_iso(row["timestamp"]) or _utc_now_iso(),
+                payload=row["payload"] or {},
+            )
+            for row in page_rows
+        ]
+        next_cursor = (
+            f"{events[-1].timestamp}|{events[-1].id}" if has_more and events else None
+        )
+        return events, next_cursor, has_more
+
+    def list_session_messages(
+        self,
+        session_id: str,
+        limit: int,
+        cursor: int | None = None,
+    ) -> tuple[list[SessionMessage], str | None, bool]:
+        query = """
+            SELECT cm.id, wr.session_id, cm.thread_id, cm.role, cm.content, cm.created_at
+            FROM conversation_messages cm
+            INNER JOIN workflow_runs wr
+                ON wr.thread_id = cm.thread_id
+            WHERE wr.session_id = %s
+        """
+        params: list[Any] = [session_id]
+        if cursor is not None:
+            query += " AND cm.id > %s"
+            params.append(cursor)
+        query += """
+            ORDER BY cm.id ASC
+            LIMIT %s
+        """
+        params.append(limit + 1)
+
+        with self._pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        messages = [
+            SessionMessage(
+                id=int(row["id"]),
+                session_id=row["session_id"],
+                thread_id=row["thread_id"],
+                role=row["role"],
+                content=row["content"],
+                created_at=_as_iso(row["created_at"]) or _utc_now_iso(),
+            )
+            for row in page_rows
+        ]
+        next_cursor = str(messages[-1].id) if has_more and messages else None
+        return messages, next_cursor, has_more
+
     def get_workflow_run(self, thread_id: str) -> WorkflowRunDetailsResponse | None:
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     SELECT thread_id, status, input, latest_output,
@@ -225,7 +346,7 @@ class WorkflowRunRepository:
 
     def append_workflow_event(self, thread_id: str, event: WorkflowEvent) -> None:
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     INSERT INTO workflow_events (id, thread_id, type, timestamp, payload)
@@ -248,7 +369,7 @@ class WorkflowRunRepository:
     def update_workflow_status(self, thread_id: str, status: WorkflowRunStatus) -> None:
         now = _utc_now_iso()
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     UPDATE workflow_runs
@@ -292,7 +413,7 @@ class WorkflowRunRepository:
 
     def update_current_stage(self, thread_id: str, stage: str | None) -> None:
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     UPDATE workflow_runs
@@ -305,7 +426,7 @@ class WorkflowRunRepository:
 
     def update_latest_output(self, thread_id: str, output: dict[str, Any]) -> None:
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     UPDATE workflow_runs
@@ -332,7 +453,7 @@ class WorkflowRunRepository:
             "resolved_at": None,
         }
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     INSERT INTO approvals (
@@ -376,7 +497,7 @@ class WorkflowRunRepository:
     ) -> None:
         now = _utc_now_iso()
         with self._pool.connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     """
                     UPDATE approvals

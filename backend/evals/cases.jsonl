@@ -1,3 +1,6 @@
 {"id":"case-1","input":"Order ORD-1009 is delayed by 5 days. I need compensation.","expect_hitl":true}
 {"id":"case-2","input":"Order ORD-1001 arrived late by 1 day. What can you do?","expect_hitl":false}
 {"id":"case-3","input":"Order ORD-2009 came damaged and broken.","expect_hitl":true}
+{"id":"case-4","input":"Order ORD-1001 arrived broken.","expect_hitl":true}
+{"id":"case-5","input":"I need help with order issue, it arrived late but package condition was fine.","expect_hitl":false}
+{"id":"case-6","input":"Order ORD-1009 was delivered late and I want a refund.","expect_hitl":true}

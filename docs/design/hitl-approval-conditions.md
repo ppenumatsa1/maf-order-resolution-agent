@@ -1,10 +1,15 @@
 # HITL Approval Trigger Conditions
 
-This document defines the exact conditions that trigger human approval (`hitl.request`) in both workflow implementations, with test-ready examples.
+This document defines the exact conditions that trigger human approval (`hitl.request`) in the MAF SDK workflow, with test-ready examples.
+
+## Journey Context (Local MAF -> Azure app-hosted -> Foundry-hosted)
+
+- Local MAF path is implemented and currently active (`WORKFLOW_MODE=maf_sdk`).
+- Azure app-hosted and Foundry-hosted modes are scaffolded for future phases.
+- Therefore, the trigger behavior below is the **current production contract** for this repository runtime.
 
 ## Scope
 
-- Deterministic workflow: `backend/workflows/sequential_resolution_workflow.py`
 - MAF SDK workflow: `backend/workflows/maf_sdk_workflow.py`
 
 ## Rule Summary
@@ -17,27 +22,7 @@ HITL is triggered if any of these are true:
 
 If none of the above are true, the workflow completes directly without human approval.
 
-## Deterministic Workflow Rules
-
-Source behavior:
-
-- `requires_hitl = policy["amount"] >= 100 or "manual_review" in policy["policy"]`
-- If `issue_type == "damaged_item"`, `requires_hitl = True`
-
-How values are derived:
-
-- Amount comes from order status:
-  - Order IDs ending with `9` -> amount `185.0`
-  - Other order IDs -> amount `79.0`
-- Issue classification:
-  - Message contains `damage` or `broken` -> `damaged_item`
-  - Message contains `wrong` -> `wrong_item`
-  - Else -> `late_delivery`
-- Policy strings:
-  - `late_delivery` -> `refund_allowed_if_delay_exceeds_3_days`
-  - `damaged_item` -> `replacement_or_full_refund_with_photo_proof`
-  - `wrong_item` -> `free_replacement_and_return_label`
-  - Unknown type fallback -> `manual_review_required`
+Policy retrieval through local pgvector-compatible RAG is now performed before resolution, but it is non-blocking and does not alter the trigger rules above.
 
 ## MAF SDK Workflow Rules
 
@@ -47,12 +32,18 @@ Source behavior:
 
 How values are derived:
 
-- Issue classification is narrower:
-  - Message contains `damaged` -> `damaged_item`
+- Issue classification:
+  - Message contains `damage` or `broken` -> `damaged_item`
+  - Message contains `wrong` -> `wrong_item`
   - Else -> `late_delivery`
 - Order ID mapping in this path:
   - Message containing `1009` -> `ord-1009` (amount `185.0`)
   - Else -> `ord-1001` (amount `79.0`)
+- Policy lookup:
+  - `late_delivery` -> `refund_allowed_if_delay_exceeds_3_days`
+  - `damaged_item` -> `replacement_or_full_refund_with_photo_proof`
+  - `wrong_item` -> `free_replacement_and_return_label`
+  - Unknown issue types -> `manual_review_required` (this satisfies the `manual_review` trigger condition)
 
 ## Test Matrix (Easy to Reproduce)
 
@@ -74,17 +65,11 @@ How values are derived:
 - Expected: no `hitl.request`; direct `workflow.output` with `status=completed`.
 - Why: amount `79.0`, no `manual_review`, non-damaged issue.
 
-4. Wrong item with low amount (deterministic workflow)
+4. Wrong item no-approval path (current classifier behavior)
 
-- Input: `Order ORD-1001 has the wrong item.`
-- Expected: no `hitl.request`.
-- Why: issue type `wrong_item`, amount `79.0`, policy string has no `manual_review`.
-
-5. Wrong item with high amount (deterministic workflow)
-
-- Input: `Order ORD-1009 has the wrong item.`
-- Expected: `hitl.request` emitted.
-- Why: amount `185.0`.
+- Input: `Order ORD-1001 has the wrong item in the box.`
+- Expected: no `hitl.request`; direct `workflow.output` with `status=completed`.
+- Why: issue type `wrong_item`, amount `79.0`, and policy does not include `manual_review`.
 
 ## What to Assert in Tests
 
@@ -101,6 +86,9 @@ For HITL-required scenarios:
   - final `workflow.output.status=completed`
 - After rejection API call:
   - final `workflow.output.status=escalated`
+- Repeated approval/rejection submission for the same `checkpoint_id` remains idempotent:
+  - only one `hitl.response`
+  - only one terminal `workflow.output`
 
 For non-HITL scenarios:
 

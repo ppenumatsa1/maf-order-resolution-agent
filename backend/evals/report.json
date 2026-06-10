@@ -1,6 +1,6 @@
 {
-  "total": 3,
-  "passed": 3,
+  "total": 6,
+  "passed": 6,
   "pass_rate": 100.0,
   "results": [
     {
@@ -19,6 +19,27 @@
     },
     {
       "id": "case-3",
+      "expect_hitl": true,
+      "actual_hitl": true,
+      "has_output": true,
+      "passed": true
+    },
+    {
+      "id": "case-4",
+      "expect_hitl": true,
+      "actual_hitl": true,
+      "has_output": true,
+      "passed": true
+    },
+    {
+      "id": "case-5",
+      "expect_hitl": false,
+      "actual_hitl": false,
+      "has_output": true,
+      "passed": true
+    },
+    {
+      "id": "case-6",
       "expect_hitl": true,
       "actual_hitl": true,
       "has_output": true,

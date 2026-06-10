@@ -5,28 +5,34 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+from app.config import get_config
 from tools.mcp_tools import MCPKnowledgeTool
 from workflows.checkpoint_store import CheckpointStore
 from workflows.event_bus import EventBus
-from workflows.sequential_resolution_workflow import (
-    SequentialResolutionWorkflow,
-    WorkflowContext,
-)
-from workflows.session_memory import SessionMemoryStore
+from workflows.factory import create_workflow
+from workflows.order_resolution.state import WorkflowContext
+from workflows.rag import PolicyKnowledgeIngestion, create_rag_provider
+from workflows.session_memory import create_memory_store
 
 
 async def run_eval() -> None:
     root = Path(__file__).resolve().parents[1]
     cases_path = root / "evals" / "cases.jsonl"
+    config = get_config()
 
     event_bus = EventBus()
-    memory_store = SessionMemoryStore(root / "data" / "memory")
+    memory_store = create_memory_store(config.memory_provider, root / "data" / "memory")
     checkpoint_store = CheckpointStore(root / "data" / "checkpoints")
-    workflow = SequentialResolutionWorkflow(
+    rag_provider = create_rag_provider(config.rag_provider)
+    if config.rag_provider == "pgvector":
+        await PolicyKnowledgeIngestion(rag_provider).ingest_defaults_safe()
+    workflow = create_workflow(
+        config=config,
         event_bus=event_bus,
         memory_store=memory_store,
         checkpoint_store=checkpoint_store,
         mcp_tool=MCPKnowledgeTool(endpoint=None),
+        rag_provider=rag_provider,
     )
 
     total = 0
@@ -53,8 +59,21 @@ async def run_eval() -> None:
         has_hitl = any(event["type"] == "hitl.request" for event in history)
         if has_hitl:
             checkpoint = next(
-                event for event in history if event["type"] == "checkpoint.created"
+                (event for event in history if event["type"] == "checkpoint.created"),
+                None,
             )
+            if checkpoint is None:
+                results.append(
+                    {
+                        "id": case["id"],
+                        "expect_hitl": case["expect_hitl"],
+                        "actual_hitl": has_hitl,
+                        "has_output": False,
+                        "passed": False,
+                        "error": "checkpoint.created missing",
+                    }
+                )
+                continue
             await workflow.handle_hitl_response(
                 checkpoint_id=checkpoint["payload"]["checkpoint_id"],
                 decision="approve",

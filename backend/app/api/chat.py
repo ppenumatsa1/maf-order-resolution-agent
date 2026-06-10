@@ -6,7 +6,7 @@ from app.models import ChatRunRequest, ChatRunResponse
 from app.state import event_bus, workflow, workflow_run_repository
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from workflows.sequential_resolution_workflow import WorkflowContext
+from workflows.order_resolution.state import WorkflowContext
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -25,7 +25,10 @@ async def run_chat(request: ChatRunRequest) -> ChatRunResponse:
         user_message=request.message,
     )
     workflow_run_repository.create_workflow_run(
-        thread_id=thread_id, input_text=request.message
+        thread_id=thread_id,
+        input_text=request.message,
+        session_id=session_id,
+        customer_id=request.customer_id,
     )
     await workflow.start(context)
 

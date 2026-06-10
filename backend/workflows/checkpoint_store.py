@@ -41,9 +41,7 @@ class CheckpointStore:
                 return {
                     "checkpoint_id": str(row["checkpoint_id"]),
                     "thread_id": row["thread_id"],
-                    "created_at": row["created_at"]
-                    .astimezone(timezone.utc)
-                    .isoformat(),
+                    "created_at": row["created_at"].astimezone(timezone.utc).isoformat(),
                     "status": row["status"],
                     "state": row["state"] or {},
                     "reviewer": row["reviewer"],
@@ -52,6 +50,30 @@ class CheckpointStore:
 
     def update(self, checkpoint: dict[str, Any]) -> None:
         self._save(checkpoint)
+
+    def try_resolve(
+        self,
+        *,
+        checkpoint_id: str,
+        resolved_status: str,
+        reviewer: str,
+        comments: str | None,
+    ) -> bool:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE checkpoints
+                    SET status = %s,
+                        reviewer = %s,
+                        comments = %s,
+                        updated_at = NOW()
+                    WHERE checkpoint_id = %s::uuid
+                      AND status IN ('pending_hitl', 'pending')
+                    """,
+                    (resolved_status, reviewer, comments, checkpoint_id),
+                )
+                return cur.rowcount == 1
 
     def _save(self, checkpoint: dict[str, Any]) -> None:
         with self._pool.connection() as conn:

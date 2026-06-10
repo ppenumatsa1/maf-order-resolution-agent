@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "./components/studio/AppShell";
 import HumanApprovalPanel from "./components/studio/HumanApprovalPanel";
 import LatestOutputPanel from "./components/studio/LatestOutputPanel";
+import RagEvidencePanel from "./components/studio/RagEvidencePanel";
 import RunMetadataPanel from "./components/studio/RunMetadataPanel";
 import WorkflowHistorySidebar from "./components/studio/WorkflowHistorySidebar";
 import WorkflowRunComposer from "./components/studio/WorkflowRunComposer";
@@ -24,7 +25,7 @@ export default function App() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunListItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [totalRuns, setTotalRuns] = useState(0);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -54,7 +55,7 @@ export default function App() {
       try {
         const params = new URLSearchParams({
           page: String(page),
-          pageSize: String(pageSize),
+          page_size: String(pageSize),
         });
         if (statusFilter !== "all") {
           params.set("status", statusFilter);
@@ -71,6 +72,9 @@ export default function App() {
         const data = (await response.json()) as WorkflowRunListResponse;
         setWorkflowRuns(data.items);
         setTotalRuns(data.total);
+        if (typeof data.page_size === "number" && data.page_size > 0) {
+          setPageSize(data.page_size);
+        }
 
         if (!selectedThreadId && data.items.length > 0) {
           setSelectedThreadId(data.items[0].thread_id);
@@ -279,6 +283,7 @@ export default function App() {
           output={latestOutput}
           status={selectedWorkflowDetails?.status ?? null}
         />
+        <RagEvidencePanel details={selectedWorkflowDetails} events={events} />
         <RunMetadataPanel
           metadata={selectedWorkflowDetails?.metadata ?? null}
         />

@@ -16,8 +16,8 @@
 
 ## Data and Durability
 
-- Local JSON file storage for memory and checkpoints (v1)
-- Cosmos-compatible abstraction planned for checkpoint and conversation persistence
+- PostgreSQL as the durable source of truth for workflow runs, events, conversation messages, checkpoints, approvals, sessions, and eval records
+- Psycopg v3 + connection pooling for backend persistence access
 
 ## Integration
 

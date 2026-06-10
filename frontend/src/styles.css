@@ -313,6 +313,56 @@ textarea {
   align-items: center;
 }
 
+.evidence-list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 30vh;
+  overflow: auto;
+}
+
+.evidence-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem;
+  background: #fff;
+}
+
+.evidence-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.evidence-policy {
+  margin: 0.45rem 0;
+  font-size: 0.84rem;
+}
+
+.evidence-chunks {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.evidence-chunks code {
+  background: #eef4ff;
+  border: 1px solid #c3d6ff;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.evidence-item ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1rem;
+}
+
+.evidence-item li {
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
 .metadata-list,
 .approval-context {
   display: grid;

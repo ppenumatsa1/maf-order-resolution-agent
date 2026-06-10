@@ -2,6 +2,7 @@ type Props = {
   page: number;
   pageSize: number;
   total: number;
+  visibleCount: number;
   isLoading: boolean;
   onPrevious: () => void;
   onNext: () => void;
@@ -11,6 +12,7 @@ export default function PaginationControls({
   page,
   pageSize,
   total,
+  visibleCount,
   isLoading,
   onPrevious,
   onNext,
@@ -30,7 +32,7 @@ export default function PaginationControls({
         Previous
       </button>
       <span className="muted">
-        Page {page} of {totalPages} • {total} runs
+        Page {page} of {totalPages} • {visibleCount} shown / {total} runs
       </span>
       <button
         type="button"

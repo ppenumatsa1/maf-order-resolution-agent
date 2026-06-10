@@ -5,6 +5,7 @@
 - `rubric/e2e-rubric.md`: evaluation rubric for end-to-end workflow quality.
 - `playwright/`: browser automation suite for key demo scenarios.
 - `mcp/mock_mcp_server.py`: authenticated mock MCP endpoint for POC.
+- `skills/design-review-skill.sh`: deterministic design-review validation entry point used by `/fleet` skill.
 
 ## Run Playwright locally
 
@@ -14,6 +15,8 @@ npm install
 npx playwright install
 PLAYWRIGHT_BASE_URL=http://localhost:5173 npm run test:e2e
 ```
+
+Playwright writes artifacts under `scripts/playwright/.artifacts/` (test results + HTML report).
 
 ## Run with Docker Compose profile
 

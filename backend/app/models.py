@@ -50,9 +50,7 @@ class HealthResponse(BaseModel):
     service: str = "maf-orchestration-backend"
 
 
-WorkflowRunStatus = Literal[
-    "running", "waiting_approval", "completed", "failed", "escalated"
-]
+WorkflowRunStatus = Literal["running", "waiting_approval", "completed", "failed", "escalated"]
 
 
 class WorkflowRunListItem(BaseModel):
@@ -68,6 +66,12 @@ class WorkflowRunListResponse(BaseModel):
     page: int
     page_size: int
     total: int
+
+
+class CursorPagination(BaseModel):
+    limit: int
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class WorkflowRunMetadata(BaseModel):
@@ -101,3 +105,22 @@ class WorkflowRunDetailsResponse(BaseModel):
     pending_approvals: list[PendingApproval]
     latest_output: dict[str, Any] | None = None
     metadata: WorkflowRunMetadata
+
+
+class WorkflowEventListResponse(BaseModel):
+    items: list[WorkflowEvent]
+    pagination: CursorPagination
+
+
+class SessionMessage(BaseModel):
+    id: int
+    session_id: str
+    thread_id: str
+    role: str
+    content: str
+    created_at: str
+
+
+class SessionMessageListResponse(BaseModel):
+    items: list[SessionMessage]
+    pagination: CursorPagination

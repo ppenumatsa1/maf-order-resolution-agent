@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.models import HitlResponseRequest, HitlResponseResult
 from app.state import workflow
 from fastapi import APIRouter, HTTPException
+from workflows.idempotency_store import IdempotencyInProgressError
 
 router = APIRouter(prefix="/api/hitl", tags=["hitl"])
 
@@ -18,6 +19,11 @@ async def respond_hitl(request: HitlResponseRequest) -> HitlResponseResult:
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IdempotencyInProgressError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
     return HitlResponseResult(
         accepted=True, checkpoint_id=request.checkpoint_id, thread_id=thread_id

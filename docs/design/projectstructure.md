@@ -14,7 +14,14 @@ maf/
       event_bus.py
       session_memory.py
       checkpoint_store.py
-      sequential_resolution_workflow.py
+      maf_sdk_workflow.py
+      factory.py
+      order_resolution/
+        __init__.py
+        events.py
+        hitl.py
+        state.py
+        workflow.py
     tools/
       local_tools.py
       mcp_tools.py
@@ -54,6 +61,19 @@ maf/
       playwright.config.ts
       tests/
         workflow.e2e.spec.ts
+  infra/
+    azure-apphosted/
+      iac/
+        main.bicep
+      runtime/
+        entrypoint.sh
+        smoke-test.sh
+    foundry-hosted/
+      iac/
+        main.bicep
+      runtime/
+        entrypoint.sh
+        smoke-test.sh
   docs/
     design/
       prd.md

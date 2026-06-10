@@ -15,9 +15,7 @@ def test_persists_and_reloads_after_store_reinit() -> None:
     memory_store = SessionMemoryStore()
     checkpoint_store = CheckpointStore()
 
-    run_repo.create_workflow_run(
-        thread_id=thread_id, input_text="Order ORD-1009 delayed"
-    )
+    run_repo.create_workflow_run(thread_id=thread_id, input_text="Order ORD-1009 delayed")
     memory_store.append_message(thread_id, "user", "Order ORD-1009 delayed")
     memory_store.append_message(thread_id, "assistant", "Investigating your order now")
 

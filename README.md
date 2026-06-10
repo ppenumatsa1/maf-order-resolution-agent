@@ -2,6 +2,58 @@
 
 Simple command flow to run the full POC with Docker and Make.
 
+## Project Goal
+
+Build a verifiable multi-agent order-resolution system that can automate routine support decisions, pause for human approval on risky actions, and preserve full workflow history for operational transparency and auditability.
+
+## Business Use Case
+
+Customer support teams handle issues like delayed delivery, damaged items, and wrong-item scenarios. This project provides:
+
+- deterministic triage -> policy -> resolution workflow execution,
+- human-in-the-loop gating for high-risk decisions,
+- persisted conversation/checkpoint/timeline history,
+- UI visibility for operators to inspect and resume workflows safely.
+
+## Verifiability
+
+System correctness is validated through three layers:
+
+- backend tests for low-risk and HITL workflows,
+- eval harness for expected HITL/no-HITL outcomes,
+- Playwright E2E tests for end-user workflow behavior.
+
+Validation commands:
+
+```bash
+make test
+make eval-backend
+make test-e2e
+```
+
+High-level architecture reference:
+
+- `docs/architecture.md`
+
+## Journey Status (Local MAF -> Azure app-hosted -> Foundry-hosted)
+
+Current implementation status:
+
+| Stage               | Status      | Current reality in code                                                                                              |
+| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Local MAF (default) | Implemented | `WORKFLOW_MODE=maf_sdk` runs the sequential workflow with SSE events, checkpointing, HITL, and Postgres persistence. |
+| Azure app-hosted    | Scaffolded  | Config accepts `STORE_PROVIDER=azure_postgres                                                                        | app_db`, but runtime currently enforces `STORE_PROVIDER=postgres`in`backend/app/state.py`. |
+| Foundry-hosted      | Scaffolded  | Config accepts `WORKFLOW_MODE=foundry_hosted`, but workflow factory raises not implemented.                          |
+
+Provider status:
+
+- RAG:
+  - `pgvector`: implemented (local pgvector-compatible retrieval persisted in Postgres).
+  - `azure_ai_search`, `foundry_vector`, `foundry_iq`: placeholder providers returning empty evidence.
+- Memory:
+  - `postgres`: implemented, durable.
+  - `foundry_memory`: in-process placeholder, not durable across process restarts.
+
 ## Fast Start (Recommended)
 
 ### 1) Start all servers
@@ -44,6 +96,7 @@ make down        # stop all services
 make test        # lint + backend tests (local)
 make test-e2e    # playwright tests (local)
 make docker-test # playwright tests in docker compose profile
+./scripts/skills/design-review-skill.sh # deterministic review + test gate
 ```
 
 ## Local (Non-Docker) Flow
@@ -58,6 +111,16 @@ make run-frontend
 
 `make bootstrap` creates `backend/.venv` and installs backend/frontend/playwright dependencies.
 
+## Azure/Foundry Scaffolding
+
+Deployment scaffolding for future hosted paths is available under:
+
+- `infra/azure-apphosted/`
+- `infra/foundry-hosted/`
+
+Each path includes starter IaC, runtime `.env` samples, an entrypoint script, and a smoke-test script.
+These are additive and do not change local `make up` / `make test` workflows.
+
 ## Notes
 
 - Workflow state is persisted in Postgres (`postgres-data` Docker volume), including:
@@ -66,7 +129,26 @@ make run-frontend
   - checkpoints and HITL approvals
 - Restarting backend/frontend does not lose workflow history as long as the Postgres volume is kept.
 - `make down` stops containers but keeps the Postgres volume; use `docker compose down -v` only when you want to wipe persisted state.
-- MAF SDK workflow mode is available via `USE_MAF_SDK=true`.
+- Workflow and provider mode are configured via:
+  - `WORKFLOW_MODE=maf_sdk`
+  - `STORE_PROVIDER=postgres|azure_postgres|app_db`
+  - `RAG_PROVIDER=pgvector|azure_ai_search|foundry_vector|foundry_iq`
+  - `MEMORY_PROVIDER=postgres|foundry_memory`
+- Read-only model/MCP paths are retried with bounded attempts (`READ_RETRY_ATTEMPTS`, `READ_RETRY_DELAY_SECONDS`).
+- Business write actions are guarded by deterministic idempotency keys (`workflow_run_id:step_name:business_id`).
+- Local pgvector-compatible policy retrieval is enabled by default. `tool.call` payloads now include `policy_evidence_ids` for retrieved policy chunks.
+- Store provider switching is scaffolded but not runtime-enabled yet; current supported runtime value remains `STORE_PROVIDER=postgres`.
+- RAG provider options:
+  - `pgvector` (default, fully wired local pgvector-compatible retrieval)
+  - `azure_ai_search` (safe placeholder stub)
+  - `foundry_vector` (safe placeholder stub)
+  - `foundry_iq` (safe placeholder stub)
+- Memory provider switching is available through `MEMORY_PROVIDER`:
+  - `postgres` (default, persisted in Postgres)
+  - `foundry_memory` (placeholder in-process stub for Foundry integration)
+- API supports workflow/session history pagination:
+  - `/api/workflows` accepts `page`, `page_size`, and `pageSize` (legacy alias).
+  - `/api/workflows/{thread_id}/events` and `/api/sessions/{session_id}/messages` use cursor pagination (`limit`, `cursor`).
 
 ## Human Approval Trigger Rules (HITL)
 
@@ -83,6 +165,7 @@ Quick summary:
 
 ## Design Docs
 
+- `docs/architecture.md`
 - `docs/design/prd.md`
 - `docs/design/techstack.md`
 - `docs/design/projectstructure.md`

@@ -10,7 +10,8 @@
 
 1. Sequential Orchestration
 
-- Evidence: timeline shows `triage`, `policy`, `resolution` in order.
+- Evidence: `workflow.stage` events show `triage` (`started` -> `completed`),
+  `policy_retrieval` (`started` -> `completed`), then `resolution` (`completed`).
 - Score:
   - 0: out-of-order or missing stages
   - 1: order mostly correct but one missing stage payload
@@ -26,7 +27,7 @@
 
 3. HITL Gate and Resume
 
-- Evidence: `hitl.request` emitted, approval/rejection accepted, workflow continues to terminal state.
+- Evidence: `checkpoint.created` + `hitl.request` emitted for HITL-required flows, approval/rejection accepted, workflow continues to terminal state.
 - Score:
   - 0: no HITL when expected or no resume
   - 1: HITL works but flaky terminal state
@@ -34,11 +35,11 @@
 
 4. Checkpoint Durability
 
-- Evidence: checkpoint file created for HITL flows in `backend/data/checkpoints`.
+- Evidence: checkpoint record is persisted and retrievable via `CheckpointStore` for HITL flows.
 - Score:
   - 0: none created
   - 1: created but missing required state fields
-  - 2: created with thread, status, and state payload
+  - 2: created with `thread_id`, `status`, and state payload fields (`run_id`, `session_id`, `customer_id`, `order_id`, `action`, `amount`)
 
 5. Output Quality
 
@@ -50,7 +51,8 @@
 
 6. Observability Baseline
 
-- Evidence: service starts with OTEL provider, spans created for workflow and agent stages.
+- Evidence: service starts with OTEL tracer provider and workflow emits observable stage/tool/HITL/output events.
+- Automation note: tracer export and span inspection are environment-dependent and should be verified in runtime telemetry backends (for example OTEL collector / APM), not by brittle unit assertions.
 - Score:
   - 0: no spans/signals
   - 1: partial spans only

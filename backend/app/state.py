@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-import os
-
+from app.config import get_config
 from app.db import postgres_db
 from app.models import WorkflowEvent
 from app.workflow_run_repository import WorkflowRunRepository
 from tools.mcp_tools import MCPKnowledgeTool
 from workflows.checkpoint_store import CheckpointStore
 from workflows.event_bus import EventBus
-from workflows.maf_sdk_workflow import MafSdkSequentialWorkflow
-from workflows.sequential_resolution_workflow import SequentialResolutionWorkflow
-from workflows.session_memory import SessionMemoryStore
+from workflows.factory import create_workflow
+from workflows.rag import create_rag_provider
+from workflows.session_memory import create_memory_store
 
 postgres_db.ensure_schema()
+config = get_config()
+if config.store_provider != "postgres":
+    raise RuntimeError(
+        "Store provider switching is not implemented yet. Use STORE_PROVIDER=postgres."
+    )
 event_bus = EventBus()
 workflow_run_repository = WorkflowRunRepository()
-memory_store = SessionMemoryStore()
+memory_store = create_memory_store(config.memory_provider)
 checkpoint_store = CheckpointStore()
 mcp_tool = MCPKnowledgeTool()
+rag_provider = create_rag_provider(config.rag_provider)
 
 
 def _status_from_output(event: WorkflowEvent) -> str | None:
@@ -39,9 +44,7 @@ def _sync_event_to_run(event: WorkflowEvent) -> None:
 
     if event.type == "hitl.request":
         workflow_run_repository.add_pending_approval(event.thread_id, event.payload)
-        workflow_run_repository.update_workflow_status(
-            event.thread_id, "waiting_approval"
-        )
+        workflow_run_repository.update_workflow_status(event.thread_id, "waiting_approval")
         return
 
     if event.type == "hitl.response":
@@ -64,9 +67,7 @@ def _sync_event_to_run(event: WorkflowEvent) -> None:
         workflow_run_repository.update_latest_output(event.thread_id, event.payload)
         output_status = _status_from_output(event)
         if output_status:
-            workflow_run_repository.update_workflow_status(
-                event.thread_id, output_status
-            )
+            workflow_run_repository.update_workflow_status(event.thread_id, output_status)
         else:
             workflow_run_repository.update_workflow_status(event.thread_id, "completed")
         return
@@ -76,26 +77,16 @@ def _sync_event_to_run(event: WorkflowEvent) -> None:
 
 
 event_bus.add_listener(_sync_event_to_run)
-
-if os.getenv("USE_MAF_SDK", "false").lower() == "true":
-    try:
-        workflow = MafSdkSequentialWorkflow(
-            event_bus=event_bus,
-            memory_store=memory_store,
-            checkpoint_store=checkpoint_store,
-            mcp_tool=mcp_tool,
-        )
-    except Exception:
-        workflow = SequentialResolutionWorkflow(
-            event_bus=event_bus,
-            memory_store=memory_store,
-            checkpoint_store=checkpoint_store,
-            mcp_tool=mcp_tool,
-        )
-else:
-    workflow = SequentialResolutionWorkflow(
+try:
+    workflow = create_workflow(
+        config=config,
         event_bus=event_bus,
         memory_store=memory_store,
         checkpoint_store=checkpoint_store,
         mcp_tool=mcp_tool,
+        rag_provider=rag_provider,
     )
+except NotImplementedError as exc:
+    raise RuntimeError(
+        "Unsupported runtime configuration: foundry_hosted mode is not available yet."
+    ) from exc

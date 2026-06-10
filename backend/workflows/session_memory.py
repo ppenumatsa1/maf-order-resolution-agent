@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from app.db import postgres_db
 
+logger = logging.getLogger(__name__)
 
-class SessionMemoryStore:
+
+class SessionMemoryProvider(Protocol):
+    def get_messages(self, thread_id: str) -> list[dict[str, Any]]: ...
+
+    def append_message(self, thread_id: str, role: str, content: str) -> None: ...
+
+    def summarize_context(self, thread_id: str, max_messages: int = 8) -> str: ...
+
+
+class PostgresSessionMemoryStore:
     def __init__(self, _storage_dir: Path | None = None) -> None:
         postgres_db.ensure_schema()
         self._pool = postgres_db.get_pool()
@@ -66,3 +77,39 @@ class SessionMemoryStore:
         window = messages[-max_messages:]
         lines = [f"{item['role']}: {item['content']}" for item in window]
         return "\n".join(lines)
+
+
+class FoundrySessionMemoryStore:
+    """Placeholder Foundry memory provider until remote persistence is integrated."""
+
+    def __init__(self, _storage_dir: Path | None = None) -> None:
+        self._messages: dict[str, list[dict[str, Any]]] = {}
+
+    def get_messages(self, thread_id: str) -> list[dict[str, Any]]:
+        return [dict(message) for message in self._messages.get(thread_id, [])]
+
+    def append_message(self, thread_id: str, role: str, content: str) -> None:
+        self._messages.setdefault(thread_id, []).append({"role": role, "content": content})
+
+    def summarize_context(self, thread_id: str, max_messages: int = 8) -> str:
+        messages = self.get_messages(thread_id)
+        if not messages:
+            return ""
+        window = messages[-max_messages:]
+        lines = [f"{item['role']}: {item['content']}" for item in window]
+        return "\n".join(lines)
+
+
+def create_memory_store(provider: str, storage_dir: Path | None = None) -> SessionMemoryProvider:
+    if provider == "postgres":
+        return PostgresSessionMemoryStore(storage_dir)
+    if provider == "foundry_memory":
+        logger.warning(
+            "MEMORY_PROVIDER=foundry_memory is an in-process placeholder and is not durable across process restarts."
+        )
+        return FoundrySessionMemoryStore(storage_dir)
+    raise ValueError(f"Unsupported MEMORY_PROVIDER: {provider}")
+
+
+# Backward compatible alias for existing imports/tests.
+SessionMemoryStore = PostgresSessionMemoryStore

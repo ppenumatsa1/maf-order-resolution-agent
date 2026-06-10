@@ -10,16 +10,12 @@ from app.models import WorkflowEvent
 
 class EventBus:
     def __init__(self) -> None:
-        self._subscribers: dict[str, set[asyncio.Queue[WorkflowEvent]]] = defaultdict(
-            set
-        )
+        self._subscribers: dict[str, set[asyncio.Queue[WorkflowEvent]]] = defaultdict(set)
         self._history: dict[str, list[WorkflowEvent]] = defaultdict(list)
         self._listeners: list[Callable[[WorkflowEvent], Awaitable[None] | None]] = []
         self._lock = asyncio.Lock()
 
-    def add_listener(
-        self, listener: Callable[[WorkflowEvent], Awaitable[None] | None]
-    ) -> None:
+    def add_listener(self, listener: Callable[[WorkflowEvent], Awaitable[None] | None]) -> None:
         self._listeners.append(listener)
 
     async def publish(self, event: WorkflowEvent) -> None:
@@ -42,9 +38,7 @@ class EventBus:
             await queue.put(item)
         return queue
 
-    async def unsubscribe(
-        self, thread_id: str, queue: asyncio.Queue[WorkflowEvent]
-    ) -> None:
+    async def unsubscribe(self, thread_id: str, queue: asyncio.Queue[WorkflowEvent]) -> None:
         async with self._lock:
             self._subscribers[thread_id].discard(queue)
 
@@ -61,6 +55,4 @@ class EventBus:
             await self.unsubscribe(thread_id, queue)
 
     def history_as_json(self, thread_id: str) -> str:
-        return json.dumps(
-            [event.model_dump() for event in self._history[thread_id]], indent=2
-        )
+        return json.dumps([event.model_dump() for event in self._history[thread_id]], indent=2)

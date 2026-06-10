@@ -10,6 +10,13 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 
 ## Workflow Guardrails
 
+- Keep API, application service, MAF runtime, and infrastructure concerns separated:
+  - `backend/app/api/v1/routers/*` owns HTTP/SSE routes.
+  - `backend/app/api/v1/schemas/*` owns API contracts.
+  - `backend/app/modules/order_resolution/*` owns service/domain seams, ports, workflow context/events, and projection logic.
+  - `backend/app/core/*` owns config, database, telemetry, and runtime composition.
+  - `backend/app/infrastructure/*` is the repository-pattern/adapters namespace.
+  - `backend/app/maf/*` owns the MAF runtime namespace.
 - Any change to HITL decision logic must update:
   - `docs/design/hitl-approval-conditions.md`
   - tests in `backend/tests/test_workflow.py` and/or eval cases in `backend/evals/cases.jsonl`

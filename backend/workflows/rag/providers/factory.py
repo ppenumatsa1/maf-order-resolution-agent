@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.config import RagProvider
+from app.core.config import RagProvider
 from workflows.rag.core import RAGProvider
 from workflows.rag.providers.azure_ai_search_provider import AzureAISearchRAGProvider
 from workflows.rag.providers.foundry_provider import FoundryRAGProvider

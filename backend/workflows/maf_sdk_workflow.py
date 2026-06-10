@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from workflows.order_resolution.state import WorkflowContext
-from workflows.order_resolution.workflow import OrderResolutionWorkflow
+from app.maf.workflows.order_resolution import OrderResolutionWorkflow
+from app.modules.order_resolution.models import WorkflowContext
 
 
 class MafSdkSequentialWorkflow(OrderResolutionWorkflow):

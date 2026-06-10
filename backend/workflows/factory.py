@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-from app.config import AppConfig
-from tools.mcp_tools import MCPKnowledgeTool
-from workflows.checkpoint_store import CheckpointStore
-from workflows.event_bus import EventBus
+from app.core.config import AppConfig
+from app.modules.order_resolution.ports import (
+    CheckpointRepository,
+    EventPublisher,
+    McpKnowledgePort,
+    SessionMemoryRepository,
+)
 from workflows.maf_sdk_workflow import MafSdkSequentialWorkflow
 from workflows.rag.core import RAGProvider
-from workflows.session_memory import SessionMemoryProvider
 
 
 def create_workflow(
     *,
     config: AppConfig,
-    event_bus: EventBus,
-    memory_store: SessionMemoryProvider,
-    checkpoint_store: CheckpointStore,
-    mcp_tool: MCPKnowledgeTool,
+    event_bus: EventPublisher,
+    memory_store: SessionMemoryRepository,
+    checkpoint_store: CheckpointRepository,
+    mcp_tool: McpKnowledgePort,
     rag_provider: RAGProvider,
 ):
     if config.workflow_mode == "maf_sdk":

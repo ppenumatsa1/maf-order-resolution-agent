@@ -5,11 +5,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.maf.workflows import order_resolution as workflow_module
 from tools.mcp_tools import MCPKnowledgeTool
 from workflows.checkpoint_store import CheckpointStore
 from workflows.event_bus import EventBus
 from workflows.maf_sdk_workflow import MafSdkSequentialWorkflow
-from workflows.order_resolution import workflow as workflow_module
 from workflows.order_resolution.state import WorkflowContext
 from workflows.session_memory import SessionMemoryStore
 

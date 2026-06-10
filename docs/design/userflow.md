@@ -10,11 +10,11 @@ The product journey is:
 
 Current status:
 
-| Stage            | Status      | What is actually wired today                                                                 |
-| ---------------- | ----------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Local MAF        | Implemented | End-to-end workflow path is active via `WORKFLOW_MODE=maf_sdk`.                              |
-| Azure app-hosted | Scaffolded  | Config values exist (`STORE_PROVIDER=azure_postgres                                          | app_db`), but startup still enforces `STORE_PROVIDER=postgres`. |
-| Foundry-hosted   | Scaffolded  | `WORKFLOW_MODE=foundry_hosted` exists as config contract but runtime is not implemented yet. |
+| Stage            | Status      | What is actually wired today                                                                                     |
+| ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| Local MAF        | Implemented | End-to-end workflow path is active via `WORKFLOW_MODE=maf_sdk`.                                                  |
+| Azure app-hosted | Scaffolded  | Config values exist (`STORE_PROVIDER=azure_postgres|app_db`), but startup still enforces `STORE_PROVIDER=postgres`. |
+| Foundry-hosted   | Scaffolded  | `WORKFLOW_MODE=foundry_hosted` exists as config contract but runtime is not implemented yet.                     |
 
 ## Current Runtime User Flow (Implemented Path)
 
@@ -44,6 +44,7 @@ sequenceDiagram
    participant U as Support Agent
    participant UI as React UI
    participant CHAT as /api/chat
+   participant SVC as Order Resolution Service
    participant WF as Workflow Engine
    participant EV as Event Bus + SSE
    participant REPO as Workflow Repository
@@ -53,16 +54,17 @@ sequenceDiagram
 
    U->>UI: Submit order issue
    UI->>CHAT: POST /api/chat
-   CHAT->>REPO: create_workflow_run(...)
+   CHAT->>SVC: start_chat_run(...)
+   SVC->>REPO: create_workflow_run(...)
    REPO->>PG: INSERT workflow_runs
-   CHAT->>WF: run(thread_id, message)
+   SVC->>WF: run(thread_id, message)
    WF->>MEM: append_message(user)
    MEM->>PG: INSERT conversation_messages
    WF->>EV: workflow.stage / tool.call / workflow.output
    EV->>REPO: append_workflow_event(...)
    REPO->>PG: INSERT workflow_events
    EV-->>UI: SSE timeline events
-   WF->>REPO: update_current_stage / update_latest_output / update_workflow_status
+   EV->>REPO: update_current_stage / update_latest_output / update_workflow_status
    REPO->>PG: UPDATE workflow_runs
    WF->>CK: create or update checkpoint state (when needed)
    CK->>PG: UPSERT checkpoints
@@ -84,12 +86,15 @@ React UI (frontend/src/App.tsx, components/*)
 FastAPI Chat API (backend/app/api/chat.py)
    |
    v
+Order Resolution Service (backend/app/modules/order_resolution/service.py)
+   |
+   v
 Workflow Runtime (backend/workflows/order_resolution/workflow.py)
    |-- write transcript --> Session Memory Store (backend/workflows/session_memory.py)
    |                         -> Postgres table: conversation_messages
    |
    |-- emit events -------> Event Bus (backend/workflows/event_bus.py)
-   |                         -> sync listener (backend/app/state.py)
+      |                         -> projector (backend/app/modules/order_resolution/projections.py)
    |                         -> repository (backend/app/workflow_run_repository.py)
    |                         -> Postgres tables: workflow_runs, workflow_events, approvals
    |
@@ -100,18 +105,21 @@ Workflow Runtime (backend/workflows/order_resolution/workflow.py)
 
 History views:
 UI -> GET /api/workflows, /api/workflows/{thread_id}, /api/sessions/{session_id}/messages
-   -> backend/app/api/workflows.py + backend/app/api/sessions.py
-   -> backend/app/workflow_run_repository.py
+   -> backend/app/api/v1/routers/workflows.py + backend/app/api/v1/routers/sessions.py
+   -> backend/app/infrastructure/persistence/workflow_run_repository.py
    -> Postgres read models
 ```
 
 Primary file touchpoints in this path:
 
 - UI: `frontend/src/App.tsx`, `frontend/src/components/*`
-- API: `backend/app/api/chat.py`, `backend/app/api/workflows.py`, `backend/app/api/sessions.py`
-- Runtime wiring: `backend/app/state.py`
-- Workflow logic: `backend/workflows/order_resolution/workflow.py`
-- Persistence adapters: `backend/app/workflow_run_repository.py`, `backend/workflows/session_memory.py`, `backend/workflows/checkpoint_store.py`
+- API: `backend/app/api/v1/routers/chat.py`, `backend/app/api/v1/routers/workflows.py`, `backend/app/api/v1/routers/sessions.py`
+- API schemas: `backend/app/api/v1/schemas/*`
+- Service facade: `backend/app/modules/order_resolution/service.py`
+- Runtime wiring: `backend/app/core/container.py`
+- Event projection: `backend/app/modules/order_resolution/projections.py`
+- Workflow logic: `backend/app/maf/workflows/order_resolution.py`
+- Persistence adapters: `backend/app/infrastructure/persistence/*`
 - Schema: `backend/app/sql/schema.sql`
 
 ### Event Contract (must stay stable for frontend/tests)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from tools.policy_catalog import default_policy_seeds
+from app.modules.order_resolution.policies import default_policy_seeds
 from workflows.rag.core import KnowledgeDocument, RAGProvider
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,14 @@ This file describes expected behavior for coding agents working in this reposito
 
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
 - Frontend: React + Vite, consumes SSE workflow events.
-- Workflow checkpointing: file-based storage under `backend/data/checkpoints`.
+- Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
+- Backend package boundaries:
+  - `backend/app/api/v1/routers/*` owns HTTP/SSE routes.
+  - `backend/app/api/v1/schemas/*` owns API contracts.
+  - `backend/app/modules/order_resolution/*` owns the application service, internal workflow models, ports, and event projection.
+  - `backend/app/core/*` owns config, database, telemetry, and composition.
+  - `backend/app/infrastructure/*` is the repository-pattern/adapters namespace.
+  - `backend/app/maf/*` owns the MAF runtime namespace.
 
 ## Agent Change Policy
 

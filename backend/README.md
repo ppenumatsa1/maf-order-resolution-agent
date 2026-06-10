@@ -53,6 +53,18 @@ Memory provider switching is available now:
 - `GET /api/sessions/{session_id}/messages` returns cursor-paginated session messages (`limit`, `cursor`).
 - `GET /health` returns service health.
 
+## Internal Boundaries
+
+The backend follows the clean agent-style package layout while keeping the current deployable service shape:
+
+- `app/api/v1/routers/*` owns public HTTP/SSE routes.
+- `app/api/v1/schemas/*` owns API response/request contracts.
+- `app/modules/order_resolution/*` owns the order-resolution service/domain seams, HITL policy logic, internal workflow models, ports, and event-to-read-model projection.
+- `app/core/config.py`, `app/core/database.py`, `app/core/telemetry.py`, and `app/core/container.py` own core configuration, database, telemetry, and runtime composition.
+- `app/infrastructure/persistence/*`, `app/infrastructure/events/*`, `app/infrastructure/rag/*`, and `app/infrastructure/mcp/*` are repository-pattern/adapters namespaces.
+- `app/maf/*` owns the MAF workflow runtime namespace, tools, clients, agents, and prompts scaffolding.
+- Existing `app/api/*`, `app/models.py`, `app/config.py`, `app/db.py`, `workflows/*`, `tools/*`, and `app/state.py` paths remain compatibility shims.
+
 ## Event Contract (SSE)
 
 The frontend and tests rely on these emitted event types remaining stable:

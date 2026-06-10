@@ -39,11 +39,11 @@ High-level architecture reference:
 
 Current implementation status:
 
-| Stage               | Status      | Current reality in code                                                                                              |
-| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Local MAF (default) | Implemented | `WORKFLOW_MODE=maf_sdk` runs the sequential workflow with SSE events, checkpointing, HITL, and Postgres persistence. |
-| Azure app-hosted    | Scaffolded  | Config accepts `STORE_PROVIDER=azure_postgres                                                                        | app_db`, but runtime currently enforces `STORE_PROVIDER=postgres`in`backend/app/state.py`. |
-| Foundry-hosted      | Scaffolded  | Config accepts `WORKFLOW_MODE=foundry_hosted`, but workflow factory raises not implemented.                          |
+| Stage               | Status      | Current reality in code                                                                                                 |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Local MAF (default) | Implemented | `WORKFLOW_MODE=maf_sdk` runs the sequential workflow with SSE events, checkpointing, HITL, and Postgres persistence.    |
+| Azure app-hosted    | Scaffolded  | Config accepts `STORE_PROVIDER=azure_postgres|app_db`, but runtime currently enforces `STORE_PROVIDER=postgres`.        |
+| Foundry-hosted      | Scaffolded  | Config accepts `WORKFLOW_MODE=foundry_hosted`, but workflow factory raises not implemented.                             |
 
 Provider status:
 
@@ -120,6 +120,18 @@ Deployment scaffolding for future hosted paths is available under:
 
 Each path includes starter IaC, runtime `.env` samples, an entrypoint script, and a smoke-test script.
 These are additive and do not change local `make up` / `make test` workflows.
+
+## Backend Package Boundaries
+
+The backend now follows the clean agent-style package layout while preserving compatibility shims:
+
+- `backend/app/api/v1/routers/*`: stable FastAPI route contracts.
+- `backend/app/api/v1/schemas/*`: API request/response contracts.
+- `backend/app/modules/order_resolution/*`: API-facing service, HITL policy logic, workflow context/event models, ports, and read-model projection.
+- `backend/app/core/*`: config, database, telemetry, and composition root.
+- `backend/app/infrastructure/*`: repository-pattern/adapters namespace for persistence, events, RAG, MCP, and external integrations.
+- `backend/app/maf/*`: MAF workflow runtime namespace, tools, clients, agents, and prompts scaffolding.
+- Legacy `backend/app/api/*`, `backend/app/models.py`, `backend/app/config.py`, `backend/app/db.py`, `backend/workflows/*`, and `backend/tools/*` paths remain compatibility shims.
 
 ## Notes
 

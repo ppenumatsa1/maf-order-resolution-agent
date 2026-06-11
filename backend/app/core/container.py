@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.core.config import get_config
 from app.core.database import postgres_db
+from app.core.telemetry import record_workflow_event
 from app.infrastructure.events import EventBus
 from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore, WorkflowRunRepository
@@ -27,6 +28,7 @@ rag_provider = create_rag_provider(config.rag_provider)
 workflow_run_event_projector = WorkflowRunEventProjector(workflow_run_repository)
 
 event_bus.add_listener(workflow_run_event_projector.sync_event_to_run)
+event_bus.add_listener(record_workflow_event)
 
 try:
     workflow = create_workflow(

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import AppShell from "./components/studio/AppShell";
 import HumanApprovalPanel from "./components/studio/HumanApprovalPanel";
 import LatestOutputPanel from "./components/studio/LatestOutputPanel";
+import ManualTestPanel from "./components/studio/ManualTestPanel";
 import RagEvidencePanel from "./components/studio/RagEvidencePanel";
 import RunMetadataPanel from "./components/studio/RunMetadataPanel";
 import WorkflowHistorySidebar from "./components/studio/WorkflowHistorySidebar";
 import WorkflowRunComposer from "./components/studio/WorkflowRunComposer";
+import { getApiBase } from "./config";
 import WorkflowTimeline from "./components/studio/WorkflowTimeline";
 import {
   PendingApproval,
@@ -17,12 +20,20 @@ import {
   WorkflowStatus,
 } from "./types/workflow";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const API_BASE = getApiBase();
 const DEFAULT_MESSAGE =
   "Order ORD-1009 is delayed by 5 days. I need compensation.";
 
 export default function App() {
+  const hasAutoSelectedInitialRun = useRef(false);
+  const hasUserInteractedWithRunSelection = useRef(false);
+  const selectedThreadIdRef = useRef<string | null>(null);
+  const selectionVersionRef = useRef(0);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [activeHistoryThreadId, setActiveHistoryThreadId] = useState<string | null>(
+    null,
+  );
+  const [isComposingNewRun, setIsComposingNewRun] = useState(false);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunListItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -76,8 +87,17 @@ export default function App() {
           setPageSize(data.page_size);
         }
 
-        if (!selectedThreadId && data.items.length > 0) {
-          setSelectedThreadId(data.items[0].thread_id);
+        if (
+          !hasAutoSelectedInitialRun.current &&
+          !hasUserInteractedWithRunSelection.current
+        ) {
+          hasAutoSelectedInitialRun.current = true;
+          if (!selectedThreadIdRef.current && data.items.length > 0) {
+            selectionVersionRef.current += 1;
+            selectedThreadIdRef.current = data.items[0].thread_id;
+            setActiveHistoryThreadId(data.items[0].thread_id);
+            setSelectedThreadId(data.items[0].thread_id);
+          }
         }
       } catch (error) {
         setHistoryError(
@@ -90,38 +110,59 @@ export default function App() {
     [pageSize, selectedThreadId, statusFilter],
   );
 
-  const loadWorkflowDetails = useCallback(async (threadId: string) => {
-    setIsDetailsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/workflows/${threadId}`);
-      if (!response.ok) {
-        throw new Error(
-          `Unable to fetch workflow details (${response.status})`,
-        );
-      }
-      const details = (await response.json()) as WorkflowRunDetails;
-      setSelectedWorkflowDetails(details);
-      setEvents(details.events ?? []);
-      setPendingApprovals(details.pending_approvals ?? []);
-      setLatestOutput(details.latest_output ?? null);
-    } finally {
-      setIsDetailsLoading(false);
-    }
+  const clearSelectedRunPanels = useCallback(() => {
+    setSelectedWorkflowDetails(null);
+    setEvents([]);
+    setPendingApprovals([]);
+    setLatestOutput(null);
   }, []);
+
+  const loadWorkflowDetails = useCallback(
+    async (
+      threadId: string,
+      expectedSelectionVersion = selectionVersionRef.current,
+    ) => {
+      setIsDetailsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE}/api/workflows/${threadId}`);
+        if (!response.ok) {
+          throw new Error(
+            `Unable to fetch workflow details (${response.status})`,
+          );
+        }
+        const details = (await response.json()) as WorkflowRunDetails;
+        if (
+          selectedThreadIdRef.current !== threadId ||
+          selectionVersionRef.current !== expectedSelectionVersion
+        ) {
+          return;
+        }
+        setSelectedWorkflowDetails(details);
+        setEvents(details.events ?? []);
+        setPendingApprovals(details.pending_approvals ?? []);
+        setLatestOutput(details.latest_output ?? null);
+      } finally {
+        if (selectionVersionRef.current === expectedSelectionVersion) {
+          setIsDetailsLoading(false);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void loadWorkflowHistory(currentPage);
   }, [currentPage, loadWorkflowHistory]);
 
   useEffect(() => {
-    if (!selectedThreadId) {
+    if (isComposingNewRun || !selectedThreadId) {
       return;
     }
-    void loadWorkflowDetails(selectedThreadId);
-  }, [selectedThreadId, loadWorkflowDetails]);
+    void loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
+  }, [isComposingNewRun, selectedThreadId, loadWorkflowDetails]);
 
   useEffect(() => {
-    if (!selectedThreadId || !selectedWorkflowDetails) {
+    if (isComposingNewRun || !selectedThreadId || !selectedWorkflowDetails) {
       return;
     }
     if (
@@ -131,13 +172,18 @@ export default function App() {
     }
 
     const timer = window.setInterval(() => {
-      void loadWorkflowDetails(selectedThreadId);
+      void loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
     }, 2500);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [selectedThreadId, selectedWorkflowDetails, loadWorkflowDetails]);
+  }, [
+    isComposingNewRun,
+    selectedThreadId,
+    selectedWorkflowDetails,
+    loadWorkflowDetails,
+  ]);
 
   const filteredRuns = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -154,16 +200,25 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     await loadWorkflowHistory(currentPage);
-    if (selectedThreadId) {
-      await loadWorkflowDetails(selectedThreadId);
+    if (!isComposingNewRun && selectedThreadId) {
+      await loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
     }
-  }, [currentPage, loadWorkflowDetails, loadWorkflowHistory, selectedThreadId]);
+  }, [
+    currentPage,
+    isComposingNewRun,
+    loadWorkflowDetails,
+    loadWorkflowHistory,
+    selectedThreadId,
+  ]);
 
   const startWorkflow = useCallback(async () => {
     if (!message.trim()) {
       return;
     }
 
+    hasUserInteractedWithRunSelection.current = true;
+    const selectionVersion = selectionVersionRef.current + 1;
+    selectionVersionRef.current = selectionVersion;
     setIsStartingWorkflow(true);
     try {
       const response = await fetch(`${API_BASE}/api/chat/run`, {
@@ -176,14 +231,21 @@ export default function App() {
       }
 
       const payload = (await response.json()) as { thread_id: string };
+      if (selectionVersionRef.current !== selectionVersion) {
+        return;
+      }
       setCurrentPage(1);
+      clearSelectedRunPanels();
+      selectedThreadIdRef.current = payload.thread_id;
+      setActiveHistoryThreadId(payload.thread_id);
+      setIsComposingNewRun(false);
       setSelectedThreadId(payload.thread_id);
       await loadWorkflowHistory(1);
-      await loadWorkflowDetails(payload.thread_id);
+      await loadWorkflowDetails(payload.thread_id, selectionVersion);
     } finally {
       setIsStartingWorkflow(false);
     }
-  }, [loadWorkflowDetails, loadWorkflowHistory, message]);
+  }, [clearSelectedRunPanels, loadWorkflowDetails, loadWorkflowHistory, message]);
 
   const submitHitlDecision = useCallback(
     async (
@@ -205,7 +267,7 @@ export default function App() {
         });
 
         if (selectedThreadId) {
-          await loadWorkflowDetails(selectedThreadId);
+          await loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
         }
         await loadWorkflowHistory(currentPage);
       } finally {
@@ -216,25 +278,55 @@ export default function App() {
   );
 
   const selectWorkflow = (threadId: string) => {
+    hasUserInteractedWithRunSelection.current = true;
+    clearSelectedRunPanels();
+    selectionVersionRef.current += 1;
+    selectedThreadIdRef.current = threadId;
+    setActiveHistoryThreadId(threadId);
+    setIsComposingNewRun(false);
     setSelectedThreadId(threadId);
   };
 
+  const openWorkflow = useCallback(
+    async (threadId: string) => {
+      hasUserInteractedWithRunSelection.current = true;
+      clearSelectedRunPanels();
+      const selectionVersion = selectionVersionRef.current + 1;
+      selectionVersionRef.current = selectionVersion;
+      selectedThreadIdRef.current = threadId;
+      setActiveHistoryThreadId(threadId);
+      setIsComposingNewRun(false);
+      setSelectedThreadId(threadId);
+      await loadWorkflowHistory(1);
+      await loadWorkflowDetails(threadId, selectionVersion);
+    },
+    [clearSelectedRunPanels, loadWorkflowDetails, loadWorkflowHistory],
+  );
+
   const handleNewRun = () => {
-    setSelectedThreadId(null);
-    setSelectedWorkflowDetails(null);
-    setEvents([]);
-    setPendingApprovals([]);
-    setLatestOutput(null);
-    setMessage(DEFAULT_MESSAGE);
+    hasUserInteractedWithRunSelection.current = true;
+    selectionVersionRef.current += 1;
+    selectedThreadIdRef.current = null;
+    flushSync(() => {
+      setActiveHistoryThreadId(null);
+      setIsComposingNewRun(true);
+      setSelectedThreadId(null);
+      clearSelectedRunPanels();
+      setMessage(DEFAULT_MESSAGE);
+    });
   };
 
   const totalPages = Math.max(1, Math.ceil(totalRuns / pageSize));
+  const visibleSelectedThreadId = isComposingNewRun ? null : selectedThreadId;
+  const visibleActiveHistoryThreadId = isComposingNewRun
+    ? null
+    : activeHistoryThreadId;
 
   return (
     <AppShell onNewRun={handleNewRun} onRefresh={() => void refreshAll()}>
       <WorkflowHistorySidebar
         runs={filteredRuns}
-        selectedThreadId={selectedThreadId}
+        selectedThreadId={visibleActiveHistoryThreadId}
         statusFilter={statusFilter}
         searchTerm={searchTerm}
         page={currentPage}
@@ -262,12 +354,20 @@ export default function App() {
           onSubmit={startWorkflow}
           onClear={() => setMessage("")}
         />
+        <ManualTestPanel
+          onLoadPrompt={setMessage}
+          onOpenWorkflow={openWorkflow}
+        />
         <WorkflowTimeline
           events={events}
+          hasSelectedWorkflow={Boolean(visibleSelectedThreadId)}
           isLoading={isDetailsLoading}
           onRefresh={async () => {
-            if (selectedThreadId) {
-              await loadWorkflowDetails(selectedThreadId);
+            if (visibleSelectedThreadId) {
+              await loadWorkflowDetails(
+                visibleSelectedThreadId,
+                selectionVersionRef.current,
+              );
             }
           }}
         />

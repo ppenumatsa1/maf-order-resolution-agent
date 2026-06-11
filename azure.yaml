@@ -1,0 +1,23 @@
+name: maf-order-resolution-agent
+metadata:
+  template: azd-init
+
+infra:
+  provider: bicep
+  path: ./infra/azure-apphosted/iac
+
+services:
+  backend:
+    project: ./backend
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+  frontend:
+    project: ./frontend
+    language: js
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .

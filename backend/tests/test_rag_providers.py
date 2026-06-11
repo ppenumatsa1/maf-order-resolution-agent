@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
+from app.infrastructure.persistence import WorkflowRunRepository
 from workflows.rag import KnowledgeDocument, RetrievalRequest, create_rag_provider
+from workflows.rag.ingestion import PolicyKnowledgeIngestion
 from workflows.rag.providers import (
     AzureAISearchRAGProvider,
     FoundryRAGProvider,
@@ -12,6 +16,34 @@ from workflows.rag.providers import (
 def test_create_rag_provider_pgvector() -> None:
     provider = create_rag_provider("pgvector")
     assert isinstance(provider, PgVectorRAGProvider)
+
+
+@pytest.mark.asyncio
+async def test_pgvector_provider_returns_seeded_policy_evidence() -> None:
+    provider = create_rag_provider("pgvector")
+    assert isinstance(provider, PgVectorRAGProvider)
+    await PolicyKnowledgeIngestion(provider).ingest_defaults()
+
+    thread_id = str(uuid4())
+    WorkflowRunRepository().create_workflow_run(
+        thread_id=thread_id,
+        input_text="Order ORD-1009 is delayed by 5 days. I need compensation.",
+        session_id=thread_id,
+        customer_id="cust-test",
+    )
+
+    result = await provider.retrieve(
+        RetrievalRequest(
+            thread_id=thread_id,
+            query="Policy guidance for late_delivery",
+            issue_type="late_delivery",
+            top_k=3,
+        )
+    )
+
+    assert result.provider == "pgvector-postgres"
+    assert result.evidence
+    assert result.evidence[0].metadata["issue_type"] == "late_delivery"
 
 
 @pytest.mark.asyncio

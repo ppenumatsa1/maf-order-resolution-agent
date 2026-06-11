@@ -5,6 +5,8 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 ## Primary Goals
 
 - Keep one MAF-based business workflow path (no deterministic fallback path).
+- Deterministic triage fallback is allowed only when Foundry Models env vars are
+  absent; do not add a separate deterministic fallback orchestration path.
 - Keep HITL behavior deterministic and testable.
 - Keep API response contracts stable for frontend and Playwright tests.
 
@@ -33,6 +35,10 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
   - Handle approvals via explicit request/response objects keyed by request id.
   - Do not blindly retry side-effecting tools; enforce idempotency keys for write operations.
   - Keep per-agent context/config scoped by agent identity.
+  - Observe MAF executor telemetry from streamed `executor_invoked`,
+    `executor_completed`, and `output` events.
+  - Preserve checkpoint trace context for HITL pause/resume telemetry so
+    approval spans remain correlated with the original workflow operation.
   - Emit and persist correlated execution identifiers (`workflow_run_id`, `session_id`, `thread_id`, `event_id`).
 
 ## Local Validation Commands
@@ -42,6 +48,18 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Playwright E2E: `make test-e2e`
 - Docker E2E profile: `make docker-test`
 - Deterministic review/test gate: `./scripts/skills/design-review-skill.sh`
+
+## Repository Skills
+
+- Use `design-review` as the final deterministic local gate.
+- Use `docs-sync` for documentation updates after code, IaC, script, or behavior changes.
+- Use `backend-boundary-review` for API/modules/core/infrastructure/MAF separation and shim import safety.
+- Use `local-validation` for local unit/integration/e2e checks.
+- Use `iac-review` for Azure/Foundry IaC, Docker, AZD, RBAC, secret, smoke, and security review without deployment.
+- Use `azure-validation` for Azure readiness/live endpoint checks without deployment.
+- Use `azure-deployment` only after Azure validation passes.
+- Use `azure-telemetry-validation` after hosted deployment to verify App Insights request, dependency, trace, HITL correlation, and exception data.
+- Use `release-readiness` to orchestrate the focused skills for PR/release handoff.
 
 ## Baseline Test Inputs
 

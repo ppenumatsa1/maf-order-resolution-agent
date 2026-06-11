@@ -5,12 +5,14 @@ import { WorkflowEvent } from "../../types/workflow";
 
 type Props = {
   events: WorkflowEvent[];
+  hasSelectedWorkflow: boolean;
   onRefresh: () => Promise<void>;
   isLoading: boolean;
 };
 
 export default function WorkflowTimeline({
   events,
+  hasSelectedWorkflow,
   onRefresh,
   isLoading,
 }: Props) {
@@ -35,7 +37,11 @@ export default function WorkflowTimeline({
       </header>
 
       {events.length === 0 ? (
-        <p className="muted">No events available for this workflow.</p>
+        <p className="muted">
+          {hasSelectedWorkflow
+            ? "No events available for this workflow yet."
+            : "Start a workflow or select a run to view timeline events."}
+        </p>
       ) : (
         <div className="timeline-list">
           {events.map((event) => (

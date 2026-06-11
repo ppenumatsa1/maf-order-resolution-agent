@@ -1,0 +1,53 @@
+name: Azure App-Hosted Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: AZD environment name
+        required: true
+        default: maf-order-resolution-dev
+      location:
+        description: Azure region
+        required: true
+        default: eastus2
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Provision and deploy with AZD
+    runs-on: ubuntu-latest
+    environment: azure-apphosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Configure AZD environment
+        run: |
+          azd env new "${{ inputs.environment }}" --location "${{ inputs.location }}" --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}" || azd env select "${{ inputs.environment }}"
+          azd env set AZURE_LOCATION "${{ inputs.location }}"
+          azd env set POSTGRES_ADMIN_PASSWORD "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          azd env set MCP_SERVER_URL "${{ vars.MCP_SERVER_URL }}"
+          azd env set MCP_API_KEY "${{ secrets.MCP_API_KEY }}"
+          azd env set MCP_BEARER_TOKEN "${{ secrets.MCP_BEARER_TOKEN }}"
+
+      - name: Provision infrastructure
+        run: azd provision --no-prompt
+
+      - name: Deploy application containers
+        run: azd deploy --no-prompt
+
+      - name: Run Azure smoke test
+        run: |
+          eval "$(azd env get-values | sed 's/^/export /')"
+          infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"

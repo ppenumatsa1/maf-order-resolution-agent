@@ -14,7 +14,7 @@ from workflows.rag.core import (
 
 
 class PgVectorRAGProvider(RAGProvider):
-    """Local pgvector-compatible scaffold.
+    """Postgres-backed pgvector-compatible scaffold.
 
     This provider persists query/evidence state in Postgres and uses deterministic
     text/metadata ranking until embedding generation is wired in.
@@ -60,7 +60,7 @@ class PgVectorRAGProvider(RAGProvider):
             )
             for row in rows
         ]
-        return RetrievalResult(provider="pgvector-local", query_id=query_id, evidence=evidence)
+        return RetrievalResult(provider="pgvector-postgres", query_id=query_id, evidence=evidence)
 
     @staticmethod
     def _chunk_document(

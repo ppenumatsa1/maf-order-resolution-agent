@@ -9,6 +9,9 @@ type EvidenceEntry = {
   id: string;
   timestampLabel: string;
   source: string;
+  provider: string | null;
+  queryId: string | null;
+  evidenceCount: number | null;
   policy: string | null;
   chunkIds: string[];
   snippets: string[];
@@ -89,6 +92,7 @@ function extractEvidenceEntry(
   const mcpResult = asRecord(payloadRecord.mcp_result);
   const mcpPayload = mcpResult?.result ?? mcpResult ?? payloadRecord;
   const mcpPayloadRecord = asRecord(mcpPayload) ?? payloadRecord;
+  const policyRetrieval = asRecord(payloadRecord.policy_retrieval);
 
   const chunkIds = new Set<string>();
   collectChunkIds(payloadRecord, chunkIds);
@@ -108,11 +112,20 @@ function extractEvidenceEntry(
     : new Date(timestamp).toLocaleTimeString();
   const resolvedSource =
     typeof mcpResult?.source === "string" ? mcpResult.source : source;
+  const provider =
+    typeof policyRetrieval?.provider === "string" ? policyRetrieval.provider : null;
+  const queryId =
+    typeof policyRetrieval?.query_id === "string" ? policyRetrieval.query_id : null;
+  const evidenceCount =
+    typeof policyRetrieval?.count === "number" ? policyRetrieval.count : null;
 
   return {
     id,
     timestampLabel,
     source: resolvedSource,
+    provider,
+    queryId,
+    evidenceCount,
     policy,
     chunkIds: [...chunkIds].slice(0, 12),
     snippets: [...snippets].slice(0, 3),
@@ -155,7 +168,9 @@ export default function RagEvidencePanel({ details, events }: Props) {
         <h2>RAG Evidence</h2>
       </header>
       {entries.length === 0 ? (
-        <p className="muted">No retrieved policy evidence or chunk IDs yet.</p>
+        <p className="muted">
+          No policy evidence retrieved yet for the selected workflow.
+        </p>
       ) : (
         <div className="evidence-list">
           {entries.map((entry) => (
@@ -164,20 +179,51 @@ export default function RagEvidencePanel({ details, events }: Props) {
                 <span className="event-badge">{entry.source}</span>
                 <span className="muted">{entry.timestampLabel}</span>
               </div>
-              {entry.policy ? <p className="evidence-policy">{entry.policy}</p> : null}
+              <dl className="summary-list evidence-summary-list">
+                {entry.provider ? (
+                  <div>
+                    <dt>Provider</dt>
+                    <dd>{entry.provider}</dd>
+                  </div>
+                ) : null}
+                {entry.queryId ? (
+                  <div>
+                    <dt>Query</dt>
+                    <dd>{entry.queryId}</dd>
+                  </div>
+                ) : null}
+                {entry.evidenceCount !== null ? (
+                  <div>
+                    <dt>Evidence</dt>
+                    <dd>{entry.evidenceCount}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {entry.policy ? (
+                <div className="evidence-section">
+                  <strong>Policy/action</strong>
+                  <p className="evidence-policy">{entry.policy}</p>
+                </div>
+              ) : null}
               {entry.chunkIds.length > 0 ? (
-                <div className="evidence-chunks">
-                  {entry.chunkIds.map((chunkId) => (
-                    <code key={`${entry.id}-${chunkId}`}>{chunkId}</code>
-                  ))}
+                <div className="evidence-section">
+                  <strong>Chunk IDs</strong>
+                  <div className="evidence-chunks">
+                    {entry.chunkIds.map((chunkId) => (
+                      <code key={`${entry.id}-${chunkId}`}>{chunkId}</code>
+                    ))}
+                  </div>
                 </div>
               ) : null}
               {entry.snippets.length > 0 ? (
-                <ul>
-                  {entry.snippets.map((snippet) => (
-                    <li key={`${entry.id}-${snippet}`}>{snippet}</li>
-                  ))}
-                </ul>
+                <div className="evidence-section">
+                  <strong>Snippets</strong>
+                  <ul>
+                    {entry.snippets.map((snippet) => (
+                      <li key={`${entry.id}-${snippet}`}>{snippet}</li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               <details>
                 <summary>Raw details</summary>

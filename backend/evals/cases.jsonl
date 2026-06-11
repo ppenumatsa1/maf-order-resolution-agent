@@ -1,6 +1,10 @@
-{"id":"case-1","input":"Order ORD-1009 is delayed by 5 days. I need compensation.","expect_hitl":true}
-{"id":"case-2","input":"Order ORD-1001 arrived late by 1 day. What can you do?","expect_hitl":false}
-{"id":"case-3","input":"Order ORD-2009 came damaged and broken.","expect_hitl":true}
-{"id":"case-4","input":"Order ORD-1001 arrived broken.","expect_hitl":true}
-{"id":"case-5","input":"I need help with order issue, it arrived late but package condition was fine.","expect_hitl":false}
-{"id":"case-6","input":"Order ORD-1009 was delivered late and I want a refund.","expect_hitl":true}
+{"id":"ord-1001-low-risk-late","input":"Order ORD-1001 arrived late by 1 day. What can you do?","expect_hitl":false}
+{"id":"ord-1002-wrong-item","input":"Order ORD-1002 has the wrong item in the box.","expect_hitl":false}
+{"id":"ord-1003-rag-policy-explanation","input":"Order ORD-1003 is delayed and I want the policy explanation before any action.","expect_hitl":false}
+{"id":"ord-1004-damaged-approve","input":"Order ORD-1004 arrived damaged and broken.","expect_hitl":true}
+{"id":"ord-1005-broken-reject-manual","input":"Order ORD-1005 arrived broken and the customer asks for a replacement.","expect_hitl":true}
+{"id":"ord-1006-low-risk-durability","input":"Order ORD-1006 was delayed but package condition is fine.","expect_hitl":false}
+{"id":"ord-1007-session-history","input":"Order ORD-1007 is late. Start this request in session manual-session-1007.","expect_hitl":false}
+{"id":"ord-1008-damaged-pause-resume","input":"Order ORD-1008 arrived damaged. Please pause for supervisor review.","expect_hitl":true}
+{"id":"ord-1009-high-amount","input":"Order ORD-1009 is delayed by 5 days. I need compensation.","expect_hitl":true}
+{"id":"ord-1010-post-migration-smoke","input":"Order ORD-1010 has a normal late-delivery question and needs no refund escalation.","expect_hitl":false}

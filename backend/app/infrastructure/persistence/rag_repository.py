@@ -121,16 +121,16 @@ class RagRepository:
                         d.source,
                         d.title,
                         (
-                            CASE WHEN dc.content ILIKE %s THEN 1.0 ELSE 0.0 END
+                            CASE WHEN dc.content ILIKE %s::text THEN 1.0 ELSE 0.0 END
                             + CASE
-                                WHEN %s IS NOT NULL
-                                 AND COALESCE(dc.metadata->>'issue_type', d.metadata->>'issue_type') = %s
+                                WHEN %s::text IS NOT NULL
+                                 AND COALESCE(dc.metadata->>'issue_type', d.metadata->>'issue_type') = %s::text
                                 THEN 0.75
                                 ELSE 0.0
                               END
                             + CASE
-                                WHEN %s IS NOT NULL
-                                 AND d.title ILIKE CONCAT('%%', %s, '%%')
+                                WHEN %s::text IS NOT NULL
+                                 AND d.title ILIKE CONCAT('%%', %s::text, '%%')
                                 THEN 0.25
                                 ELSE 0.0
                               END
@@ -138,8 +138,8 @@ class RagRepository:
                     FROM document_chunks dc
                     INNER JOIN documents d ON d.id = dc.document_id
                     WHERE (
-                        %s IS NULL
-                        OR COALESCE(dc.metadata->>'issue_type', d.metadata->>'issue_type') = %s
+                        %s::text IS NULL
+                        OR COALESCE(dc.metadata->>'issue_type', d.metadata->>'issue_type') = %s::text
                     )
                     ORDER BY score DESC, dc.created_at DESC
                     LIMIT %s

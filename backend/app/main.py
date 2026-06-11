@@ -6,7 +6,7 @@ from app.api.v1.routers.hitl import router as hitl_router
 from app.api.v1.routers.sessions import router as sessions_router
 from app.api.v1.routers.workflows import router as workflows_router
 from app.core.container import config, rag_provider
-from app.core.telemetry import setup_observability
+from app.core.telemetry import instrument_fastapi_app, setup_observability
 from app.infrastructure.rag import PolicyKnowledgeIngestion
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 setup_observability()
 
 app = FastAPI(title="MAF Multi-Agent Orchestration Demo", version="0.1.0")
+instrument_fastapi_app(app)
 
 app.add_middleware(
     CORSMiddleware,

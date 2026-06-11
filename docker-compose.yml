@@ -57,7 +57,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_BASE: http://localhost:8000
+      API_BASE: ""
       VITE_PROXY_TARGET: http://backend:8000
 
   playwright:
@@ -69,6 +69,7 @@ services:
     working_dir: /workspace/scripts/playwright
     environment:
       PLAYWRIGHT_BASE_URL: http://frontend:5173
+      PLAYWRIGHT_ARTIFACTS_DIR: /tmp/maf-playwright-artifacts
     volumes:
       - ./:/workspace
     command: bash -lc "npm install && npx playwright install --with-deps && npm run test:e2e"

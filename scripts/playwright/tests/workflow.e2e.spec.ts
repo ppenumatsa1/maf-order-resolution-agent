@@ -4,6 +4,13 @@ const HIGH_RISK_DELAYED_MESSAGE =
   "Order ORD-1009 is delayed by 5 days. I need compensation.";
 const LOW_RISK_LATE_MESSAGE = "Order ORD-1001 was late by one day.";
 const DAMAGED_ITEM_MESSAGE = "Order ORD-1001 arrived broken.";
+const caseDelayMs = Number(process.env.PLAYWRIGHT_CASE_DELAY_MS ?? 0);
+
+async function delayForHostedModelQuota() {
+  if (caseDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, caseDelayMs));
+  }
+}
 
 async function submitWorkflowMessage(page: Page, message: string) {
   const input = page.locator("textarea").first();
@@ -12,6 +19,10 @@ async function submitWorkflowMessage(page: Page, message: string) {
 }
 
 test.describe("MAF workflow UI", () => {
+  test.beforeEach(async () => {
+    await delayForHostedModelQuota();
+  });
+
   test("high-risk request triggers HITL and approve path completes", async ({
     page,
   }) => {
@@ -46,6 +57,53 @@ test.describe("MAF workflow UI", () => {
     await expect(
       page.getByText("No pending approvals.", { exact: false }),
     ).toBeVisible();
+  });
+
+  test("new run clears selected workflow panels", async ({ page }) => {
+    await page.goto("/");
+    const outputPanel = page.locator(".panel-output");
+    const timelinePanel = page.locator(".panel-timeline");
+    const metadataPanel = page.locator(".panel-metadata");
+
+    await submitWorkflowMessage(page, LOW_RISK_LATE_MESSAGE);
+
+    await expect(
+      page.getByText("workflow.output", { exact: false }),
+    ).toBeVisible();
+    await expect(outputPanel).toContainText("Resolution complete");
+    await page.getByRole("button", { name: "New Run" }).click();
+
+    await expect(timelinePanel).toContainText(
+      "Start a workflow or select a run to view timeline events.",
+    );
+    await expect(outputPanel).toContainText(
+      "Start or select a workflow to view the latest output.",
+    );
+    await expect(metadataPanel).toContainText("No workflow selected.");
+  });
+
+  test("manual test panel runs a case and reports pass", async ({ page }) => {
+    await page.goto("/");
+    const manualPanel = page.locator(".panel-manual-tests");
+
+    await expect(manualPanel.getByText("Test Tools")).toBeVisible();
+    await expect(manualPanel.locator(".manual-case")).toHaveCount(0);
+    await manualPanel
+      .getByRole("button", { name: "Show Manual Test Matrix" })
+      .click();
+    const caseCard = manualPanel.locator(".manual-case", { hasText: "ORD-1001" });
+    await expect(caseCard).toBeVisible();
+    await caseCard.getByRole("button", { name: "Load prompt" }).click();
+    await expect(page.locator("textarea").first()).toHaveValue(
+      "Order ORD-1001 arrived late by 1 day. What can you do?",
+    );
+
+    await caseCard.getByRole("button", { name: "Run case" }).click();
+
+    await expect(caseCard.locator(".result-pass")).toBeVisible();
+    await expect(caseCard).toContainText("Observed");
+    await expect(caseCard).toContainText("HITL: false");
+    await expect(page.locator(".panel-output")).toContainText("Resolution complete");
   });
 
   test("reject decision escalates workflow", async ({ page }) => {

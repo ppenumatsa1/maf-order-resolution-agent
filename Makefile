@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
-	run-backend run-frontend format lint test test-backend eval-backend test-e2e \
+	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
 	run-mock-mcp up down logs ps docker-test clean
 
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "  test-backend    - Run backend pytest suite"
 	@echo "  eval-backend    - Run workflow eval harness"
 	@echo "  test-e2e        - Run Playwright tests locally"
+	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
 	@echo "  clean           - Remove caches and test artifacts"
@@ -60,7 +61,23 @@ eval-backend: ensure-backend-env
 	cd backend && . .venv/bin/activate && python -m evals.eval_runner
 
 test-e2e:
-	cd scripts/playwright && npm run test:e2e
+	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
+		cd scripts/playwright && npm run test:e2e; \
+	else \
+		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+		frontend_url="http://127.0.0.1:$${frontend_port}"; \
+		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
+		frontend_pid="$$!"; \
+		trap 'kill '"$$frontend_pid"' 2>/dev/null || true; wait '"$$frontend_pid"' 2>/dev/null || true' EXIT; \
+		for _ in {1..30}; do \
+			curl -fsS "$${frontend_url}" >/dev/null && break; \
+			sleep 1; \
+		done; \
+		PLAYWRIGHT_BASE_URL="$${frontend_url}" bash -c 'cd scripts/playwright && npm run test:e2e'; \
+	fi
+
+manual-matrix:
+	scripts/manual/run-manual-matrix.sh "$${API_URL:-http://localhost:8000}" $${MANUAL_MATRIX_ARGS:-}
 
 run-mock-mcp: ensure-backend-env
 	. backend/.venv/bin/activate && uvicorn scripts.mcp.mock_mcp_server:app --reload --port 8011

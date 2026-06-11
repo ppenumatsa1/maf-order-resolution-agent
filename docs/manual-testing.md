@@ -53,6 +53,89 @@ For each run, verify these signals from timeline/API:
 - `checkpoints` (when applicable)
 - `approvals` (when applicable)
 
+## ORD-1001 to ORD-1010 Cross-Use-Case Matrix
+
+Use this matrix as a repeatable parity suite while removing compatibility shims, moving to Azure app-hosted runtime, and later moving to Foundry-hosted runtime.
+
+For a quick executable check, run the script-backed matrix against any backend URL:
+
+```bash
+make manual-matrix
+API_URL="https://<backend-host>" make manual-matrix
+MANUAL_MATRIX_ARGS="--request-timeout 120 --timeout 90 --case-delay 15" API_URL="https://<backend-host>" make manual-matrix
+scripts/manual/run-manual-matrix.sh http://localhost:8000 --case ORD-1009
+```
+
+The runner uses [frontend/src/data/manualCases.json](../frontend/src/data/manualCases.json) and prints a PASS/FAIL table with observed status, HITL detection, thread id, and failure reasons. Use `MANUAL_MATRIX_ARGS` with `--case-delay` for low-capacity hosted Foundry deployments to avoid model throttling while preserving the same workflow behavior.
+
+The Workflow Studio also includes a collapsed **Test Tools** panel with a **Manual Test Matrix** that uses the same fixture expectations:
+
+1. Open the UI.
+2. Expand **Show Manual Test Matrix** only for demos, smoke checks, or parity validation.
+3. Use **Load prompt** to inspect or edit a scenario prompt in the composer.
+4. Use **Run case** to execute one scenario through `/api/chat/run`.
+5. Use **Run all** only when you want to generate a full local parity run.
+6. Confirm each case shows PASS/FAIL, observed status, HITL result, evidence count, and generated thread id.
+7. Use **View run** to re-open the generated workflow timeline, output, RAG evidence, and metadata.
+
+The panel is an operator verification aid, not a separate backend test framework. The script runner remains the automation-friendly parity check for local and Azure URLs.
+
+Current deterministic local-runtime caveat:
+
+- Messages containing `1009` resolve to workflow order id `ord-1009` with amount `185.0`.
+- All other order ids currently resolve to workflow order id `ord-1001` with amount `79.0`.
+- Therefore, `ORD-1002` through `ORD-1008` and `ORD-1010` are still useful as prompt-level regression cases, but the current backend will persist/emit `ord-1001` for those runs until order lookup is generalized.
+
+| Case | Prompt | Primary path | Decision to take | Expected signals |
+| --- | --- | --- | --- | --- |
+| ORD-1001 | `Order ORD-1001 arrived late by 1 day. What can you do?` | Happy path, no HITL | None | `policy_retrieval` runs; no `hitl.request`; final `workflow.output.status=completed`; emitted order id is `ord-1001`. |
+| ORD-1002 | `Order ORD-1002 has the wrong item in the box.` | Wrong-item no-HITL path | None | `tool.call.policy_evidence_ids` exists; no `hitl.request`; final status `completed`; emitted order id is currently `ord-1001`. |
+| ORD-1003 | `Order ORD-1003 is delayed and I want the policy explanation before any action.` | RAG evidence visibility | None | `workflow.stage` includes `policy_retrieval`; `tool.call.policy_retrieval.provider` and `query_id` are present; final status `completed`. |
+| ORD-1004 | `Order ORD-1004 arrived damaged and broken.` | Damaged-item HITL | Approve | `checkpoint.created` then `hitl.request`; approval emits one `hitl.response`; final status `completed`. |
+| ORD-1005 | `Order ORD-1005 arrived broken and the customer asks for a replacement.` | Damaged-item HITL rejection | Reject | `hitl.request` appears; rejection emits `workflow.output.status=escalated`; no duplicate terminal output. |
+| ORD-1006 | `Order ORD-1006 was delayed but package condition is fine.` | Low-risk durability case | None | Complete the run, restart backend, then verify workflow details/events/messages are still queryable. |
+| ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.` | Session history continuity | None | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages. |
+| ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.` | Pause/resume checkpoint | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`. |
+| ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.` | High-amount HITL | Approve | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`. |
+| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case | None | No HITL; final status `completed`; use this as a smoke test after shim removal/Azure/Foundry moves. |
+
+For each row, capture:
+
+1. input prompt and generated `thread_id`
+2. full event sequence from `/api/workflows/{thread_id}/events`
+3. final `workflow_runs.status`
+4. any checkpoint/approval id
+5. observed `tool.call.policy_retrieval.provider`, `query_id`, and `policy_evidence_ids`
+
+## Azure App-Hosted Parity Smoke
+
+After Azure deployment, run the hosted smoke script with the deployed backend and frontend URLs:
+
+```bash
+infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+```
+
+This validates:
+
+1. backend `/health`
+2. frontend `/health`
+3. low-risk `ORD-1001` emits `workflow.output` without `hitl.request`
+4. high-risk `ORD-1009` emits `hitl.request`
+5. optional Foundry triage metadata when `EXPECT_TRIAGE_MODE=foundry_models` is set
+
+Then use the ORD-1001 to ORD-1010 matrix above for manual parity before removing compatibility shims or moving to Foundry-hosted runtime.
+
+For hosted Playwright runs against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
+
+```bash
+PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000 \
+PLAYWRIGHT_TEST_TIMEOUT_MS=120000 \
+PLAYWRIGHT_CASE_DELAY_MS=15000 \
+PLAYWRIGHT_BASE_URL="$WEB_URL" \
+make test-e2e
+```
+
 ## Scenario 1: Regular Flow (No HITL)
 
 Goal: Validate happy path without human approval.

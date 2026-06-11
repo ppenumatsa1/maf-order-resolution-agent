@@ -18,7 +18,7 @@ This file describes expected behavior for coding agents working in this reposito
 ## Agent Change Policy
 
 1. Keep changes minimal and focused on user request.
-2. Use one MAF-based workflow path; do not introduce or retain deterministic fallback orchestration.
+2. Use one MAF-based workflow path; do not introduce or retain deterministic fallback orchestration. The deterministic triage fallback is permitted only when Foundry Models env vars are absent and must not bypass MAF execution.
 3. If API/event contracts intentionally change, update frontend, tests, and docs in the same change set.
 4. If HITL logic changes, update docs and tests in the same change set.
 5. Follow sample-derived implementation guardrails:
@@ -29,6 +29,8 @@ This file describes expected behavior for coding agents working in this reposito
 - retries are allowed only for read/model operations; side-effecting writes must be idempotent
 - per-agent kwargs/config must remain scoped to that agent
 - executor invocation/completion/output signals must stay observable and correlated
+- MAF telemetry should observe streamed `executor_invoked`, `executor_completed`, and `output` events
+- HITL telemetry must preserve checkpoint trace context so approval/resume spans stay correlated with the original workflow operation
 
 6. Never remove coverage for:
 
@@ -45,6 +47,22 @@ Run and report:
 - `./scripts/skills/design-review-skill.sh` (consolidated deterministic review/test gate)
 
 If a suite cannot run because of missing runtime dependencies (for example browser binaries), report the blocker and the exact command needed to unblock.
+
+## Repository Skills
+
+Use focused skills instead of one broad agent pass:
+
+- `design-review`: final deterministic local review/test gate.
+- `docs-sync`: update affected docs after code, IaC, script, or behavior changes.
+- `backend-boundary-review`: check API/application/core/infrastructure/MAF separation and shim import safety.
+- `local-validation`: run local unit/integration/e2e gates.
+- `iac-review`: review Azure/Foundry IaC and deployment assets without deploying.
+- `azure-validation`: validate Azure readiness or live endpoints without deployment.
+- `azure-deployment`: deploy only after Azure validation has passed.
+- `azure-telemetry-validation`: run hosted workflow stimulus and KQL checks against Application Insights after deployment.
+- `release-readiness`: orchestrate relevant focused skills for PR/release handoff.
+
+Keep compatibility shims tolerated until the dedicated shim-removal cleanup, but do not add new canonical code that imports shim paths.
 
 ## HITL Testing Baseline
 

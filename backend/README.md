@@ -5,10 +5,10 @@
 | Stage | Status | Backend behavior today |
 |---|---|---|
 | Local MAF | Implemented | `WORKFLOW_MODE=maf_sdk` is fully wired and is the active runtime path. |
-| Azure app-hosted | Scaffolded | `STORE_PROVIDER=azure_postgres|app_db` are accepted config values, but app startup rejects non-`postgres` store providers. |
+| Azure app-hosted | Prepared | Azure IaC and container wiring are present; first cutover uses `STORE_PROVIDER=postgres` with Azure PostgreSQL via `DATABASE_URL`. |
 | Foundry-hosted | Scaffolded | `WORKFLOW_MODE=foundry_hosted` is accepted config, but `workflows/factory.py` raises `NotImplementedError`. |
 
-This means the backend currently runs the Local MAF path end-to-end; Azure/Foundry modes are scaffolding contracts for later phases.
+This means the backend currently runs the Local MAF path end-to-end. Azure app-hosted deployment preserves that runtime path and moves the hosting/database/secrets layer to Azure. The app-hosted IaC also provisions Azure AI Foundry/Azure AI Services project and model deployments and passes non-secret deployment metadata through `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`, and `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME`.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ export RAG_PROVIDER=pgvector
 export MEMORY_PROVIDER=postgres
 ```
 
-Store provider switching values for Azure/Foundry are defined but not runtime-enabled yet. Current runtime support requires `STORE_PROVIDER=postgres`.
+Store provider switching values for Azure/Foundry are defined but not runtime-enabled yet. Current runtime support requires `STORE_PROVIDER=postgres`, including the first Azure app-hosted deployment.
 RAG providers now support:
 
 - `RAG_PROVIDER=pgvector` (default, fully wired local pgvector-compatible retrieval)
@@ -41,6 +41,35 @@ Memory provider switching is available now:
 
 - `MEMORY_PROVIDER=postgres` (default, persisted in Postgres)
 - `MEMORY_PROVIDER=foundry_memory` (in-process placeholder stub for Foundry memory integration)
+
+Model client selection:
+
+- Set `FOUNDRY_PROJECTS_ENDPOINT` and `FOUNDRY_MODEL_DEPLOYMENT_NAME` to use
+  the Microsoft Foundry Models project endpoint client for triage agents.
+- `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME` is the canonical embeddings deployment
+  name emitted by Azure app-hosted IaC for downstream RAG/vector integration.
+- `FOUNDRY_PROJECT_ENDPOINT`, `MAF_MODEL`, `FOUNDRY_MODEL`, and `MAF_PROVIDER`
+  remain compatibility aliases for existing developer environments; new
+  configuration should use the canonical variables above.
+- If Foundry config is absent, local and CI runs keep the deterministic triage
+  fallback. This fallback replaces only the LLM triage summary, not the MAF
+  workflow path.
+
+HITL remains deterministic and model-independent. The LLM can summarize triage,
+but approval decisions are still made from issue classification, order amount,
+and policy text by the backend HITL rules.
+
+Telemetry:
+
+- `APPLICATIONINSIGHTS_CONNECTION_STRING` enables Azure Monitor/Application
+  Insights trace export.
+- `ENABLE_TELEMETRY` disables all local telemetry setup when set to `false`.
+- `ENABLE_INSTRUMENTATION` controls MAF/OpenTelemetry instrumentation when
+  telemetry is enabled.
+- `OTEL_RECORD_CONTENT=false` is the default and suppresses prompt, response,
+  payload, and tool content from span attributes.
+- MAF workflow telemetry observes streamed executor I/O events:
+  `executor_invoked`, `executor_completed`, and `output`.
 
 ## APIs
 
@@ -80,7 +109,7 @@ The frontend and tests rely on these emitted event types remaining stable:
 
 - This implementation uses a MAF SDK sequential workflow by default and uses `SequentialBuilder` participant chaining.
 - Provider switches are controlled with `STORE_PROVIDER`, `RAG_PROVIDER`, and `MEMORY_PROVIDER`.
-- Hosted-path scaffolds (IaC + runtime entrypoints) are in `../infra/azure-apphosted` and `../infra/foundry-hosted`.
+- Hosted-path artifacts are in `../infra/azure-apphosted` and `../infra/foundry-hosted`; Azure app-hosted uses AZD + Bicep + Azure Container Apps.
 - MCP calls support auth headers through env vars (`MCP_API_KEY`, `MCP_BEARER_TOKEN`).
 - Read-only model/MCP calls use bounded retries (`READ_RETRY_ATTEMPTS`, `READ_RETRY_DELAY_SECONDS`).
 - Local pgvector-compatible RAG retrieval is wired for policy lookup; retrieved chunk IDs are emitted in `tool.call.payload.policy_evidence_ids`.

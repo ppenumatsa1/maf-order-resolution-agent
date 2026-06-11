@@ -5,14 +5,14 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from app.infrastructure.events import EventBus
+from app.infrastructure.mcp import MCPKnowledgeTool
+from app.infrastructure.persistence import CheckpointStore
+from app.infrastructure.persistence.session_memory import SessionMemoryStore
 from app.maf.clients import FoundryModelsConfig
 from app.maf.workflows import order_resolution as workflow_module
-from tools.mcp_tools import MCPKnowledgeTool
-from workflows.checkpoint_store import CheckpointStore
-from workflows.event_bus import EventBus
-from workflows.maf_sdk_workflow import MafSdkSequentialWorkflow
-from workflows.order_resolution.state import WorkflowContext
-from workflows.session_memory import SessionMemoryStore
+from app.maf.workflows.order_resolution import OrderResolutionWorkflow
+from app.modules.order_resolution.models import WorkflowContext
 
 
 def _event_types(history: list[dict[str, object]]) -> list[str]:
@@ -39,7 +39,7 @@ def clear_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_low_risk_flow_completes_without_hitl(tmp_path: Path) -> None:
     event_bus = EventBus()
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=CheckpointStore(tmp_path / "checkpoints"),
@@ -114,7 +114,7 @@ async def test_high_risk_flow_requests_hitl_then_resumes(
     monkeypatch.setattr(workflow_module, "current_trace_context", lambda: trace_context)
     event_bus = EventBus()
     checkpoint_store = CheckpointStore(tmp_path / "checkpoints")
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=checkpoint_store,
@@ -175,7 +175,7 @@ async def test_high_risk_flow_requests_hitl_then_resumes(
 @pytest.mark.asyncio
 async def test_broken_item_always_requests_hitl(tmp_path: Path) -> None:
     event_bus = EventBus()
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=CheckpointStore(tmp_path / "checkpoints"),
@@ -200,7 +200,7 @@ async def test_broken_item_always_requests_hitl(tmp_path: Path) -> None:
 async def test_high_risk_rejection_emits_escalated_terminal_output(tmp_path: Path) -> None:
     event_bus = EventBus()
     checkpoint_store = CheckpointStore(tmp_path / "checkpoints")
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=checkpoint_store,
@@ -244,7 +244,7 @@ async def test_high_risk_rejection_emits_escalated_terminal_output(tmp_path: Pat
 @pytest.mark.asyncio
 async def test_retries_read_only_paths_before_succeeding(tmp_path: Path) -> None:
     event_bus = EventBus()
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=CheckpointStore(tmp_path / "checkpoints"),
@@ -349,7 +349,7 @@ async def test_foundry_config_emits_foundry_triage_mode(
         lambda _config: (DummyClient(), DummyCredential(), config),
     )
     event_bus = EventBus()
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=CheckpointStore(tmp_path / "checkpoints"),
@@ -398,7 +398,7 @@ async def test_submit_resolution_is_idempotent_for_duplicate_approval(
 ) -> None:
     event_bus = EventBus()
     checkpoint_store = CheckpointStore(tmp_path / "checkpoints")
-    workflow = MafSdkSequentialWorkflow(
+    workflow = OrderResolutionWorkflow(
         event_bus=event_bus,
         memory_store=SessionMemoryStore(tmp_path / "memory"),
         checkpoint_store=checkpoint_store,

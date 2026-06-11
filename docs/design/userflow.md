@@ -83,22 +83,22 @@ Support Agent
 React UI (frontend/src/App.tsx, components/*)
    | POST /api/chat
    v
-FastAPI Chat API (backend/app/api/chat.py)
+FastAPI Chat API (backend/app/api/v1/routers/chat.py)
    |
    v
 Order Resolution Service (backend/app/modules/order_resolution/service.py)
    |
    v
-Workflow Runtime (backend/workflows/order_resolution/workflow.py)
-   |-- write transcript --> Session Memory Store (backend/workflows/session_memory.py)
+Workflow Runtime (backend/app/maf/workflows/order_resolution.py)
+   |-- write transcript --> Session Memory Store (backend/app/infrastructure/persistence/session_memory.py)
    |                         -> Postgres table: conversation_messages
    |
-   |-- emit events -------> Event Bus (backend/workflows/event_bus.py)
+   |-- emit events -------> Event Bus (backend/app/infrastructure/events/event_bus.py)
       |                         -> projector (backend/app/modules/order_resolution/projections.py)
-   |                         -> repository (backend/app/workflow_run_repository.py)
+   |                         -> repository (backend/app/infrastructure/persistence/workflow_run_repository.py)
    |                         -> Postgres tables: workflow_runs, workflow_events, approvals
    |
-   |-- checkpoint state --> Checkpoint Store (backend/workflows/checkpoint_store.py)
+   |-- checkpoint state --> Checkpoint Store (backend/app/infrastructure/persistence/checkpoint_store.py)
    |                         -> Postgres table: checkpoints
    |
    +-- final output ------> API response + SSE stream to UI timeline
@@ -135,6 +135,7 @@ Primary file touchpoints in this path:
 
 - The existing `tool.call` event now includes `policy_evidence_ids` (chunk IDs from retrieval) and `policy_retrieval` metadata (`provider`, `query_id`, `count`).
 - Event type contracts are unchanged.
+- The legacy SSE stream remains stable. A parallel rich stream at `/api/chat/stream/{thread_id}/rich` projects native workflow events into AG-UI-compatible lifecycle, step, tool, text/output, HITL/custom, and raw events, and the current UI consumes it for live timeline updates.
 
 ## API Pagination Contracts
 

@@ -35,12 +35,19 @@ Then run package validation using repository commands that already exist, such a
 - Run the repository smoke script when present; it must validate health and workflow behavior without changing infrastructure.
 - For live Container Apps, verify app health endpoint, ingress URL, revision readiness, and recent logs.
 - Validate live `/health` or equivalent endpoint over HTTPS.
+- Run hosted Playwright UI parity against the frontend URL when live resources exist:
+
+```bash
+PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e
+```
+
+  This must prove the frontend is wired to the API, including Workflow History loading JSON successfully. Any visible `Unexpected token`, `not valid JSON`, or `<!doctype` error is a blocker because it indicates an API route/proxy fallback to HTML.
 - Validate `ORD-1001` completes without `hitl.request`.
 - Validate `ORD-1009` emits `hitl.request` and can follow the expected HITL path.
 - Confirm RBAC where resources exist: Container Apps managed identity can pull from ACR, read Key Vault secrets, and access PostgreSQL/observability dependencies as designed.
 
 ## Pass/fail behavior
 
-- Pass only when preview, Bicep build, package validation, smoke checks, health checks, workflow cases, and applicable RBAC checks succeed.
+- Pass only when preview, Bicep build, package validation, smoke checks, hosted Playwright UI parity where live resources exist, health checks, workflow cases, and applicable RBAC checks succeed.
 - If passing, update `.azure/deployment-plan.md` status to `Validated` only when explicitly requested by the user or task.
 - If blocked, report the exact failing command, missing resource, or permission gap and do not deploy.

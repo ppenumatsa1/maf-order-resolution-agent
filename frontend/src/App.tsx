@@ -10,6 +10,7 @@ import RunMetadataPanel from "./components/studio/RunMetadataPanel";
 import WorkflowHistorySidebar from "./components/studio/WorkflowHistorySidebar";
 import WorkflowRunComposer from "./components/studio/WorkflowRunComposer";
 import { getApiBase } from "./config";
+import { openRichThreadStream } from "./lib/sseClient";
 import WorkflowTimeline from "./components/studio/WorkflowTimeline";
 import {
   PendingApproval,
@@ -58,6 +59,8 @@ export default function App() {
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+  const [isRichStreamConnected, setIsRichStreamConnected] = useState(false);
+  const [richEnvelopeCount, setRichEnvelopeCount] = useState(0);
 
   const loadWorkflowHistory = useCallback(
     async (page: number) => {
@@ -183,6 +186,64 @@ export default function App() {
     selectedThreadId,
     selectedWorkflowDetails,
     loadWorkflowDetails,
+  ]);
+
+  useEffect(() => {
+    if (isComposingNewRun || !selectedThreadId) {
+      setIsRichStreamConnected(false);
+      setRichEnvelopeCount(0);
+      return;
+    }
+
+    setRichEnvelopeCount(0);
+    const source = openRichThreadStream(
+      API_BASE,
+      selectedThreadId,
+      (envelope) => {
+        const nativeEvent = envelope.native_event;
+        if (selectedThreadIdRef.current !== nativeEvent.thread_id) {
+          return;
+        }
+
+        setEvents((previous) => {
+          if (previous.some((event) => event.id === nativeEvent.id)) {
+            return previous;
+          }
+          return [...previous, nativeEvent];
+        });
+        setRichEnvelopeCount((count) => count + 1);
+
+        if (
+          nativeEvent.type === "workflow.output" ||
+          nativeEvent.type === "hitl.request" ||
+          nativeEvent.type === "hitl.response" ||
+          nativeEvent.type === "checkpoint.created"
+        ) {
+          void loadWorkflowDetails(
+            nativeEvent.thread_id,
+            selectionVersionRef.current,
+          );
+          void loadWorkflowHistory(currentPage);
+        }
+      },
+    );
+
+    setIsRichStreamConnected(true);
+    source.onerror = () => {
+      setIsRichStreamConnected(false);
+    };
+
+    return () => {
+      setIsRichStreamConnected(false);
+      setRichEnvelopeCount(0);
+      source.close();
+    };
+  }, [
+    currentPage,
+    isComposingNewRun,
+    loadWorkflowDetails,
+    loadWorkflowHistory,
+    selectedThreadId,
   ]);
 
   const filteredRuns = useMemo(() => {
@@ -362,6 +423,8 @@ export default function App() {
           events={events}
           hasSelectedWorkflow={Boolean(visibleSelectedThreadId)}
           isLoading={isDetailsLoading}
+          isLiveStreaming={isRichStreamConnected}
+          richEnvelopeCount={richEnvelopeCount}
           onRefresh={async () => {
             if (visibleSelectedThreadId) {
               await loadWorkflowDetails(

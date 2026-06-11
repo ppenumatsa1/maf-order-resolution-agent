@@ -8,9 +8,9 @@ from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore, WorkflowRunRepository
 from app.infrastructure.persistence.session_memory import create_memory_store
 from app.infrastructure.rag import create_rag_provider
+from app.maf.factory import create_workflow
 from app.modules.order_resolution.projections import WorkflowRunEventProjector
 from app.modules.order_resolution.service import OrderResolutionService
-from workflows.factory import create_workflow
 
 postgres_db.ensure_schema()
 config = get_config()

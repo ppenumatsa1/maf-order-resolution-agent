@@ -20,3 +20,12 @@ async def stream_chat(thread_id: str) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+@router.get("/stream/{thread_id}/rich")
+async def stream_chat_rich(thread_id: str) -> StreamingResponse:
+    return StreamingResponse(
+        event_bus.rich_sse_stream(thread_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )

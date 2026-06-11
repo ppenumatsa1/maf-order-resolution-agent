@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import pytest
-from workflows.session_memory import FoundrySessionMemoryStore, create_memory_store
+from app.infrastructure.persistence.session_memory import (
+    FoundrySessionMemoryStore,
+    create_memory_store,
+)
 
 
 def test_create_memory_store_foundry_placeholder() -> None:

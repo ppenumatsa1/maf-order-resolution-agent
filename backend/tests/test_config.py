@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from app.config import get_config
+from app.core.config import get_config
 
 
 @pytest.fixture(autouse=True)

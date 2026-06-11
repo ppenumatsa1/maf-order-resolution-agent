@@ -13,6 +13,17 @@ export type WorkflowEvent = {
   payload: Record<string, unknown>;
 };
 
+export type RichWorkflowEventEnvelope = {
+  type: "workflow.rich";
+  version: "ag-ui-compatible.v1";
+  id: string;
+  thread_id: string;
+  timestamp: string;
+  source: "maf-order-resolution";
+  native_event: WorkflowEvent;
+  events: Array<Record<string, unknown>>;
+};
+
 export type WorkflowRunListItem = {
   thread_id: string;
   status: WorkflowStatus;

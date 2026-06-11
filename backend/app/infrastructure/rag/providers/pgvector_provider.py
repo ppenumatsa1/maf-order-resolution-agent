@@ -4,7 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.infrastructure.persistence.rag_repository import RagRepository
-from workflows.rag.core import (
+from app.infrastructure.rag.core import (
     KnowledgeDocument,
     RAGProvider,
     RetrievalRequest,

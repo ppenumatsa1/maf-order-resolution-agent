@@ -7,6 +7,7 @@ This file describes expected behavior for coding agents working in this reposito
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
 - Frontend: React + Vite, consumes SSE workflow events.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
+- Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
 - Backend package boundaries:
   - `backend/app/api/v1/routers/*` owns HTTP/SSE routes.
   - `backend/app/api/v1/schemas/*` owns API contracts.
@@ -30,7 +31,9 @@ This file describes expected behavior for coding agents working in this reposito
 - per-agent kwargs/config must remain scoped to that agent
 - executor invocation/completion/output signals must stay observable and correlated
 - MAF telemetry should observe streamed `executor_invoked`, `executor_completed`, and `output` events
+- MAF middleware should centralize cross-cutting runtime behavior such as correlation, redaction/enrichment, usage/event observation, and explicit failure events
 - HITL telemetry must preserve checkpoint trace context so approval/resume spans stay correlated with the original workflow operation
+- additive rich event streams must preserve the native event payload and must not replace or rename stable SSE event types
 
 6. Never remove coverage for:
 
@@ -56,13 +59,16 @@ Use focused skills instead of one broad agent pass:
 - `docs-sync`: update affected docs after code, IaC, script, or behavior changes.
 - `backend-boundary-review`: check API/application/core/infrastructure/MAF separation and shim import safety.
 - `local-validation`: run local unit/integration/e2e gates.
+- `quick-validation`: run fast validation for app-only redeployments.
 - `iac-review`: review Azure/Foundry IaC and deployment assets without deploying.
 - `azure-validation`: validate Azure readiness or live endpoints without deployment.
 - `azure-deployment`: deploy only after Azure validation has passed.
 - `azure-telemetry-validation`: run hosted workflow stimulus and KQL checks against Application Insights after deployment.
 - `release-readiness`: orchestrate relevant focused skills for PR/release handoff.
 
-Keep compatibility shims tolerated until the dedicated shim-removal cleanup, but do not add new canonical code that imports shim paths.
+Use `scripts/skills/deployment-mode-router.sh` to route quick-vs-full validation and app-only-vs-full deployment for release work.
+
+Legacy shim paths have been removed. Do not add code that imports or recreates `app/models.py`, `app/config.py`, `app/db.py`, `app/state.py`, `app/workflow_run_repository.py`, `app/rag_repository.py`, `workflows/*`, `tools/*`, or root `app/api/*` router shims.
 
 ## HITL Testing Baseline
 

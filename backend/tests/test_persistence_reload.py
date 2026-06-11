@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.models import WorkflowEvent
-from app.workflow_run_repository import WorkflowRunRepository
-from workflows.checkpoint_store import CheckpointStore
-from workflows.session_memory import SessionMemoryStore
+from app.infrastructure.persistence import CheckpointStore, WorkflowRunRepository
+from app.infrastructure.persistence.session_memory import SessionMemoryStore
+from app.modules.order_resolution.models import WorkflowEvent
 
 
 def test_persists_and_reloads_after_store_reinit() -> None:

@@ -32,6 +32,8 @@ Run the repository entry point:
    - `scripts/rubric/e2e-rubric.md`
    - `scripts/playwright/tests/workflow.e2e.spec.ts`
 
+The Playwright suite must include a Workflow History API health assertion that fails on visible `Unexpected token`, `not valid JSON`, or `<!doctype` errors, because those indicate the frontend received HTML instead of API JSON.
+
 ## Pass/fail behavior
 
 - Exit code `0`: all checks passed.

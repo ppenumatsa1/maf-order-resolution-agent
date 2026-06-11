@@ -4,9 +4,9 @@ from uuid import uuid4
 
 import pytest
 from app.infrastructure.persistence import WorkflowRunRepository
-from workflows.rag import KnowledgeDocument, RetrievalRequest, create_rag_provider
-from workflows.rag.ingestion import PolicyKnowledgeIngestion
-from workflows.rag.providers import (
+from app.infrastructure.rag import KnowledgeDocument, RetrievalRequest, create_rag_provider
+from app.infrastructure.rag.ingestion import PolicyKnowledgeIngestion
+from app.infrastructure.rag.providers import (
     AzureAISearchRAGProvider,
     FoundryRAGProvider,
     PgVectorRAGProvider,

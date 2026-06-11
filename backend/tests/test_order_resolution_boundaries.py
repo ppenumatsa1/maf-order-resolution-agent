@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
-from app.models import ChatRunRequest, HitlResponseRequest
+from app.api.v1.schemas.chat import ChatRunRequest
+from app.api.v1.schemas.hitl import HitlResponseRequest
+from app.infrastructure.events import EventBus
+from app.maf.middleware import (
+    WorkflowEventEnricher,
+    WorkflowMiddlewareContext,
+    execute_with_failure_event,
+)
+from app.modules.order_resolution import events as event_types
 from app.modules.order_resolution.models import WorkflowContext, WorkflowEvent
 from app.modules.order_resolution.projections import WorkflowRunEventProjector
+from app.modules.order_resolution.rich_events import rich_events_for_workflow_event
 from app.modules.order_resolution.service import OrderResolutionService
 
 
@@ -208,3 +218,125 @@ def test_workflow_run_event_projector_syncs_hitl_and_output_events() -> None:
         ("thread-123", "running"),
         ("thread-123", "completed"),
     ]
+
+
+def test_workflow_event_enricher_adds_correlation_without_overwriting_payload() -> None:
+    context = WorkflowContext(
+        run_id="run-123",
+        thread_id="thread-123",
+        session_id="session-123",
+        customer_id="cust-123",
+        user_message="Order ORD-1001 arrived late.",
+    )
+    payload = {"agent": "triage", "workflow_run_id": "existing-run"}
+
+    enriched = WorkflowEventEnricher().enrich(context, payload)
+
+    assert enriched == {
+        "agent": "triage",
+        "workflow_run_id": "existing-run",
+        "session_id": "session-123",
+    }
+    assert payload == {"agent": "triage", "workflow_run_id": "existing-run"}
+
+
+@pytest.mark.asyncio
+async def test_workflow_middleware_emits_failure_before_reraising() -> None:
+    context = WorkflowContext(
+        run_id="run-123",
+        thread_id="thread-123",
+        session_id="session-123",
+        customer_id="cust-123",
+        user_message="Order ORD-1001 arrived late.",
+    )
+    failures: list[tuple[WorkflowContext, Exception]] = []
+
+    async def operation() -> None:
+        raise RuntimeError("model unavailable")
+
+    async def emit_failure(run_context: WorkflowContext, exc: Exception) -> None:
+        failures.append((run_context, exc))
+
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        await execute_with_failure_event(
+            WorkflowMiddlewareContext(workflow="order_resolution", run=context),
+            operation,
+            emit_failure,
+        )
+
+    assert failures[0][0] == context
+    assert str(failures[0][1]) == "model unavailable"
+
+
+def test_rich_events_project_native_stage_tool_hitl_and_output_events() -> None:
+    stage_events = rich_events_for_workflow_event(
+        WorkflowEvent(
+            type=event_types.WORKFLOW_STAGE,
+            thread_id="thread-123",
+            payload={"agent": "triage", "status": "started", "workflow_run_id": "run-123"},
+        )
+    )
+    tool_events = rich_events_for_workflow_event(
+        WorkflowEvent(
+            type=event_types.TOOL_CALL,
+            thread_id="thread-123",
+            payload={"local_tool": "fetch_order_status", "workflow_run_id": "run-123"},
+        )
+    )
+    hitl_events = rich_events_for_workflow_event(
+        WorkflowEvent(
+            type=event_types.HITL_REQUEST,
+            thread_id="thread-123",
+            payload={"checkpoint_id": "checkpoint-123", "workflow_run_id": "run-123"},
+        )
+    )
+    output_events = rich_events_for_workflow_event(
+        WorkflowEvent(
+            type=event_types.WORKFLOW_OUTPUT,
+            thread_id="thread-123",
+            payload={"message": "done", "status": "completed", "workflow_run_id": "run-123"},
+        )
+    )
+
+    assert stage_events[0]["type"] == "STEP_STARTED"
+    assert stage_events[0]["stepName"] == "triage"
+    assert [event["type"] for event in tool_events] == [
+        "TOOL_CALL_START",
+        "TOOL_CALL_RESULT",
+        "TOOL_CALL_END",
+    ]
+    assert hitl_events[0]["type"] == "CUSTOM"
+    assert hitl_events[0]["name"] == "hitl.request"
+    assert [event["type"] for event in output_events] == [
+        "TEXT_MESSAGE_START",
+        "TEXT_MESSAGE_CONTENT",
+        "TEXT_MESSAGE_END",
+        "RUN_FINISHED",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_event_bus_rich_stream_emits_additive_agui_envelope() -> None:
+    event_bus = EventBus()
+    await event_bus.publish(
+        WorkflowEvent(
+            type=event_types.WORKFLOW_OUTPUT,
+            thread_id="thread-123",
+            payload={"message": "done", "status": "completed"},
+        )
+    )
+
+    stream = event_bus.rich_sse_stream("thread-123")
+    try:
+        chunk = await stream.__anext__()
+    finally:
+        await stream.aclose()
+
+    assert chunk.startswith("event: workflow.rich\n")
+    data = chunk.split("data: ", 1)[1].strip()
+    envelope = json.loads(data)
+    assert envelope["type"] == "workflow.rich"
+    assert envelope["version"] == "ag-ui-compatible.v1"
+    assert envelope["native_event"]["type"] == "workflow.output"
+    assert envelope["events"][0]["type"] == "RUN_STARTED"
+    assert envelope["events"][-1]["type"] == "RUN_FINISHED"

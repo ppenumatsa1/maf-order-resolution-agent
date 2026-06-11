@@ -18,6 +18,18 @@ async function submitWorkflowMessage(page: Page, message: string) {
   await page.getByRole("button", { name: "Start Workflow" }).click();
 }
 
+async function openStudioWithHealthyHistory(page: Page) {
+  await page.goto("/");
+
+  const sidebar = page.locator(".sidebar-history");
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByText("Loading workflow history...")).toBeHidden();
+  await expect(sidebar.locator(".error-text")).toHaveCount(0);
+  await expect(
+    page.getByText(/Unexpected token|not valid JSON|<!doctype/i),
+  ).toHaveCount(0);
+}
+
 test.describe("MAF workflow UI", () => {
   test.beforeEach(async () => {
     await delayForHostedModelQuota();
@@ -26,7 +38,7 @@ test.describe("MAF workflow UI", () => {
   test("high-risk request triggers HITL and approve path completes", async ({
     page,
   }) => {
-    await page.goto("/");
+    await openStudioWithHealthyHistory(page);
     const outputPanel = page.locator(".panel-output");
     const approvalPanel = page.locator(".panel-approval");
 
@@ -47,7 +59,7 @@ test.describe("MAF workflow UI", () => {
   });
 
   test("low-risk request completes without HITL", async ({ page }) => {
-    await page.goto("/");
+    await openStudioWithHealthyHistory(page);
 
     await submitWorkflowMessage(page, LOW_RISK_LATE_MESSAGE);
 
@@ -59,8 +71,23 @@ test.describe("MAF workflow UI", () => {
     ).toBeVisible();
   });
 
+  test("workflow history status filter loads JSON without fallback HTML", async ({
+    page,
+  }) => {
+    await openStudioWithHealthyHistory(page);
+    const sidebar = page.locator(".sidebar-history");
+
+    await sidebar.getByRole("combobox").selectOption("running");
+
+    await expect(sidebar.getByText("Loading workflow history...")).toBeHidden();
+    await expect(sidebar.locator(".error-text")).toHaveCount(0);
+    await expect(
+      page.getByText(/Unexpected token|not valid JSON|<!doctype/i),
+    ).toHaveCount(0);
+  });
+
   test("new run clears selected workflow panels", async ({ page }) => {
-    await page.goto("/");
+    await openStudioWithHealthyHistory(page);
     const outputPanel = page.locator(".panel-output");
     const timelinePanel = page.locator(".panel-timeline");
     const metadataPanel = page.locator(".panel-metadata");
@@ -83,7 +110,7 @@ test.describe("MAF workflow UI", () => {
   });
 
   test("manual test panel runs a case and reports pass", async ({ page }) => {
-    await page.goto("/");
+    await openStudioWithHealthyHistory(page);
     const manualPanel = page.locator(".panel-manual-tests");
 
     await expect(manualPanel.getByText("Test Tools")).toBeVisible();
@@ -107,7 +134,7 @@ test.describe("MAF workflow UI", () => {
   });
 
   test("reject decision escalates workflow", async ({ page }) => {
-    await page.goto("/");
+    await openStudioWithHealthyHistory(page);
     const outputPanel = page.locator(".panel-output");
     const approvalPanel = page.locator(".panel-approval");
 

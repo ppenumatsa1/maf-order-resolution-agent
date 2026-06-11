@@ -50,7 +50,7 @@ Provider status:
 
 - RAG:
   - `pgvector`: implemented (local pgvector-compatible retrieval persisted in Postgres).
-  - `azure_ai_search`, `foundry_vector`, `foundry_iq`: placeholder providers returning empty evidence.
+  - `azure_ai_search`, `foundry_vector`, `foundry_iq`: placeholder providers returning empty evidence. Azure AI Search is intentionally deferred until the Foundry retrieval architecture is selected.
 - Memory:
   - `postgres`: implemented, durable.
   - `foundry_memory`: in-process placeholder, not durable across process restarts.
@@ -101,8 +101,12 @@ make logs        # stream logs
 make down        # stop all services
 make test        # lint + backend tests (local)
 make test-e2e    # playwright tests (local)
+make validate-quick # fast redeploy validation (playwright + optional smoke)
+make validate-full  # full validation (test + eval + e2e + design-review)
 make manual-matrix # script-backed ORD-1001..ORD-1010 verification
 make docker-test # playwright tests in docker compose profile
+make deploy-app   # azd deploy (app-only)
+make deploy-full  # azd provision && azd deploy (infra + app)
 ./scripts/skills/design-review-skill.sh # deterministic review + test gate
 ```
 
@@ -114,11 +118,14 @@ Focused repository skills live under `.github/skills/` and should be composed ra
 - `docs-sync`: keep docs aligned with code, IaC, scripts, examples, and behavior changes.
 - `backend-boundary-review`: preserve API/modules/core/infrastructure/MAF separation and prevent new canonical imports from legacy shim paths.
 - `local-validation`: run local validation gates without doing design review.
+- `quick-validation`: run a fast validation gate for app-only redeployments.
 - `iac-review`: review Azure/Foundry IaC, Docker, AZD, RBAC, secrets, smoke scripts, and security without deploying.
 - `azure-validation`: validate deployable or deployed Azure app-hosted behavior without deploying.
 - `azure-deployment`: execute already validated Azure deployments and verify live endpoints.
 - `azure-telemetry-validation`: after hosted deployment, run App Insights KQL checks for requests, dependencies, HITL trace correlation, warnings, and exceptions.
 - `release-readiness`: orchestrate the focused skills for PR/release readiness, then run `design-review` last.
+
+Use `scripts/skills/deployment-mode-router.sh` to decide quick-vs-full validation and app-only-vs-full deployment from changed files.
 
 ## Local (Non-Docker) Flow
 
@@ -149,7 +156,7 @@ MEMORY_PROVIDER=postgres
 
 Azure PostgreSQL is selected through `DATABASE_URL`; `STORE_PROVIDER=azure_postgres` and `RAG_PROVIDER=azure_ai_search` remain future provider contracts until those adapters are fully implemented.
 
-Compatibility shims remain in place during Azure validation. Remove them only after Azure app-hosted parity is green.
+Azure app-hosted parity is green, and legacy compatibility shims have been removed. Use only canonical backend namespaces under `backend/app/api/v1`, `backend/app/core`, `backend/app/modules/order_resolution`, `backend/app/infrastructure`, and `backend/app/maf`.
 
 Foundry app-hosted IaC emits `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`, and `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME` for the backend model-client integration path. Model names, versions, SKU names, and capacities remain Bicep parameters for region/quota overrides.
 
@@ -167,6 +174,12 @@ MAF telemetry is emitted by observing streamed executor I/O events from
 `OTEL_RECORD_CONTENT=false` keeps prompt/output payload content out of spans by
 default.
 
+MAF middleware centralizes workflow event enrichment, streamed model-event
+observation, usage telemetry hooks, and explicit failure-event emission. The
+legacy SSE stream remains stable, and an additive rich event stream is exposed
+at `/api/chat/stream/{thread_id}/rich`. The current UI consumes this rich stream
+for live timeline updates while preserving legacy event contracts.
+
 Foundry scaffolding remains available under:
 
 - `infra/foundry-hosted/`
@@ -176,7 +189,7 @@ These are additive and do not change local `make up` / `make test` workflows.
 
 ## Backend Package Boundaries
 
-The backend now follows the clean agent-style package layout while preserving compatibility shims:
+The backend follows the clean agent-style package layout with legacy shim paths removed:
 
 - `backend/app/api/v1/routers/*`: stable FastAPI route contracts.
 - `backend/app/api/v1/schemas/*`: API request/response contracts.
@@ -184,7 +197,12 @@ The backend now follows the clean agent-style package layout while preserving co
 - `backend/app/core/*`: config, database, telemetry, and composition root.
 - `backend/app/infrastructure/*`: repository-pattern/adapters namespace for persistence, events, RAG, MCP, and external integrations.
 - `backend/app/maf/*`: MAF workflow runtime namespace, tools, clients, agents, and prompts scaffolding.
-- Legacy `backend/app/api/*`, `backend/app/models.py`, `backend/app/config.py`, `backend/app/db.py`, `backend/workflows/*`, and `backend/tools/*` paths remain compatibility shims.
+
+Legacy `backend/app/models.py`, `backend/app/config.py`, `backend/app/db.py`, `backend/app/state.py`, `backend/app/workflow_run_repository.py`, `backend/app/rag_repository.py`, `backend/workflows/*`, and `backend/tools/*` paths have been removed.
+
+## Future Monorepo Direction
+
+The preferred future shape is a top-level README plus self-contained agent folders. Each agent folder should own its code, infra/IaC, CI/CD, SRE/runbooks, and docs. This repository currently contains the order-resolution agent; add additional agents as peer top-level folders only when a concrete second agent is introduced.
 
 ## Notes
 
@@ -208,7 +226,7 @@ The backend now follows the clean agent-style package layout while preserving co
 - Store provider switching is scaffolded but not runtime-enabled yet; current supported runtime value remains `STORE_PROVIDER=postgres`.
 - RAG provider options:
   - `pgvector` (default, fully wired local pgvector-compatible retrieval)
-  - `azure_ai_search` (safe placeholder stub)
+  - `azure_ai_search` (safe placeholder stub; deferred until Foundry retrieval direction is decided)
   - `foundry_vector` (safe placeholder stub)
   - `foundry_iq` (safe placeholder stub)
 - Memory provider switching is available through `MEMORY_PROVIDER`:

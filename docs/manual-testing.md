@@ -21,7 +21,7 @@ make up
 - Backend health: [backend/app/main.py](backend/app/main.py)
 - UI: [frontend/src/App.tsx](frontend/src/App.tsx)
 
-3. Ensure Postgres is running and schema is initialized via [backend/app/db.py](backend/app/db.py).
+3. Ensure Postgres is running and schema is initialized via [backend/app/core/database.py](backend/app/core/database.py).
 
 4. Open the UI and keep browser devtools network tab visible for SSE validation.
 
@@ -55,7 +55,7 @@ For each run, verify these signals from timeline/API:
 
 ## ORD-1001 to ORD-1010 Cross-Use-Case Matrix
 
-Use this matrix as a repeatable parity suite while removing compatibility shims, moving to Azure app-hosted runtime, and later moving to Foundry-hosted runtime.
+Use this matrix as a repeatable parity suite after shim removal, while validating Azure app-hosted runtime, and later moving to Foundry-hosted runtime.
 
 For a quick executable check, run the script-backed matrix against any backend URL:
 
@@ -97,7 +97,7 @@ Current deterministic local-runtime caveat:
 | ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.` | Session history continuity | None | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages. |
 | ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.` | Pause/resume checkpoint | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`. |
 | ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.` | High-amount HITL | Approve | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`. |
-| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case | None | No HITL; final status `completed`; use this as a smoke test after shim removal/Azure/Foundry moves. |
+| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case | None | No HITL; final status `completed`; use this as a smoke test after canonical layout/Azure/Foundry moves. |
 
 For each row, capture:
 
@@ -124,7 +124,7 @@ This validates:
 4. high-risk `ORD-1009` emits `hitl.request`
 5. optional Foundry triage metadata when `EXPECT_TRIAGE_MODE=foundry_models` is set
 
-Then use the ORD-1001 to ORD-1010 matrix above for manual parity before removing compatibility shims or moving to Foundry-hosted runtime.
+Then use the ORD-1001 to ORD-1010 matrix above for manual parity before moving to Foundry-hosted runtime.
 
 For hosted Playwright runs against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
 

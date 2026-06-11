@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
 	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
-	run-mock-mcp up down logs ps docker-test clean
+	run-mock-mcp up down logs ps docker-test validate-quick validate-full deploy-app deploy-full clean
 
 help:
 	@echo "Available targets:"
@@ -22,6 +22,10 @@ help:
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
+	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
+	@echo "  validate-full   - Full validation (test + eval + e2e + design-review)"
+	@echo "  deploy-app      - App-only Azure deploy (azd deploy)"
+	@echo "  deploy-full     - Infra + app Azure deploy (azd provision && azd deploy)"
 	@echo "  clean           - Remove caches and test artifacts"
 
 bootstrap: install-backend install-frontend
@@ -98,6 +102,31 @@ ps:
 
 docker-test:
 	docker compose --profile test up --build --abort-on-container-exit playwright
+
+validate-quick:
+	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
+		$(MAKE) test-e2e; \
+	elif [[ -n "$${WEB_URL:-}" ]]; then \
+		PLAYWRIGHT_BASE_URL="$${WEB_URL}" $(MAKE) test-e2e; \
+	else \
+		$(MAKE) test-e2e; \
+	fi
+	@if [[ -n "$${API_URL:-}" ]]; then \
+		infra/azure-apphosted/runtime/smoke-test.sh "$${API_URL}" "$${WEB_URL:-}"; \
+	fi
+
+validate-full:
+	$(MAKE) test
+	$(MAKE) eval-backend
+	$(MAKE) test-e2e
+	./scripts/skills/design-review-skill.sh
+
+deploy-app:
+	azd deploy
+
+deploy-full:
+	azd provision
+	azd deploy
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +

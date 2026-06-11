@@ -9,6 +9,7 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
   absent; do not add a separate deterministic fallback orchestration path.
 - Keep HITL behavior deterministic and testable.
 - Keep API response contracts stable for frontend and Playwright tests.
+- Keep the legacy SSE event stream stable; expose richer AG-UI-compatible events only as additive surfaces.
 
 ## Workflow Guardrails
 
@@ -40,6 +41,11 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
   - Preserve checkpoint trace context for HITL pause/resume telemetry so
     approval spans remain correlated with the original workflow operation.
   - Emit and persist correlated execution identifiers (`workflow_run_id`, `session_id`, `thread_id`, `event_id`).
+  - Keep MAF middleware responsible for cross-cutting runtime behavior such as
+    correlation, safe event enrichment/redaction, usage/event observation, and
+    explicit failure event emission.
+  - Do not replace stable native SSE events with rich/AG-UI events; expose rich
+    events through additive routes/adapters.
 
 ## Local Validation Commands
 
@@ -55,11 +61,13 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Use `docs-sync` for documentation updates after code, IaC, script, or behavior changes.
 - Use `backend-boundary-review` for API/modules/core/infrastructure/MAF separation and shim import safety.
 - Use `local-validation` for local unit/integration/e2e checks.
+- Use `quick-validation` for low-risk app-only redeployments.
 - Use `iac-review` for Azure/Foundry IaC, Docker, AZD, RBAC, secret, smoke, and security review without deployment.
 - Use `azure-validation` for Azure readiness/live endpoint checks without deployment.
 - Use `azure-deployment` only after Azure validation passes.
 - Use `azure-telemetry-validation` after hosted deployment to verify App Insights request, dependency, trace, HITL correlation, and exception data.
 - Use `release-readiness` to orchestrate the focused skills for PR/release handoff.
+- Use `scripts/skills/deployment-mode-router.sh` to decide quick/full validation and app-only/full deployment from changed files.
 
 ## Baseline Test Inputs
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from app.infrastructure.rag.core import KnowledgeDocument, RAGProvider
 from app.modules.order_resolution.policies import default_policy_seeds
-from workflows.rag.core import KnowledgeDocument, RAGProvider
 
 logger = logging.getLogger(__name__)
 

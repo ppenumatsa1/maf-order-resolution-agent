@@ -23,6 +23,25 @@
 }
 ```
 
+## Rich Event Envelope
+
+The legacy SSE stream is unchanged at `/api/chat/stream/{thread_id}`. A parallel rich stream is available at `/api/chat/stream/{thread_id}/rich` for AG-UI-compatible clients:
+
+```json
+{
+  "type": "workflow.rich",
+  "version": "ag-ui-compatible.v1",
+  "id": "native-event-id:rich:1",
+  "thread_id": "uuid",
+  "timestamp": "2026-06-08T00:00:00Z",
+  "source": "maf-order-resolution",
+  "native_event": {},
+  "events": []
+}
+```
+
+Native workflow events remain the source of truth. The rich stream maps stages to step lifecycle events, tool calls to tool lifecycle/result events, terminal outputs to assistant text and run-finished events, HITL/checkpoints to custom events, failures to run-error events, and unknown native events to raw events. Each SSE frame contains one rich envelope with one or more AG-UI-compatible events; clients that need native AG-UI framing should flatten `events` in order. The stream emits `RUN_STARTED` in the first rich envelope for each subscription.
+
 ## HITL Response Request
 
 ```json
@@ -51,6 +70,8 @@
 Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
 
 MAF workflow stream events are observed from `workflow.run(..., stream=True)` for `executor_invoked`, `executor_completed`, and terminal `output` events. Full event payload/content is not recorded unless `OTEL_RECORD_CONTENT=true`.
+
+MAF middleware enriches emitted workflow events with `workflow_run_id` and `session_id`, records streamed MAF event/usage hooks, and emits `workflow.failed` for real workflow failures before re-raising the original exception.
 
 FastAPI request instrumentation is applied after app creation so hosted API calls are expected in `AppRequests`. Workflow, MAF, and Foundry model spans are exported as dependencies.
 

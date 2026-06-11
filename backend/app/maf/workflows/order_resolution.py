@@ -11,13 +11,22 @@ from app.core.telemetry import (
     observe_maf_workflow_event,
     workflow_stage_span,
 )
+from app.infrastructure.rag import NoopRAGProvider, RAGProvider, RetrievalRequest, RetrievalResult
 from app.maf.clients import (
     create_foundry_chat_client,
     get_foundry_models_config,
     has_llm_configuration,
     triage_mode_metadata,
 )
+from app.maf.middleware import (
+    MafUsageTracker,
+    WorkflowEventEnricher,
+    WorkflowMiddlewareContext,
+    create_chat_usage_middleware,
+    execute_with_failure_event,
+)
 from app.maf.tools import fetch_order_status, fetch_policy, submit_resolution
+from app.modules.order_resolution import events as event_types
 from app.modules.order_resolution.hitl import classify_issue, requires_hitl, resolve_action
 from app.modules.order_resolution.models import WorkflowContext, WorkflowEvent
 from app.modules.order_resolution.ports import (
@@ -27,8 +36,6 @@ from app.modules.order_resolution.ports import (
     McpKnowledgePort,
     SessionMemoryRepository,
 )
-from workflows.order_resolution import events as event_types
-from workflows.rag import NoopRAGProvider, RAGProvider, RetrievalRequest, RetrievalResult
 
 
 class OrderResolutionWorkflow:
@@ -53,6 +60,9 @@ class OrderResolutionWorkflow:
         self.idempotency_store = idempotency_store
         self.retry_attempts = max(1, int(os.getenv("READ_RETRY_ATTEMPTS", "3")))
         self.retry_delay_seconds = max(0.0, float(os.getenv("READ_RETRY_DELAY_SECONDS", "0.2")))
+        self._event_enricher = WorkflowEventEnricher()
+        self._usage_tracker = MafUsageTracker()
+        self._context_by_thread: dict[str, WorkflowContext] = {}
 
         from agent_framework.orchestrations import SequentialBuilder
 
@@ -68,7 +78,15 @@ class OrderResolutionWorkflow:
                 "workflow.customer_id": context.customer_id,
             },
         ):
-            await self._start_inner(context)
+            self._context_by_thread[context.thread_id] = context
+            try:
+                await execute_with_failure_event(
+                    WorkflowMiddlewareContext(workflow="order_resolution", run=context),
+                    lambda: self._start_inner(context),
+                    self._emit_failure,
+                )
+            finally:
+                self._context_by_thread.pop(context.thread_id, None)
 
     async def _start_inner(self, context: WorkflowContext) -> None:
         self.memory_store.append_message(context.thread_id, "user", context.user_message)
@@ -84,8 +102,9 @@ class OrderResolutionWorkflow:
 
         triage = await self._retry_read_operation(
             lambda: self._run_maf_sequence(
-                message=context.user_message,
-                context_summary=self.memory_store.summarize_context(context.thread_id),
+                context.user_message,
+                self.memory_store.summarize_context(context.thread_id),
+                workflow_context=context,
             )
         )
         await self._emit(
@@ -280,7 +299,21 @@ class OrderResolutionWorkflow:
         )
         return thread_id
 
-    async def _run_maf_sequence(self, message: str, context_summary: str) -> str:
+    async def _run_maf_sequence(
+        self,
+        message: str,
+        context_summary: str,
+        *,
+        workflow_context: WorkflowContext | None = None,
+    ) -> str:
+        if workflow_context is None:
+            workflow_context = WorkflowContext(
+                run_id="adhoc",
+                thread_id="adhoc",
+                session_id="adhoc",
+                customer_id="adhoc",
+                user_message=message,
+            )
         config = get_foundry_models_config()
         if config is None:
             return f"triage_summary: {self._simple_triage_summary(message)}"
@@ -294,16 +327,31 @@ class OrderResolutionWorkflow:
                     "If order id is missing, infer unknown."
                 ),
                 default_options={"store": False},
+                middleware=[
+                    create_chat_usage_middleware(
+                        workflow_name="order_resolution", context=workflow_context
+                    )
+                ],
             )
             policy_agent = client.as_agent(
                 name="PolicyAgent",
                 instructions="Assess policy risk in one concise sentence.",
                 default_options={"store": False},
+                middleware=[
+                    create_chat_usage_middleware(
+                        workflow_name="order_resolution", context=workflow_context
+                    )
+                ],
             )
             resolution_agent = client.as_agent(
                 name="ResolutionAgent",
                 instructions="Suggest final action in one concise sentence.",
                 default_options={"store": False},
+                middleware=[
+                    create_chat_usage_middleware(
+                        workflow_name="order_resolution", context=workflow_context
+                    )
+                ],
             )
             workflow = self._SequentialBuilder(
                 participants=[triage_agent, policy_agent, resolution_agent],
@@ -314,6 +362,10 @@ class OrderResolutionWorkflow:
             stream = workflow.run(message=input_text, stream=True)
             async for event in stream:
                 observe_maf_workflow_event(event, workflow_name="order_resolution")
+                usage_tracker = getattr(self, "_usage_tracker", MafUsageTracker())
+                usage_tracker.observe_stream_event(
+                    event, workflow_name="order_resolution", context=workflow_context
+                )
                 if getattr(event, "type", None) == "output":
                     final_output = getattr(event, "data", None)
 
@@ -373,6 +425,9 @@ class OrderResolutionWorkflow:
             self.memory_store.append_message(thread_id, "assistant", output["message"])
 
     async def _emit(self, thread_id: str, event_type: str, payload: dict[str, Any]) -> None:
+        context = self._context_by_thread.get(thread_id)
+        if context is not None:
+            payload = self._event_enricher.enrich(context, payload)
         with workflow_stage_span(
             event_type.replace(".", "_"),
             {
@@ -385,6 +440,17 @@ class OrderResolutionWorkflow:
             await self.event_bus.publish(
                 WorkflowEvent(type=event_type, thread_id=thread_id, payload=payload)
             )
+
+    async def _emit_failure(self, context: WorkflowContext, exc: Exception) -> None:
+        await self._emit(
+            context.thread_id,
+            event_types.WORKFLOW_FAILED,
+            {
+                "status": "failed",
+                "code": exc.__class__.__name__,
+                "message": str(exc),
+            },
+        )
 
     async def _retry_read_operation(self, operation: Callable[[], Awaitable[Any]]) -> Any:
         last_error: Exception | None = None

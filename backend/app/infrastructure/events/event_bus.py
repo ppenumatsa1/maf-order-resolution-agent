@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 from app.modules.order_resolution.models import WorkflowEvent
+from app.modules.order_resolution.rich_events import rich_envelope_for_workflow_event
 
 
 class EventBus:
@@ -49,6 +50,34 @@ class EventBus:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15)
                     yield f"data: {event.model_dump_json()}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            await self.unsubscribe(thread_id, queue)
+
+    async def rich_sse_stream(self, thread_id: str) -> AsyncGenerator[str, None]:
+        queue = await self.subscribe(thread_id)
+        sequence = 0
+        run_started = False
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
+                    sequence += 1
+                    envelope = rich_envelope_for_workflow_event(event, sequence)
+                    if not run_started:
+                        envelope["events"].insert(
+                            0,
+                            {
+                                "type": "RUN_STARTED",
+                                "threadId": event.thread_id,
+                                "runId": event.payload.get("workflow_run_id") or event.thread_id,
+                                "timestamp": envelope.get("events", [{}])[0].get("timestamp"),
+                                "rawEvent": event.model_dump(),
+                            },
+                        )
+                        run_started = True
+                    yield f"event: workflow.rich\ndata: {json.dumps(envelope, default=str)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"
         finally:

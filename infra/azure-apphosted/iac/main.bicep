@@ -291,6 +291,10 @@ var frontendEnv = [
     name: 'API_BASE'
     value: backend.outputs.url
   }
+  {
+    name: 'NGINX_API_UPSTREAM'
+    value: backend.outputs.url
+  }
 ]
 
 module frontend './modules/container-app.bicep' = {

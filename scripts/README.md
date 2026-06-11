@@ -6,6 +6,7 @@
 - `playwright/`: browser automation suite for key demo scenarios.
 - `mcp/mock_mcp_server.py`: authenticated mock MCP endpoint for POC.
 - `skills/design-review-skill.sh`: deterministic design-review validation entry point used by `/fleet` skill.
+- `skills/deployment-mode-router.sh`: routes quick/full validation and app-only/full deployment based on changed files.
 
 ## Run Playwright locally
 

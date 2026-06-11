@@ -25,14 +25,26 @@ Compose focused skills instead of doing one broad review. Run only the skills re
 ## Recommended sequence
 
 1. Inspect changed files and classify affected surfaces.
-2. Run independent focused reviews in parallel when safe.
-3. Apply only material fixes from focused reviews.
-4. Run `docs-sync` after code/IaC behavior is settled.
-5. Run `local-validation` for unit/integration/E2E proof.
-6. Run `azure-validation` when Azure artifacts or live endpoints are involved.
-7. Run `azure-deployment` only when the plan is validated and the user wants deployment.
-8. Run `azure-telemetry-validation` after hosted deployment when App Insights telemetry is in scope.
-9. Run `design-review` last to confirm the deterministic local gate.
+2. Route validation/deployment mode with:
+
+```bash
+scripts/skills/deployment-mode-router.sh
+```
+
+   - `validation_mode=quick` -> run `quick-validation`
+   - `validation_mode=full` -> run `local-validation`
+   - `deploy_mode=app_only` -> use `azd deploy`
+   - `deploy_mode=full` -> use `azd provision && azd deploy`
+3. Run independent focused reviews in parallel when safe.
+4. Apply only material fixes from focused reviews.
+5. Run `docs-sync` after code/IaC behavior is settled.
+6. Run quick or full local validation based on routing output.
+7. Run `azure-validation` when Azure artifacts or live endpoints are involved.
+8. Run `azure-deployment` only when the plan is validated and the user wants deployment.
+9. Run `azure-telemetry-validation` after hosted deployment when App Insights telemetry is in scope.
+10. Run `design-review` last to confirm the deterministic local gate.
+
+For frontend or hosted endpoint readiness, require Playwright evidence in both local and hosted modes where applicable. Hosted proof must use `PLAYWRIGHT_BASE_URL=<frontend-url> make test-e2e` and must fail if Workflow History shows `Unexpected token`, `not valid JSON`, or `<!doctype`, which means the frontend received HTML instead of API JSON.
 
 ## Guardrails
 

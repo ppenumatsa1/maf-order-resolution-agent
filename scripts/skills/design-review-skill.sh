@@ -71,6 +71,9 @@ assert_contains "$RUBRIC_FILE" "Any score 0 in criteria 1, 3, or 4 is automatic 
 assert_contains "$E2E_SPEC_FILE" "high-risk request triggers HITL and approve path completes" "happy + HITL approve flow"
 assert_contains "$E2E_SPEC_FILE" "low-risk request completes without HITL" "happy no-HITL flow"
 assert_contains "$E2E_SPEC_FILE" "reject decision escalates workflow" "exception/escalation flow"
+assert_contains "$E2E_SPEC_FILE" "openStudioWithHealthyHistory" "Workflow History API health check"
+assert_contains "$E2E_SPEC_FILE" "workflow history status filter loads JSON without fallback HTML" "Workflow History status-filter API health check"
+assert_contains "$E2E_SPEC_FILE" "not valid JSON" "HTML-as-JSON UI regression guard"
 
 echo "[PASS] Rubric and required flow coverage checks succeeded"
 

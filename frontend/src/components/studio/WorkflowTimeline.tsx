@@ -8,6 +8,8 @@ type Props = {
   hasSelectedWorkflow: boolean;
   onRefresh: () => Promise<void>;
   isLoading: boolean;
+  isLiveStreaming: boolean;
+  richEnvelopeCount: number;
 };
 
 export default function WorkflowTimeline({
@@ -15,6 +17,8 @@ export default function WorkflowTimeline({
   hasSelectedWorkflow,
   onRefresh,
   isLoading,
+  isLiveStreaming,
+  richEnvelopeCount,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -25,7 +29,12 @@ export default function WorkflowTimeline({
   return (
     <section className="panel panel-timeline">
       <header className="panel-head">
-        <h2>Event Timeline</h2>
+        <h2>
+          Event Timeline
+          {isLiveStreaming ? (
+            <span className="muted"> • Live (rich stream) • envelopes: {richEnvelopeCount}</span>
+          ) : null}
+        </h2>
         <button
           type="button"
           className="btn btn-secondary"

@@ -10,7 +10,7 @@ This document defines the exact conditions that trigger human approval (`hitl.re
 
 ## Scope
 
-- MAF SDK workflow: `backend/app/maf/workflows/order_resolution.py` (`backend/workflows/maf_sdk_workflow.py` remains a compatibility wrapper)
+- MAF SDK workflow: `backend/app/maf/workflows/order_resolution.py`
 - API-facing run/HITL requests now enter through `backend/app/modules/order_resolution/service.py`; this service delegates to the same MAF SDK workflow and does not change trigger behavior.
 
 ## Rule Summary

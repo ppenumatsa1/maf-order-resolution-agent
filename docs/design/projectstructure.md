@@ -5,26 +5,20 @@ maf/
   backend/
     app/
       api/
-        chat.py
-        hitl.py
+        v1/
+          routers/
+          schemas/
+      core/
+      infrastructure/
+        events/
+        mcp/
+        persistence/
+        rag/
+      maf/
+        workflows/
+      modules/
+        order_resolution/
       main.py
-      models.py
-      state.py
-    workflows/
-      event_bus.py
-      session_memory.py
-      checkpoint_store.py
-      maf_sdk_workflow.py
-      factory.py
-      order_resolution/
-        __init__.py
-        events.py
-        hitl.py
-        state.py
-        workflow.py
-    tools/
-      local_tools.py
-      mcp_tools.py
     observability/
       otel.py
     evals/
@@ -86,3 +80,22 @@ maf/
       Makefile
       .gitignore
 ```
+
+Future multi-agent monorepo direction:
+
+```text
+maf/
+  README.md
+  order-resolution-agent/
+    code/
+    infra/
+    sre/
+    docs/
+  <next-agent>/
+    code/
+    infra/
+    sre/
+    docs/
+```
+
+Do not create the next agent folder until there is a concrete second agent to add.

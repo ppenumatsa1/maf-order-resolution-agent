@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from workflows.rag import (
-    AzureAISearchRAGProvider,
-    FoundryRAGProvider,
+from app.infrastructure.rag.core import (
     KnowledgeDocument,
-    NoopRAGProvider,
-    PgVectorRAGProvider,
-    PolicyKnowledgeIngestion,
     RAGProvider,
     RetrievalRequest,
     RetrievalResult,
+)
+from app.infrastructure.rag.ingestion import PolicyKnowledgeIngestion
+from app.infrastructure.rag.providers import (
+    AzureAISearchRAGProvider,
+    FoundryRAGProvider,
+    NoopRAGProvider,
+    PgVectorRAGProvider,
     create_rag_provider,
 )
 

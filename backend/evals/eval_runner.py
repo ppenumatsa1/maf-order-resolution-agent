@@ -5,14 +5,14 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from app.config import get_config
-from tools.mcp_tools import MCPKnowledgeTool
-from workflows.checkpoint_store import CheckpointStore
-from workflows.event_bus import EventBus
-from workflows.factory import create_workflow
-from workflows.order_resolution.state import WorkflowContext
-from workflows.rag import PolicyKnowledgeIngestion, create_rag_provider
-from workflows.session_memory import create_memory_store
+from app.core.config import get_config
+from app.infrastructure.events import EventBus
+from app.infrastructure.mcp import MCPKnowledgeTool
+from app.infrastructure.persistence import CheckpointStore
+from app.infrastructure.persistence.session_memory import create_memory_store
+from app.infrastructure.rag import PolicyKnowledgeIngestion, create_rag_provider
+from app.maf.factory import create_workflow
+from app.modules.order_resolution.models import WorkflowContext
 
 
 async def run_eval() -> None:

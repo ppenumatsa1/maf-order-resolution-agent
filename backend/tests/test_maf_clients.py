@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from app.maf import clients
 from app.maf.workflows import order_resolution as workflow_module
-from workflows.maf_sdk_workflow import MafSdkSequentialWorkflow
+from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +106,7 @@ def test_foundry_models_config_supports_maf_model_fallback(
 
 @pytest.mark.asyncio
 async def test_workflow_uses_deterministic_triage_without_model_env() -> None:
-    workflow = MafSdkSequentialWorkflow.__new__(MafSdkSequentialWorkflow)
+    workflow = OrderResolutionWorkflow.__new__(OrderResolutionWorkflow)
 
     result = await workflow._run_maf_sequence("Order ORD-1001 is late", "no prior context")
 
@@ -174,7 +174,7 @@ async def test_workflow_uses_foundry_agents_when_configured(
         lambda _config: (DummyClient(), DummyCredential(), config),
     )
 
-    workflow = MafSdkSequentialWorkflow.__new__(MafSdkSequentialWorkflow)
+    workflow = OrderResolutionWorkflow.__new__(OrderResolutionWorkflow)
     workflow._SequentialBuilder = DummySequentialBuilder
 
     result = await workflow._run_maf_sequence("Order ORD-1001 is late", "no prior context")

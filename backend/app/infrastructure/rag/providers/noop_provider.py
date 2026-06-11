@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from workflows.rag.core import KnowledgeDocument, RAGProvider, RetrievalRequest, RetrievalResult
+from app.infrastructure.rag.core import (
+    KnowledgeDocument,
+    RAGProvider,
+    RetrievalRequest,
+    RetrievalResult,
+)
 
 
 class NoopRAGProvider(RAGProvider):

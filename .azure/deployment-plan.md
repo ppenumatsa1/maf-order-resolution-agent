@@ -1,6 +1,6 @@
 # Azure Deployment Plan
 
-> **Status:** Deployed and Telemetry Verified (HITL trace-correlation telemetry update)
+> **Status:** Deployed and Telemetry Verified (shim removal, MAF middleware, rich events, and frontend API proxy update)
 
 Generated: 2026-06-10
 
@@ -12,7 +12,7 @@ Generated: 2026-06-10
 
 **Path:** Modernize Existing
 
-**Decision on compatibility shims:** Keep shims through Azure implementation and validation. Do **not** remove them before Azure work. Remove them only after Azure app-hosted deployment passes parity tests and CI/CD is green.
+**Decision on compatibility shims:** Azure app-hosted parity and CI/CD are green, so legacy compatibility shims have been removed. Use only canonical backend namespaces going forward.
 
 **Execution mode requested:** Build on autopilot, use fleet-style parallel implementation for independent workstreams, run rubber-duck review before validation handoff, then proceed through the required Azure sequence:
 
@@ -34,6 +34,12 @@ post-deploy `azure-telemetry-validation` skill. Local validation and Azure
 readiness validation passed on 2026-06-11T00:37:00Z; deployment and KQL
 verification passed on 2026-06-11T01:10:00Z.
 
+Current release note: shim removal, MAF middleware/rich events, and the
+frontend Workflow History API proxy fix passed local validation, Bicep build,
+`azd provision --preview`, `azd provision`, `azd deploy`, hosted smoke,
+hosted Playwright UI parity, and App Insights KQL telemetry validation on
+2026-06-11T15:10:00Z.
+
 Foundry provisioning note: the Azure AI Foundry/Azure AI Services resource,
 project, chat/embeddings model deployments, model-client endpoint outputs, and
 backend/project managed identity RBAC are now provisioned in the `maf-ora-central`
@@ -42,9 +48,9 @@ Azure environment.
 Rationale:
 
 - Azure migration will touch Dockerfiles, runtime env, IaC, secrets, connection strings, ingress, health probes, CI/CD, and Postgres provider behavior.
-- Removing shims first would mix import-path cleanup risk with deployment/platform risk.
-- Shims are internal compatibility surfaces; they do not affect Azure runtime contracts if canonical imports remain documented and CI validates no new shim usage.
-- Safer sequencing: deploy with shims -> prove Azure parity -> add lint/grep guard to prevent new shim imports -> remove shims in a dedicated cleanup PR.
+- Shim removal was intentionally deferred until after Azure app-hosted parity was proven.
+- Shims were internal compatibility surfaces and did not affect Azure runtime contracts while canonical imports remained documented and validated.
+- Current state: parity is proven, shim paths are removed, and future work should not recreate or import legacy shim namespaces.
 
 ---
 
@@ -364,5 +370,5 @@ deployed to `maf-ora-central`, smoke-tested, and App Insights KQL verified.
 Earlier Azure app-hosted deployment proof is retained above as historical
 evidence for the existing `centralus` environment.
 
-1. Preserve compatibility shims until Azure app-hosted parity and CI/CD remain green, then remove shims in a dedicated cleanup.
+1. Compatibility shims have been removed after Azure app-hosted parity and CI/CD stayed green; continue using only canonical backend namespaces.
 2. Continue using `azure-telemetry-validation` after future hosted deployments to verify App Insights request, dependency, HITL correlation, warning, and exception data.

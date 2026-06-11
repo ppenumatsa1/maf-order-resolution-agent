@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 
 from app.core.config import RagProvider
-from workflows.rag.core import RAGProvider
-from workflows.rag.providers.azure_ai_search_provider import AzureAISearchRAGProvider
-from workflows.rag.providers.foundry_provider import FoundryRAGProvider
-from workflows.rag.providers.pgvector_provider import PgVectorRAGProvider
+from app.infrastructure.rag.core import RAGProvider
+from app.infrastructure.rag.providers.azure_ai_search_provider import AzureAISearchRAGProvider
+from app.infrastructure.rag.providers.foundry_provider import FoundryRAGProvider
+from app.infrastructure.rag.providers.pgvector_provider import PgVectorRAGProvider
 
 logger = logging.getLogger(__name__)
 

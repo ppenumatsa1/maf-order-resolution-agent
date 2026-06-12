@@ -1,11 +1,9 @@
 import { useState } from "react";
 
-import { getApiBase } from "../../config";
 import { MANUAL_CASES, ManualCase } from "../../data/manualCases";
 import { WorkflowEvent, WorkflowRunDetails } from "../../types/workflow";
 import StatusBadge from "./StatusBadge";
 
-const API_BASE = getApiBase();
 const TERMINAL_STATUSES = new Set(["completed", "failed", "escalated"]);
 
 type CaseResult = {
@@ -19,6 +17,7 @@ type CaseResult = {
 };
 
 type Props = {
+  apiBase: string;
   onLoadPrompt: (prompt: string) => void;
   onOpenWorkflow: (threadId: string) => Promise<void>;
 };
@@ -68,12 +67,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function waitForProgress(threadId: string): Promise<WorkflowRunDetails> {
+async function waitForProgress(
+  apiBase: string,
+  threadId: string,
+): Promise<WorkflowRunDetails> {
   const deadline = Date.now() + 30_000;
   let latest: WorkflowRunDetails | null = null;
   while (Date.now() < deadline) {
     latest = await fetchJson<WorkflowRunDetails>(
-      `${API_BASE}/api/workflows/${threadId}`,
+      `${apiBase}/api/workflows/${threadId}`,
     );
     if (
       TERMINAL_STATUSES.has(latest.status) ||
@@ -86,12 +88,15 @@ async function waitForProgress(threadId: string): Promise<WorkflowRunDetails> {
   throw new Error(`Timed out waiting for workflow ${threadId}`);
 }
 
-async function waitForTerminal(threadId: string): Promise<WorkflowRunDetails> {
+async function waitForTerminal(
+  apiBase: string,
+  threadId: string,
+): Promise<WorkflowRunDetails> {
   const deadline = Date.now() + 30_000;
   let latest: WorkflowRunDetails | null = null;
   while (Date.now() < deadline) {
     latest = await fetchJson<WorkflowRunDetails>(
-      `${API_BASE}/api/workflows/${threadId}`,
+      `${apiBase}/api/workflows/${threadId}`,
     );
     if (TERMINAL_STATUSES.has(latest.status)) {
       return latest;
@@ -136,7 +141,11 @@ function evaluateCase(testCase: ManualCase, details: WorkflowRunDetails): string
   return failures;
 }
 
-export default function ManualTestPanel({ onLoadPrompt, onOpenWorkflow }: Props) {
+export default function ManualTestPanel({
+  apiBase,
+  onLoadPrompt,
+  onOpenWorkflow,
+}: Props) {
   const [results, setResults] = useState<Record<string, CaseResult>>({});
   const [runningAll, setRunningAll] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -166,7 +175,7 @@ export default function ManualTestPanel({ onLoadPrompt, onOpenWorkflow }: Props)
 
     try {
       const startResponse = await fetchJson<{ thread_id: string }>(
-        `${API_BASE}/api/chat/run`,
+        `${apiBase}/api/chat/run`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -176,13 +185,13 @@ export default function ManualTestPanel({ onLoadPrompt, onOpenWorkflow }: Props)
           }),
         },
       );
-      let details = await waitForProgress(startResponse.thread_id);
+      let details = await waitForProgress(apiBase, startResponse.thread_id);
       if (testCase.decision) {
         const approval = details.pending_approvals[0];
         if (!approval) {
           throw new Error("expected pending HITL approval but found none");
         }
-        await fetchJson(`${API_BASE}/api/hitl/respond`, {
+        await fetchJson(`${apiBase}/api/hitl/respond`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -192,9 +201,9 @@ export default function ManualTestPanel({ onLoadPrompt, onOpenWorkflow }: Props)
             comments: `${testCase.decision} by Workflow Studio manual test panel`,
           }),
         });
-        details = await waitForTerminal(startResponse.thread_id);
+        details = await waitForTerminal(apiBase, startResponse.thread_id);
       } else if (!TERMINAL_STATUSES.has(details.status)) {
-        details = await waitForTerminal(startResponse.thread_id);
+        details = await waitForTerminal(apiBase, startResponse.thread_id);
       }
 
       const failures = evaluateCase(testCase, details);

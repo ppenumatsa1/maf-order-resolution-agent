@@ -435,6 +435,30 @@ class WorkflowRunRepository:
                     (self._json_dumps(output), _utc_now_iso(), thread_id),
                 )
 
+    def get_pending_approval_context(self, checkpoint_id: str) -> dict[str, Any] | None:
+        with self._pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    SELECT thread_id, action, order_id, amount, status
+                    FROM approvals
+                    WHERE checkpoint_id = %s::uuid
+                    ORDER BY requested_at DESC
+                    LIMIT 1
+                    """,
+                    (checkpoint_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "thread_id": row["thread_id"],
+                    "action": row["action"],
+                    "order_id": row["order_id"],
+                    "amount": row["amount"],
+                    "status": row["status"],
+                }
+
     def add_pending_approval(self, thread_id: str, approval: dict[str, Any]) -> None:
         now = _utc_now_iso()
         approval_item = {
@@ -452,6 +476,28 @@ class WorkflowRunRepository:
         }
         with self._pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO checkpoints (
+                        checkpoint_id, thread_id, created_at, status, state,
+                        reviewer, comments, updated_at
+                    )
+                    VALUES (
+                        %s::uuid, %s, %s, %s, %s::jsonb,
+                        %s, %s, NOW()
+                    )
+                    ON CONFLICT (checkpoint_id) DO NOTHING
+                    """,
+                    (
+                        approval_item["checkpoint_id"],
+                        thread_id,
+                        now,
+                        "pending_hitl",
+                        self._json_dumps({}),
+                        None,
+                        None,
+                    ),
+                )
                 cur.execute(
                     """
                     INSERT INTO approvals (

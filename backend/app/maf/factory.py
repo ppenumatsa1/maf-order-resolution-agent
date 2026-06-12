@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from app.core.config import AppConfig
+from app.foundry.client import FoundryHostedClient
+from app.foundry.config import get_foundry_hosted_config
+from app.foundry.workflow import FoundryHostedWorkflow
 from app.infrastructure.rag import RAGProvider
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 from app.modules.order_resolution.ports import (
@@ -9,6 +12,8 @@ from app.modules.order_resolution.ports import (
     IdempotencyRepository,
     McpKnowledgePort,
     SessionMemoryRepository,
+    WorkflowEngine,
+    WorkflowRunRepositoryPort,
 )
 
 
@@ -21,7 +26,8 @@ def create_workflow(
     mcp_tool: McpKnowledgePort,
     rag_provider: RAGProvider,
     idempotency_store: IdempotencyRepository | None = None,
-) -> OrderResolutionWorkflow:
+    workflow_run_repository: WorkflowRunRepositoryPort | None = None,
+) -> WorkflowEngine:
     if config.workflow_mode == "maf_sdk":
         return OrderResolutionWorkflow(
             event_bus=event_bus,
@@ -33,8 +39,11 @@ def create_workflow(
         )
 
     if config.workflow_mode == "foundry_hosted":
-        raise NotImplementedError(
-            "WORKFLOW_MODE=foundry_hosted is not implemented yet in this phase."
+        foundry_config = get_foundry_hosted_config(required=True)
+        return FoundryHostedWorkflow(
+            event_bus=event_bus,
+            client=FoundryHostedClient(foundry_config),
+            workflow_run_repository=workflow_run_repository,
         )
 
     raise ValueError(f"Unsupported workflow mode: {config.workflow_mode}")

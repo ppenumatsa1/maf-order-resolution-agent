@@ -126,6 +126,33 @@ This validates:
 
 Then use the ORD-1001 to ORD-1010 matrix above for manual parity before moving to Foundry-hosted runtime.
 
+## Three-target parity gate (local + Azure + Foundry)
+
+Use the parity runner when you need one comparable pass/fail view across all endpoints.
+
+Required environment variables (can be loaded from `maf-ora-central` `.env` via `PARITY_ENV_FILE`):
+
+```bash
+PARITY_LOCAL_API_URL=http://localhost:8000
+PARITY_LOCAL_WEB_URL=http://localhost:5173
+PARITY_AZURE_API_URL=https://<azure-backend-host>
+PARITY_AZURE_WEB_URL=https://<azure-web-host>
+PARITY_FOUNDRY_API_URL=https://<foundry-backend-host>
+PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
+```
+
+Commands:
+
+```bash
+make parity-local
+make parity-hosted
+make parity-all
+```
+
+- `parity-local` and `parity-hosted` are quick subset checks.
+- `parity-all` is the required full gate and enforces all three targets.
+- Reports are generated under `scripts/parity/reports/` in JSON and markdown.
+
 For hosted Playwright runs against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
 
 ```bash

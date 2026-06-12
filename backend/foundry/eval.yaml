@@ -1,0 +1,9 @@
+name: order-resolution-parity
+dataset_file: ../evals/cases.jsonl
+agent:
+  name: order-resolution-hosted
+evaluators:
+  - relevance
+  - task_adherence
+options:
+  pass_threshold: 0.8

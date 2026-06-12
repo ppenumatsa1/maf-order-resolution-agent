@@ -9,9 +9,12 @@ declare global {
 }
 
 export function getApiBase(): string {
-  return (
-    window.__APP_CONFIG__?.API_BASE ??
-    import.meta.env.VITE_API_BASE ??
-    "http://localhost:8000"
-  );
+  const runtimeBase = window.__APP_CONFIG__?.API_BASE?.trim();
+  const viteBase = import.meta.env.VITE_API_BASE?.trim();
+  const base = runtimeBase ?? viteBase ?? "http://localhost:8000";
+  return base.replace(/\/+$/, "");
+}
+
+export function getInitialApiBase(): string {
+  return getApiBase();
 }

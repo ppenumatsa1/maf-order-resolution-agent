@@ -5,6 +5,7 @@ import { PendingApproval } from "../../types/workflow";
 type Props = {
   approvals: PendingApproval[];
   isSubmitting: boolean;
+  error: string | null;
   onDecision: (
     approval: PendingApproval,
     decision: "approve" | "reject",
@@ -15,6 +16,7 @@ type Props = {
 export default function HumanApprovalPanel({
   approvals,
   isSubmitting,
+  error,
   onDecision,
 }: Props) {
   const [comment, setComment] = useState("Reviewed in UI");
@@ -32,6 +34,7 @@ export default function HumanApprovalPanel({
         <p className="muted">No pending approvals.</p>
       ) : (
         <>
+          {error ? <p className="error-text">{error}</p> : null}
           <p className="approval-question">
             {pendingApproval.question ?? "Approve the proposed action?"}
           </p>

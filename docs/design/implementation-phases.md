@@ -19,7 +19,11 @@
 - Compatibility shims have been removed now that Azure app-hosted parity is green.
 - Add a MAF middleware seam for telemetry/correlation, event enrichment/redaction, streamed model usage observation, session/run context, and explicit failure-event behavior.
 - Add an additive AG-UI-compatible rich event stream for future CopilotKit-style React consumption while preserving the legacy SSE stream.
-- Decide Foundry-hosted runtime and retrieval architecture before implementing Azure AI Search. `azure_ai_search` remains a placeholder until that decision is made.
+- Foundry-hosted runtime decision is now locked to structured `invocations` while backend remains the API/HITL/SSE gateway.
+- Create canonical Foundry backend namespaces:
+  - `backend/app/foundry/*` for hosted invocation/runtime adapters.
+  - `backend/foundry/*` for `agent.yaml`, `eval.yaml`, runtime metadata, and `.foundry` cache.
+- Keep Azure AI Search deferred until Foundry-hosted retrieval architecture is proven.
 
 ## Later phases
 

@@ -75,9 +75,7 @@ class FoundryResponsesConversationShadowClient:
         }
         headers = self._headers()
         close_client = self._http_client is None
-        client = self._http_client or httpx.AsyncClient(
-            timeout=self._config.timeout_seconds
-        )
+        client = self._http_client or httpx.AsyncClient(timeout=self._config.timeout_seconds)
         tracer = trace.get_tracer("foundry.hosted.order_resolution")
         try:
             with tracer.start_as_current_span(
@@ -147,8 +145,7 @@ def get_hosted_conversation_shadow_config() -> HostedConversationShadowConfig:
     config = HostedConversationShadowConfig(
         provider=provider,
         responses_url=responses_url,
-        api_key=_env("FOUNDRY_HOSTED_RESPONSES_API_KEY")
-        or _env("FOUNDRY_HOSTED_API_KEY"),
+        api_key=_env("FOUNDRY_HOSTED_RESPONSES_API_KEY") or _env("FOUNDRY_HOSTED_API_KEY"),
         timeout_seconds=_env_float("FOUNDRY_HOSTED_RESPONSES_TIMEOUT_SECONDS", 3.0),
     )
     if provider == CONVERSATION_SHADOW_RESPONSES and not config.responses_url:

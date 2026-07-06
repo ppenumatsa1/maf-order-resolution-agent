@@ -2,73 +2,34 @@
 
 ## Goal
 
-Build a verifiable order-resolution workflow that:
-- automates low-risk customer support actions,
-- pauses for human approval on risky decisions,
-- preserves full timeline/audit history for operators.
+Build a verifiable customer-support workflow that:
 
-## Use case
+- auto-resolves low-risk cases,
+- pauses for human approval on risky cases,
+- preserves timeline and audit history end-to-end.
 
-Customer support scenarios like delayed delivery, damaged item, and policy-based compensation:
-1. Triage customer issue.
-2. Retrieve policy evidence.
-3. Decide action (auto-complete or HITL checkpoint).
-4. Stream workflow events to UI and persist run history.
+Primary scenarios include delayed delivery, damaged item, and policy-driven compensation decisions.
 
-## Verifiability
+## Journey Status
 
-Run the required validation chain:
+| Stage                | Status      | Runtime path                                                                                            |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| Local MAF            | Implemented | WORKFLOW_MODE=maf_sdk                                                                                   |
+| Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                 |
+| Foundry hosted agent | In progress | Hosted invocations/responses endpoints are deployable and testable; fast three-target parity gate is enabled |
 
-```bash
-make test
-make eval-backend
-make test-e2e
-```
+## Quick Start (Local)
 
-For cross-endpoint parity (local + Azure + Foundry), use:
-
-```bash
-make parity-all
-```
-
-Core baseline checks:
-- `ORD-1001` (low amount) -> typically no HITL.
-- `ORD-1009` (high amount) -> HITL expected.
-
-## Journey status
-
-| Stage | Status | Runtime path |
-|---|---|---|
-| Local MAF | Implemented | `WORKFLOW_MODE=maf_sdk` |
-| Azure app-hosted | Implemented | Same runtime behavior hosted on ACA/Postgres/App Insights |
-| Foundry hosted agent | In progress | Hosted `invocations` path is deployed/testable; full parity iteration continues |
-
-## No-restart Foundry testing ideas
-
-| Idea | Restart needed | Notes |
-|---|---|---|
-| Backend env var only (`FOUNDRY_HOSTED_INVOCATIONS_URL`) | Yes | Stable for fixed endpoint, but slower for iterative tests. |
-| Runtime URL override in diagnostic API request (implemented) | No | Best local iteration path for hosted endpoint testing without UI restarts. |
-| Per-endpoint presets file (`dev-foundry-endpoints.json`) | No | Good next step if you frequently rotate among many agents/projects. |
-
-## Run locally
-
-### 1) Start services
+1. Bootstrap dependencies.
 
 ```bash
 make bootstrap
-make run-backend
-make run-frontend
 ```
 
-Frontend: `http://localhost:5173`
-Backend: `http://localhost:8000`
+2. Configure backend environment.
 
-### 2) Environment variables
-
-Use `backend/.env` (copy from `backend/.env.example`) and set:
-
-#### Workflow Studio (single UI)
+- Copy backend env template and edit values in [backend/.env.example](backend/.env.example) and [backend/.env](backend/.env).
+- Core local mode:
 
 ```bash
 WORKFLOW_MODE=maf_sdk
@@ -77,43 +38,117 @@ RAG_PROVIDER=pgvector
 MEMORY_PROVIDER=postgres
 ```
 
-#### Foundry-hosted endpoint wiring
+3. Start services.
 
 ```bash
-# required when WORKFLOW_MODE=foundry_hosted
-FOUNDRY_HOSTED_INVOCATIONS_URL=<foundry_invocations_endpoint>
-
-# optional if endpoint requires auth
-FOUNDRY_HOSTED_API_KEY=<token>
-FOUNDRY_HOSTED_TIMEOUT_SECONDS=30
+make up
 ```
 
-Auth behavior:
-- If **API key/token field is left blank**, backend auto-acquires an Entra bearer token for `services.ai.azure.com` endpoints (requires `az login`).
-- If auto token fails, set `FOUNDRY_HOSTED_API_KEY` in backend environment configuration.
+Or run backend/frontend separately:
 
-### 3) Use Workflow Studio
+```bash
+make run-backend
+make run-frontend
+```
 
-- **Workflow Studio** uses the configured backend API base and no longer exposes
-  backend URL presets or request-time Foundry credential overrides in the UI.
-- Runtime status uses backend health metadata
-  (`environment • workflow_mode • provider/mode`) so it is obvious which runtime
-  the configured backend is serving.
-- For non-UI hosted endpoint diagnostics, use backend `POST /api/foundry/invoke`;
-  Foundry endpoint and authentication are read from backend environment
-  configuration only.
+4. Open UI and health endpoints.
 
-## Deploy and test in Azure/Foundry
+- Frontend: http://localhost:5173
+- Backend health: http://localhost:8000/health
 
-| Step | Command |
-|---|---|
-| Deploy app services | `azd deploy` |
-| Deploy hosted agent | `azd deploy order-resolution-hosted --no-prompt` |
-| Check hosted agent | `azd ai agent show order-resolution-hosted --output json` |
-| Invoke hosted agent | `azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --no-prompt` |
+## Required Validation Gates
 
-## Key docs
+Run these before considering a change complete:
 
-- Backend details: `backend/README.md`
-- HITL rules: `docs/design/hitl-approval-conditions.md`
-- Local -> Azure -> Foundry decisions: `docs/design/local-azure-foundry-decisions.md`
+```bash
+make test
+make eval-backend
+make test-e2e
+./scripts/skills/design-review-skill.sh
+```
+
+Cross-target parity gate (requires endpoint matrix env vars):
+
+```bash
+make parity-all
+```
+
+POC parity is intentionally fast while still covering all three targets (local + Azure + Foundry):
+
+- manual baseline cases: ORD-1001 and ORD-1009
+- event contract checks: all contract cases
+- UI smoke checks: low-risk complete, high-risk approve, high-risk reject
+
+Baseline behavior checks:
+
+- ORD-1001 should usually complete without HITL.
+- ORD-1009 should require HITL.
+
+## Deploy to Azure (App-Hosted Backend + Frontend)
+
+1. Make sure azd environment is selected and configured.
+2. Deploy app services:
+
+```bash
+azd deploy
+```
+
+3. Verify deployed health:
+
+```bash
+eval "$(azd env get-values)"
+curl -fsS "$API_URL/health"
+```
+
+## Deploy to Foundry (Hosted Agent)
+
+Deploy hosted agent package:
+
+```bash
+azd deploy order-resolution-hosted --no-prompt
+```
+
+Verify and invoke:
+
+```bash
+azd ai agent show order-resolution-hosted --output json
+azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
+azd ai agent invoke order-resolution-hosted '{"input":"health check"}' --protocol responses --no-prompt
+```
+
+Note: when multiple protocols are declared, pass --protocol explicitly.
+
+## Environment Model Configuration
+
+For app-hosted model client mode (maf_sdk + foundry_models), model/deployment config is read from backend environment:
+
+- FOUNDRY_PROJECTS_ENDPOINT
+- FOUNDRY_MODEL_DEPLOYMENT_NAME
+- FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME
+
+Current default examples in checked-in templates use gpt-4.1-mini for chat deployment.
+
+## Foundry-Hosted Wiring (Local Adapter Mode)
+
+When using WORKFLOW_MODE=foundry_hosted in local backend adapter mode, configure:
+
+- FOUNDRY_HOSTED_INVOCATIONS_URL (required)
+- FOUNDRY_HOSTED_PROTOCOL=invocations|dual|responses
+- FOUNDRY_HOSTED_CONVERSATION_SHADOW_PROVIDER=none|responses (optional)
+- FOUNDRY_HOSTED_RESPONSES_URL (optional)
+- FOUNDRY_HOSTED_API_KEY (optional if Entra token flow is available)
+
+## Troubleshooting
+
+- If parity fails with 429 session_quota_exceeded from Foundry, reduce test concurrency, add case delays, or clear/raise session quota.
+- If hosted invokes fail in dual protocol mode, verify protocol-specific endpoint and pass --protocol on azd ai agent invoke.
+
+## Documentation Map
+
+- System architecture: [docs/design/architecture.md](docs/design/architecture.md)
+- Project phases and milestone history: [docs/design/implementation-phases.md](docs/design/implementation-phases.md)
+- Runtime decisions (Local -> Azure -> Foundry): [docs/design/local-azure-foundry-decisions.md](docs/design/local-azure-foundry-decisions.md)
+- HITL rules and test baseline: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)
+- IO and telemetry schema: [docs/design/schema-io-telemetry.md](docs/design/schema-io-telemetry.md)
+- Backend operational details: [backend/README.md](backend/README.md)
+- Scripts and parity/e2e usage: [scripts/README.md](scripts/README.md)

@@ -86,18 +86,18 @@ Current deterministic local-runtime caveat:
 - All other order ids currently resolve to workflow order id `ord-1001` with amount `79.0`.
 - Therefore, `ORD-1002` through `ORD-1008` and `ORD-1010` are still useful as prompt-level regression cases, but the current backend will persist/emit `ord-1001` for those runs until order lookup is generalized.
 
-| Case | Prompt | Primary path | Decision to take | Expected signals |
-| --- | --- | --- | --- | --- |
-| ORD-1001 | `Order ORD-1001 arrived late by 1 day. What can you do?` | Happy path, no HITL | None | `policy_retrieval` runs; no `hitl.request`; final `workflow.output.status=completed`; emitted order id is `ord-1001`. |
-| ORD-1002 | `Order ORD-1002 has the wrong item in the box.` | Wrong-item no-HITL path | None | `tool.call.policy_evidence_ids` exists; no `hitl.request`; final status `completed`; emitted order id is currently `ord-1001`. |
-| ORD-1003 | `Order ORD-1003 is delayed and I want the policy explanation before any action.` | RAG evidence visibility | None | `workflow.stage` includes `policy_retrieval`; `tool.call.policy_retrieval.provider` and `query_id` are present; final status `completed`. |
-| ORD-1004 | `Order ORD-1004 arrived damaged and broken.` | Damaged-item HITL | Approve | `checkpoint.created` then `hitl.request`; approval emits one `hitl.response`; final status `completed`. |
-| ORD-1005 | `Order ORD-1005 arrived broken and the customer asks for a replacement.` | Damaged-item HITL rejection | Reject | `hitl.request` appears; rejection emits `workflow.output.status=escalated`; no duplicate terminal output. |
-| ORD-1006 | `Order ORD-1006 was delayed but package condition is fine.` | Low-risk durability case | None | Complete the run, restart backend, then verify workflow details/events/messages are still queryable. |
-| ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.` | Session history continuity | None | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages. |
-| ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.` | Pause/resume checkpoint | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`. |
-| ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.` | High-amount HITL | Approve | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`. |
-| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case | None | No HITL; final status `completed`; use this as a smoke test after canonical layout/Azure/Foundry moves. |
+| Case     | Prompt                                                                               | Primary path                | Decision to take    | Expected signals                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------ | --------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| ORD-1001 | `Order ORD-1001 arrived late by 1 day. What can you do?`                             | Happy path, no HITL         | None                | `policy_retrieval` runs; no `hitl.request`; final `workflow.output.status=completed`; emitted order id is `ord-1001`.                     |
+| ORD-1002 | `Order ORD-1002 has the wrong item in the box.`                                      | Wrong-item no-HITL path     | None                | `tool.call.policy_evidence_ids` exists; no `hitl.request`; final status `completed`; emitted order id is currently `ord-1001`.            |
+| ORD-1003 | `Order ORD-1003 is delayed and I want the policy explanation before any action.`     | RAG evidence visibility     | None                | `workflow.stage` includes `policy_retrieval`; `tool.call.policy_retrieval.provider` and `query_id` are present; final status `completed`. |
+| ORD-1004 | `Order ORD-1004 arrived damaged and broken.`                                         | Damaged-item HITL           | Approve             | `checkpoint.created` then `hitl.request`; approval emits one `hitl.response`; final status `completed`.                                   |
+| ORD-1005 | `Order ORD-1005 arrived broken and the customer asks for a replacement.`             | Damaged-item HITL rejection | Reject              | `hitl.request` appears; rejection emits `workflow.output.status=escalated`; no duplicate terminal output.                                 |
+| ORD-1006 | `Order ORD-1006 was delayed but package condition is fine.`                          | Low-risk durability case    | None                | Complete the run, restart backend, then verify workflow details/events/messages are still queryable.                                      |
+| ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.`         | Session history continuity  | None                | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages.                    |
+| ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.`                | Pause/resume checkpoint     | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`.                                         |
+| ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.`                          | High-amount HITL            | Approve             | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`.                            |
+| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case   | None                | No HITL; final status `completed`; use this as a smoke test after canonical layout/Azure/Foundry moves.                                   |
 
 For each row, capture:
 
@@ -144,16 +144,31 @@ PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
 Commands:
 
 ```bash
-make parity-local
-make parity-hosted
 make parity-all
 ```
 
-- `parity-local` and `parity-hosted` are quick subset checks.
-- `parity-all` is the required full gate and enforces all three targets.
+- `parity-all` is the single parity gate for this POC and enforces all three targets.
+- The default fast profile runs:
+  - manual cases `ORD-1001` and `ORD-1009`
+  - all event contract checks
+  - Playwright smoke subset (low-risk complete, high-risk approve, high-risk reject)
 - Reports are generated under `scripts/parity/reports/` in JSON and markdown.
 
-For hosted Playwright runs against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
+To run exhaustive parity only when needed:
+
+```bash
+python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full
+```
+
+Parity runner behavior for hosted targets:
+
+- For `azure` and `foundry` targets, the runner applies hosted-safe Playwright defaults automatically:
+  - `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000`
+  - `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`
+  - `PLAYWRIGHT_CASE_DELAY_MS=15000`
+- Local target timings remain unchanged.
+
+For standalone hosted Playwright runs (outside parity runner) against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
 
 ```bash
 PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000 \

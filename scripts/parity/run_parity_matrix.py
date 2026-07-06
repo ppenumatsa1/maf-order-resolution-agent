@@ -16,6 +16,12 @@ from typing import Any
 
 TARGETS = ("local", "azure", "foundry")
 TERMINAL_STATUSES = {"completed", "failed", "escalated"}
+FAST_MATRIX_ARGS = "--case ORD-1001 --case ORD-1009"
+FAST_PLAYWRIGHT_GREP = (
+    "high-risk request triggers HITL and approve path completes|"
+    "low-risk request completes without HITL|"
+    "reject decision escalates workflow"
+)
 
 
 @dataclass(frozen=True)
@@ -206,7 +212,10 @@ def _evaluate_contract_case(
                 failures.append(f"payload check missing event: {event_type}")
                 continue
             for field_path in field_paths:
-                if all(_lookup_path(payload, str(field_path)) is None for payload in payloads):
+                if all(
+                    _lookup_path(payload, str(field_path)) is None
+                    for payload in payloads
+                ):
                     failures.append(
                         f"missing required payload field for {event_type}: {field_path}"
                     )
@@ -242,6 +251,19 @@ def _run_subprocess(
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
+
+
+def _playwright_env_for_target(target: TargetConfig) -> dict[str, str]:
+    env = {
+        **os.environ,
+        "PLAYWRIGHT_BASE_URL": target.web_url,
+    }
+    if target.name != "local":
+        # Hosted endpoints can be slower under quota limits; apply resilient defaults.
+        env.setdefault("PLAYWRIGHT_EXPECT_TIMEOUT_MS", "60000")
+        env.setdefault("PLAYWRIGHT_TEST_TIMEOUT_MS", "120000")
+        env.setdefault("PLAYWRIGHT_CASE_DELAY_MS", "15000")
+    return env
 
 
 def _resolve_targets(selected: list[str]) -> list[str]:
@@ -280,6 +302,7 @@ def _write_report(report: dict[str, Any], output_dir: Path) -> tuple[Path, Path]
         "# Endpoint parity report",
         "",
         f"- Generated: {report['generated_at']}",
+        f"- Profile: {report['profile']}",
         "",
         "| Target | Manual Matrix | Event Contract | Playwright | Overall |",
         "| --- | --- | --- | --- | --- |",
@@ -305,7 +328,9 @@ def parse_args() -> argparse.Namespace:
         if candidate.exists():
             default_env_file = str(candidate)
 
-    parser = argparse.ArgumentParser(description="Run local/azure/foundry endpoint parity checks.")
+    parser = argparse.ArgumentParser(
+        description="Run local/azure/foundry endpoint parity checks."
+    )
     parser.add_argument(
         "--targets",
         nargs="+",
@@ -316,6 +341,15 @@ def parse_args() -> argparse.Namespace:
         "--allow-partial",
         action="store_true",
         help="Allow running a subset of targets (for quick local checks).",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("fast", "full"),
+        default=os.getenv("PARITY_PROFILE", "fast"),
+        help=(
+            "Parity profile. fast runs two manual baseline cases and a UI smoke subset; "
+            "full runs complete manual matrix and full UI suite."
+        ),
     )
     parser.add_argument(
         "--env-file",
@@ -368,6 +402,11 @@ def main() -> int:
         )
 
     contract = _load_contract(args.contract)
+
+    matrix_args = args.matrix_args
+    if not matrix_args and args.profile == "fast":
+        matrix_args = FAST_MATRIX_ARGS
+
     target_results: list[dict[str, Any]] = []
     parity_passed = True
 
@@ -377,8 +416,8 @@ def main() -> int:
             str(repo_root / "scripts/manual/run-manual-matrix.sh"),
             target.api_url,
         ]
-        if args.matrix_args:
-            matrix_command.extend(shlex.split(args.matrix_args))
+        if matrix_args:
+            matrix_command.extend(shlex.split(matrix_args))
         manual_matrix = _run_subprocess(matrix_command, cwd=repo_root)
 
         contract_cases: list[dict[str, Any]] = []
@@ -400,13 +439,14 @@ def main() -> int:
             "cases": contract_cases,
         }
 
+        playwright_command = ["npm", "run", "test:e2e"]
+        if args.profile == "fast":
+            playwright_command.extend(["--", "-g", FAST_PLAYWRIGHT_GREP])
+
         playwright = _run_subprocess(
-            ["npm", "run", "test:e2e"],
+            playwright_command,
             cwd=repo_root / "scripts/playwright",
-            env={
-                **os.environ,
-                "PLAYWRIGHT_BASE_URL": target.web_url,
-            },
+            env=_playwright_env_for_target(target),
         )
 
         target_passed = (
@@ -429,6 +469,7 @@ def main() -> int:
 
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
+        "profile": args.profile,
         "targets": target_results,
         "passed": parity_passed,
     }

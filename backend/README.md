@@ -6,7 +6,7 @@
 |---|---|---|
 | Local MAF | Implemented | `WORKFLOW_MODE=maf_sdk` is fully wired and is the active runtime path. |
 | Azure app-hosted | Prepared | Azure IaC and container wiring are present; first cutover uses `STORE_PROVIDER=postgres` with Azure PostgreSQL via `DATABASE_URL`. |
-| Foundry-hosted | In progress | `WORKFLOW_MODE=foundry_hosted` uses a hosted `invocations` workflow adapter and requires `FOUNDRY_HOSTED_INVOCATIONS_URL`. |
+| Foundry-hosted | In progress | `WORKFLOW_MODE=foundry_hosted` uses a hosted `invocations` workflow adapter and requires `FOUNDRY_HOSTED_INVOCATIONS_URL`; the cutover hosted package uses `FOUNDRY_HOSTED_PROTOCOL=dual` to expose both `invocations` and additive `responses` routes. Optional `FOUNDRY_HOSTED_CONVERSATION_SHADOW_PROVIDER=responses` labels shadow turns with `synthetic=true` metadata. |
 
 The backend still keeps local MAF as the default runtime path. Azure app-hosted deployment preserves that runtime path and moves the hosting/database/secrets layer to Azure. The app-hosted IaC also provisions Azure AI Foundry/Azure AI Services project and model deployments and passes non-secret deployment metadata through `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`, and `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME`. The Foundry-hosted path is now wired for hosted invocations and event ingress but still requires hosted agent deployment for end-to-end execution.
 
@@ -200,7 +200,8 @@ Telemetry:
 - `GET /api/chat/stream/{thread_id}` streams AGUI-like SSE events.
 - `GET /api/chat/stream/{thread_id}/rich` streams AG-UI-compatible `workflow.rich` envelopes.
 - `POST /api/hitl/respond` approves/rejects a pending checkpoint.
-- `POST /api/foundry/invoke` proxies a direct hosted-agent invocations payload for non-UI diagnostics/automation using configured backend env (`FOUNDRY_HOSTED_INVOCATIONS_URL`, optional `FOUNDRY_HOSTED_API_KEY`). For `services.ai.azure.com` targets without an API key, backend auto-acquires an Entra bearer token (`az login` required).
+- `POST /api/foundry/invoke` proxies a direct hosted-agent invocations payload for non-UI diagnostics/automation using configured backend env (`FOUNDRY_HOSTED_INVOCATIONS_URL`, optional `FOUNDRY_HOSTED_API_KEY`). For `services.ai.azure.com` targets without an API key, backend auto-acquires an Entra bearer token (`az login` required). Hosted agent runtime protocol selection is controlled separately by `FOUNDRY_HOSTED_PROTOCOL=invocations|dual|responses`; use `dual` for the cutover hosted package and `invocations` for rollback.
+- `FOUNDRY_HOSTED_CONVERSATION_SHADOW_PROVIDER=responses` is hosted-runtime-only shadow mode. It posts Invocations user turns to `FOUNDRY_HOSTED_RESPONSES_URL` (or derives `/responses` from an `/invocations` URL) with `metadata.synthetic=true`, `metadata.source_protocol=invocations`, and `metadata.operation=shadow_conversation` so those records are distinguishable from active Responses canary runs.
 - `POST /api/foundry/events` ingests hosted-agent native events (token-protected via `FOUNDRY_EVENT_CALLBACK_TOKEN`).
 - `GET /api/workflows` lists workflow runs (`page`, `page_size`, and legacy `pageSize` are supported).
 - `GET /api/workflows/{thread_id}` returns workflow run details (including timeline events).
@@ -210,11 +211,17 @@ Telemetry:
 
 ## Multi-target parity checks
 
-Use repository-level parity commands to validate equivalent Workflow Studio behavior across local, Azure, and Foundry endpoints:
+Use `make parity-all` to run the single fast parity gate across local, Azure, and Foundry endpoints.
 
-- `make parity-local`
-- `make parity-hosted`
-- `make parity-all` (required full gate)
+Fast parity includes:
+
+- manual baseline cases `ORD-1001` and `ORD-1009`
+- all event contract checks
+- Playwright smoke subset (low-risk complete, high-risk approve, high-risk reject)
+
+For one-off exhaustive verification, run:
+
+- `python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full`
 
 Parity runner configuration is environment-driven via `PARITY_<TARGET>_{API,WEB}_URL` variables and optional `PARITY_ENV_FILE`.
 

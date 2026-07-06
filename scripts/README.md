@@ -36,12 +36,33 @@ PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
 Run:
 
 ```bash
-make parity-local
-make parity-hosted
 make parity-all
 ```
 
-`make parity-all` is the required full parity gate. Reports are written to `scripts/parity/reports/`.
+`make parity-all` is the single parity gate for this POC and always runs all three targets (`local`, `azure`, `foundry`) with the fast profile. Reports are written to `scripts/parity/reports/`.
+
+Fast profile coverage:
+
+- manual matrix baseline cases: `ORD-1001` and `ORD-1009`
+- all event contract cases from `scripts/parity/contract.json`
+- Playwright UI smoke subset:
+	- `high-risk request triggers HITL and approve path completes`
+	- `low-risk request completes without HITL`
+	- `reject decision escalates workflow`
+
+If you need a one-off exhaustive run, invoke the runner directly:
+
+```bash
+python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full
+```
+
+For `azure` and `foundry` targets, the parity runner now applies hosted-safe Playwright defaults automatically:
+
+- `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000`
+- `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`
+- `PLAYWRIGHT_CASE_DELAY_MS=15000`
+
+You can still override these via environment variables when needed.
 
 ## Run with Docker Compose profile
 

@@ -27,13 +27,13 @@
       "value": "order-resolution"
     },
     "foundryChatDeploymentName": {
-      "value": "gpt-4o-mini"
+      "value": "gpt-4.1-mini"
     },
     "foundryChatModelFormat": {
       "value": "OpenAI"
     },
     "foundryChatModelName": {
-      "value": "gpt-4o-mini"
+      "value": "gpt-4.1-mini"
     },
     "foundryChatModelVersion": {
       "value": "2024-07-18"

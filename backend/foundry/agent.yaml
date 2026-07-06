@@ -2,9 +2,11 @@
 
 kind: hosted
 name: order-resolution-hosted
-description: Hosted invocations agent for order-resolution workflow parity.
+description: Hosted agent for order-resolution workflow parity.
 protocols:
     - protocol: invocations
+      version: 1.0.0
+    - protocol: responses
       version: 1.0.0
 resources:
     cpu: "0.5"

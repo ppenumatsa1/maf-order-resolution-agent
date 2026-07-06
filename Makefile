@@ -3,7 +3,7 @@ COMPOSE_ENV_FILE ?= backend/.env
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
 	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
-	parity-local parity-hosted parity-all run-mock-mcp up down logs ps docker-test \
+	parity-all run-mock-mcp up down logs ps docker-test \
 	validate-quick validate-full deploy-app deploy-full clean
 
 help:
@@ -22,9 +22,7 @@ help:
 	@echo "  eval-backend    - Run workflow eval harness"
 	@echo "  test-e2e        - Run Playwright tests locally"
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
-	@echo "  parity-local    - Run quick parity checks for local endpoint"
-	@echo "  parity-hosted   - Run quick parity checks for Azure + Foundry endpoints"
-	@echo "  parity-all      - Run required parity gate for local + Azure + Foundry"
+	@echo "  parity-all      - Run fast parity gate across local + Azure + Foundry"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
 	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
@@ -88,14 +86,8 @@ test-e2e:
 manual-matrix:
 	scripts/manual/run-manual-matrix.sh "$${API_URL:-http://localhost:8000}" $${MANUAL_MATRIX_ARGS:-}
 
-parity-local:
-	scripts/parity/run-parity-matrix.sh --allow-partial --targets local
-
-parity-hosted:
-	scripts/parity/run-parity-matrix.sh --allow-partial --targets azure foundry
-
 parity-all:
-	scripts/parity/run-parity-matrix.sh --targets local azure foundry
+	scripts/parity/run-parity-matrix.sh --targets local azure foundry --profile fast
 
 run-mock-mcp: ensure-backend-env
 	. backend/.venv/bin/activate && uvicorn scripts.mcp.mock_mcp_server:app --reload --port 8011

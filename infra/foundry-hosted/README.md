@@ -5,10 +5,39 @@ This scaffold prepares a dedicated deployment/runtime path for Foundry-hosted wo
 ## Layout
 
 - `iac/main.bicep`: starter shared resources and extension points for Foundry hosting.
+- `iac/modules/*`: private networking modules (VNet, private DNS, private endpoints).
 - `iac/parameters.dev.json`: sample dev parameters.
 - `runtime/.env.example`: provider/env wiring for Foundry mode and hosted invocations endpoint.
 - `runtime/entrypoint.sh`: backend startup entrypoint for this path.
 - `runtime/smoke-test.sh`: expected-not-yet-implemented validation.
+
+## Private networking mode (phase 1 scaffold)
+
+The IaC now supports an optional private networking mode for Foundry-hosted
+deployments. This mode is disabled by default to preserve the current behavior.
+
+Set `enablePrivateNetworking=true` in `iac/parameters.dev.json` to create:
+
+- A VNet with two subnets:
+  - `agent-subnet` delegated to `Microsoft.App/environments`
+  - `pe-subnet` for private endpoints
+- Private DNS zones and VNet links for:
+  - `privatelink.blob.core.windows.net`
+  - `privatelink.azconfig.io`
+  - `privatelink.services.ai.azure.com`
+  - `privatelink.cognitiveservices.azure.com`
+  - `privatelink.openai.azure.com`
+- Private endpoints for:
+  - storage account (blob)
+  - app configuration
+  - existing Foundry account (when `existingFoundryAccountResourceId` is set)
+
+Notes:
+
+- Foundry account private endpoint creation is opt-in through
+  `existingFoundryAccountResourceId`.
+- This phase is network-foundation only; tools-behind-vnet and full ingress
+  hardening are deferred.
 
 ## Runtime wiring
 

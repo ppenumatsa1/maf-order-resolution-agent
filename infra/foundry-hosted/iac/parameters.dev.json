@@ -13,6 +13,39 @@
     },
     "foundryEventCallbackTokenSettingName": {
       "value": "FOUNDRY_EVENT_CALLBACK_TOKEN"
+    },
+    "enablePrivateNetworking": {
+      "value": false
+    },
+    "vnetName": {
+      "value": ""
+    },
+    "vnetAddressPrefix": {
+      "value": "192.168.0.0/16"
+    },
+    "agentSubnetName": {
+      "value": "agent-subnet"
+    },
+    "agentSubnetPrefix": {
+      "value": "192.168.0.0/24"
+    },
+    "privateEndpointSubnetName": {
+      "value": "pe-subnet"
+    },
+    "privateEndpointSubnetPrefix": {
+      "value": "192.168.1.0/24"
+    },
+    "privateDnsZoneNames": {
+      "value": [
+        "privatelink.blob.core.windows.net",
+        "privatelink.azconfig.io",
+        "privatelink.services.ai.azure.com",
+        "privatelink.cognitiveservices.azure.com",
+        "privatelink.openai.azure.com"
+      ]
+    },
+    "existingFoundryAccountResourceId": {
+      "value": ""
     }
   }
 }

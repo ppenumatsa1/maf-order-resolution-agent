@@ -12,10 +12,10 @@ Primary scenarios include delayed delivery, damaged item, and policy-driven comp
 
 ## Journey Status
 
-| Stage                | Status      | Runtime path                                                                                            |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| Local MAF            | Implemented | WORKFLOW_MODE=maf_sdk                                                                                   |
-| Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                 |
+| Stage                | Status      | Runtime path                                                                                                 |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| Local MAF            | Implemented | WORKFLOW_MODE=maf_sdk                                                                                        |
+| Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                      |
 | Foundry hosted agent | In progress | Hosted invocations/responses endpoints are deployable and testable; fast three-target parity gate is enabled |
 
 ## Quick Start (Local)

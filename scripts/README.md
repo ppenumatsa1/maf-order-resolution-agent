@@ -46,9 +46,9 @@ Fast profile coverage:
 - manual matrix baseline cases: `ORD-1001` and `ORD-1009`
 - all event contract cases from `scripts/parity/contract.json`
 - Playwright UI smoke subset:
-	- `high-risk request triggers HITL and approve path completes`
-	- `low-risk request completes without HITL`
-	- `reject decision escalates workflow`
+  - `high-risk request triggers HITL and approve path completes`
+  - `low-risk request completes without HITL`
+  - `reject decision escalates workflow`
 
 If you need a one-off exhaustive run, invoke the runner directly:
 

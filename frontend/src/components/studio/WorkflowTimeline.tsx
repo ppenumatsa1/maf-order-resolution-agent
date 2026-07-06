@@ -1,5 +1,3 @@
-import { useEffect, useRef } from "react";
-
 import TimelineEvent from "./TimelineEvent";
 import { WorkflowEvent } from "../../types/workflow";
 
@@ -20,12 +18,6 @@ export default function WorkflowTimeline({
   isLiveStreaming,
   richEnvelopeCount,
 }: Props) {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [events]);
-
   return (
     <section className="panel panel-timeline">
       <header className="panel-head">
@@ -56,7 +48,6 @@ export default function WorkflowTimeline({
           {events.map((event) => (
             <TimelineEvent key={event.id} event={event} />
           ))}
-          <div ref={bottomRef} />
         </div>
       )}
     </section>

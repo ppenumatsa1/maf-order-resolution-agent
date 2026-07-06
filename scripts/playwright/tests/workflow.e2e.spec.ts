@@ -86,6 +86,14 @@ test.describe("MAF workflow UI", () => {
     ).toHaveCount(0);
   });
 
+  test("studio hides backend override controls", async ({ page }) => {
+    await openStudioWithHealthyHistory(page);
+    await expect(page.getByText("Runtime:", { exact: false })).toBeVisible();
+    await expect(page.getByLabel("Backend URL")).toHaveCount(0);
+    await expect(page.getByLabel("Backend preset")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Apply Backend" })).toHaveCount(0);
+  });
+
   test("new run clears selected workflow panels", async ({ page }) => {
     await openStudioWithHealthyHistory(page);
     const outputPanel = page.locator(".panel-output");

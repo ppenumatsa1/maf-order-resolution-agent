@@ -7,6 +7,12 @@
     },
     "namePrefix": {
       "value": "maffddev"
+    },
+    "foundryHostedInvocationsUrl": {
+      "value": ""
+    },
+    "foundryEventCallbackTokenSettingName": {
+      "value": "FOUNDRY_EVENT_CALLBACK_TOKEN"
     }
   }
 }

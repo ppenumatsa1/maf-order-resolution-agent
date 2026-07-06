@@ -42,6 +42,13 @@ services:
     environment:
       APP_ENV: docker
       OTEL_SERVICE_NAME: maf-customer-resolution
+      WORKFLOW_MODE: ${WORKFLOW_MODE:-maf_sdk}
+      FOUNDRY_HOSTED_INVOCATIONS_URL: ${FOUNDRY_HOSTED_INVOCATIONS_URL:-}
+      FOUNDRY_HOSTED_API_KEY: ${FOUNDRY_HOSTED_API_KEY:-}
+      FOUNDRY_HOSTED_TIMEOUT_SECONDS: ${FOUNDRY_HOSTED_TIMEOUT_SECONDS:-30}
+      FOUNDRY_EVENT_CALLBACK_TOKEN: ${FOUNDRY_EVENT_CALLBACK_TOKEN:-}
+      FOUNDRY_PROJECTS_ENDPOINT: ${FOUNDRY_PROJECTS_ENDPOINT:-}
+      FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}
       MCP_SERVER_URL: http://mock-mcp:8011/mcp
       MCP_API_KEY: demo-api-key
       MCP_BEARER_TOKEN: demo-bearer-token
@@ -57,7 +64,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      API_BASE: ""
+      API_BASE: ${API_URL:-}
       NGINX_API_UPSTREAM: http://backend:8000
       VITE_PROXY_TARGET: http://backend:8000
 

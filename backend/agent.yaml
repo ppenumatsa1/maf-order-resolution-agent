@@ -1,0 +1,9 @@
+kind: hosted
+name: order-resolution-hosted
+protocols:
+    - protocol: invocations
+      version: 1.0.0
+code_configuration:
+    runtime: python_3_13
+    entry_point: foundry/main.py
+    dependency_resolution: remote_build

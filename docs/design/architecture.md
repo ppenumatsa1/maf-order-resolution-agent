@@ -20,7 +20,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 - operationally transparent (SSE timeline, workflow history),
 - business-safe (deterministic HITL triggers and approvals),
 - durable (Postgres-backed persistence for runs/events/messages/checkpoints),
-- extensible (local MAF now, Azure/Foundry-hosted scaffolding available).
+- extensible (local MAF now, Azure app-hosted deployed, Foundry-hosted invocations integration in progress).
 
 ## High-Level Runtime Architecture
 
@@ -96,6 +96,65 @@ ASCII fallback (if Mermaid rendering is unavailable):
 Live updates: FastAPI Backend -> SSE event stream by thread -> UI timeline
 ```
 
+## Workflow-Mode Mapping (Shared Tools + Events, Different Workflow Engines)
+
+Both execution modes keep the **same API surface**, **same business tools**, and **same stable event contract**.
+What changes is the workflow engine behind the service boundary.
+
+```mermaid
+flowchart TD
+    A[main.py + container.py wiring]
+    B[POST /api/chat/run]
+    C[OrderResolutionService.start_chat_run]
+    D{WORKFLOW_MODE}
+
+    A --> B --> C --> D
+
+    D -->|maf_sdk| E1[OrderResolutionWorkflow]
+    D -->|foundry_hosted| E2[FoundryHostedWorkflow]
+
+    E1 --> F[Shared business tools\nfetch_order_status / fetch_policy / submit_resolution]
+    E2 --> F
+
+    E1 --> G[Shared event types\nworkflow.stage / tool.call / checkpoint.created /\nhitl.request / hitl.response / workflow.output]
+    E2 --> G
+
+    G --> H[EventBus + projector]
+    H --> I[(workflow_runs / workflow_events / checkpoints / approvals)]
+    H --> J[SSE stream to UI]
+```
+
+ASCII fallback:
+
+```text
+main.py/container
+      |
+      v
+POST /api/chat/run
+      |
+      v
+OrderResolutionService
+      |
+      +--> WORKFLOW_MODE=maf_sdk ---------> OrderResolutionWorkflow --------+
+      |                                                                      |
+      +--> WORKFLOW_MODE=foundry_hosted -> FoundryHostedWorkflow -----------+
+                                                                             |
+                                                                             v
+                               Shared tools: fetch_order_status/fetch_policy/submit_resolution
+                                                                             |
+                                                                             v
+     Shared stable events: workflow.stage, tool.call, checkpoint.created, hitl.request,
+                           hitl.response, workflow.output
+                                                                             |
+                                                                             v
+                           EventBus -> DB projections + SSE timeline to UI
+```
+
+### What is shared vs what differs
+
+- **Shared:** router/service entrypoints, business tool semantics, HITL semantics, stable SSE event names, persistence projections.
+- **Different:** workflow engine implementation (`OrderResolutionWorkflow` vs `FoundryHostedWorkflow`) and where orchestration runs.
+
 ## Core Business Flow
 
 1. User submits an order issue from the UI.
@@ -151,7 +210,7 @@ Required commands:
 The same business flow is intended to transition through:
 
 1. local MAF runtime (implemented),
-2. Azure app-hosted runtime (scaffolded),
-3. Foundry-hosted runtime (scaffolded).
+2. Azure app-hosted runtime (deployed),
+3. Foundry-hosted runtime (invocations integration in progress).
 
 Architecture keeps API and event contracts stable to simplify this progression while maintaining business traceability.

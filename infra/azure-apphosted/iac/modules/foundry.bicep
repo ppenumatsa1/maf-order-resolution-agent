@@ -9,7 +9,7 @@ param publicNetworkAccess string = 'Enabled'
 param disableLocalAuth bool = true
 param chatDeploymentName string
 param chatModelFormat string = 'OpenAI'
-param chatModelName string = 'gpt-4o-mini'
+param chatModelName string = 'gpt-4.1-mini'
 param chatModelVersion string = '2024-07-18'
 param chatDeploymentSkuName string = 'GlobalStandard'
 param chatDeploymentCapacity int = 1

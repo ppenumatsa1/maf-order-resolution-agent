@@ -30,19 +30,15 @@ workflow_run_event_projector = WorkflowRunEventProjector(workflow_run_repository
 event_bus.add_listener(workflow_run_event_projector.sync_event_to_run)
 event_bus.add_listener(record_workflow_event)
 
-try:
-    workflow = create_workflow(
-        config=config,
-        event_bus=event_bus,
-        memory_store=memory_store,
-        checkpoint_store=checkpoint_store,
-        mcp_tool=mcp_tool,
-        rag_provider=rag_provider,
-    )
-except NotImplementedError as exc:
-    raise RuntimeError(
-        "Unsupported runtime configuration: foundry_hosted mode is not available yet."
-    ) from exc
+workflow = create_workflow(
+    config=config,
+    event_bus=event_bus,
+    memory_store=memory_store,
+    checkpoint_store=checkpoint_store,
+    mcp_tool=mcp_tool,
+    rag_provider=rag_provider,
+    workflow_run_repository=workflow_run_repository,
+)
 
 order_resolution_service = OrderResolutionService(
     workflow=workflow,

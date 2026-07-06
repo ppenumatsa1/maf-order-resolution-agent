@@ -6,6 +6,12 @@ param location string = resourceGroup().location
 @description('Prefix used for shared resources')
 param namePrefix string = 'maffd'
 
+@description('Foundry hosted invocations endpoint URL wired into backend runtime (optional during scaffold).')
+param foundryHostedInvocationsUrl string = ''
+
+@description('Name of the callback token setting used by backend event ingress.')
+param foundryEventCallbackTokenSettingName string = 'FOUNDRY_EVENT_CALLBACK_TOKEN'
+
 var suffix = toLower(uniqueString(resourceGroup().id))
 var storageAccountName = take(replace('${namePrefix}st${suffix}', '-', ''), 24)
 var appConfigName = take('${namePrefix}-appcs-${suffix}', 50)
@@ -34,4 +40,11 @@ resource appConfig 'Microsoft.AppConfiguration/configurationStores@2024-06-01-pr
 
 output storageAccountId string = storage.id
 output appConfigurationId string = appConfig.id
-output nextStep string = 'Add Foundry project/agent resources and bind runtime identity.'
+output foundryHostedInvocationsUrl string = foundryHostedInvocationsUrl
+output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
+output requiredBackendSettings array = [
+  'WORKFLOW_MODE=foundry_hosted'
+  'FOUNDRY_HOSTED_INVOCATIONS_URL=<hosted-agent-invocations-endpoint>'
+  '${foundryEventCallbackTokenSettingName}=<shared-callback-token>'
+]
+output nextStep string = 'Bind hosted agent deployment endpoint and callback token, then run azd ai agent show/invoke validation.'

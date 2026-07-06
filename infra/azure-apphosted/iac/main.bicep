@@ -34,13 +34,13 @@ param mcpServerUrl string = ''
 param foundryProjectName string = 'order-resolution'
 
 @description('Azure AI Foundry chat model deployment name exposed to the backend.')
-param foundryChatDeploymentName string = 'gpt-4o-mini'
+param foundryChatDeploymentName string = 'gpt-4.1-mini'
 
 @description('Azure AI Foundry chat model format.')
 param foundryChatModelFormat string = 'OpenAI'
 
 @description('Azure AI Foundry chat model name.')
-param foundryChatModelName string = 'gpt-4o-mini'
+param foundryChatModelName string = 'gpt-4.1-mini'
 
 @description('Azure AI Foundry chat model version. Override when the target region requires a different version.')
 param foundryChatModelVersion string = '2024-07-18'

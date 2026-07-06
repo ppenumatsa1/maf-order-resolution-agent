@@ -9,7 +9,7 @@ import RagEvidencePanel from "./components/studio/RagEvidencePanel";
 import RunMetadataPanel from "./components/studio/RunMetadataPanel";
 import WorkflowHistorySidebar from "./components/studio/WorkflowHistorySidebar";
 import WorkflowRunComposer from "./components/studio/WorkflowRunComposer";
-import { getApiBase } from "./config";
+import { getInitialApiBase } from "./config";
 import { openRichThreadStream } from "./lib/sseClient";
 import WorkflowTimeline from "./components/studio/WorkflowTimeline";
 import {
@@ -21,15 +21,26 @@ import {
   WorkflowStatus,
 } from "./types/workflow";
 
-const API_BASE = getApiBase();
 const DEFAULT_MESSAGE =
   "Order ORD-1009 is delayed by 5 days. I need compensation.";
+
+type RuntimeHealth = {
+  status: "ok";
+  service: string;
+  workflow_mode: "maf_sdk" | "foundry_hosted";
+  runtime_provider: string;
+  runtime_mode: string;
+  environment: string;
+};
 
 export default function App() {
   const hasAutoSelectedInitialRun = useRef(false);
   const hasUserInteractedWithRunSelection = useRef(false);
   const selectedThreadIdRef = useRef<string | null>(null);
   const selectionVersionRef = useRef(0);
+  const [apiBase] = useState(() => getInitialApiBase());
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
+  const [runtimeHealthError, setRuntimeHealthError] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [activeHistoryThreadId, setActiveHistoryThreadId] = useState<string | null>(
     null,
@@ -58,10 +69,60 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [isRichStreamConnected, setIsRichStreamConnected] = useState(false);
   const [richEnvelopeCount, setRichEnvelopeCount] = useState(0);
 
+  const clearSelectedRunPanels = useCallback(() => {
+    setSelectedWorkflowDetails(null);
+    setEvents([]);
+    setPendingApprovals([]);
+    setLatestOutput(null);
+    setActionError(null);
+  }, []);
+
+  const loadRuntimeHealth = useCallback(
+    async (baseUrl: string, signal?: AbortSignal) => {
+      setRuntimeHealthError(null);
+      setRuntimeHealth(null);
+      const healthUrls = [`${baseUrl}/api/health`, `${baseUrl}/health`];
+      let lastError: unknown = null;
+      try {
+        for (const url of healthUrls) {
+          try {
+            const response = await fetch(url, { signal });
+            if (!response.ok) {
+              throw new Error(`Health check failed (${response.status})`);
+            }
+            const payload = (await response.json()) as RuntimeHealth;
+            setRuntimeHealth(payload);
+            return;
+          } catch (error) {
+            lastError = error;
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        lastError = error;
+      } finally {
+        if (signal?.aborted) {
+          return;
+        }
+        if (!lastError) {
+          return;
+        }
+        const message =
+          lastError instanceof Error
+            ? lastError.message
+            : "Unable to reach backend health endpoint";
+        setRuntimeHealthError(message);
+      }
+    },
+    [],
+  );
   const loadWorkflowHistory = useCallback(
     async (page: number) => {
       setIsHistoryLoading(true);
@@ -74,9 +135,7 @@ export default function App() {
         if (statusFilter !== "all") {
           params.set("status", statusFilter);
         }
-        const response = await fetch(
-          `${API_BASE}/api/workflows?${params.toString()}`,
-        );
+        const response = await fetch(`${apiBase}/api/workflows?${params.toString()}`);
         if (!response.ok) {
           throw new Error(
             `Unable to fetch workflow history (${response.status})`,
@@ -110,15 +169,8 @@ export default function App() {
         setIsHistoryLoading(false);
       }
     },
-    [pageSize, selectedThreadId, statusFilter],
+    [apiBase, pageSize, statusFilter],
   );
-
-  const clearSelectedRunPanels = useCallback(() => {
-    setSelectedWorkflowDetails(null);
-    setEvents([]);
-    setPendingApprovals([]);
-    setLatestOutput(null);
-  }, []);
 
   const loadWorkflowDetails = useCallback(
     async (
@@ -127,7 +179,7 @@ export default function App() {
     ) => {
       setIsDetailsLoading(true);
       try {
-        const response = await fetch(`${API_BASE}/api/workflows/${threadId}`);
+        const response = await fetch(`${apiBase}/api/workflows/${threadId}`);
         if (!response.ok) {
           throw new Error(
             `Unable to fetch workflow details (${response.status})`,
@@ -150,12 +202,18 @@ export default function App() {
         }
       }
     },
-    [],
+    [apiBase],
   );
 
   useEffect(() => {
     void loadWorkflowHistory(currentPage);
   }, [currentPage, loadWorkflowHistory]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadRuntimeHealth(apiBase, controller.signal);
+    return () => controller.abort();
+  }, [apiBase, loadRuntimeHealth]);
 
   useEffect(() => {
     if (isComposingNewRun || !selectedThreadId) {
@@ -197,7 +255,7 @@ export default function App() {
 
     setRichEnvelopeCount(0);
     const source = openRichThreadStream(
-      API_BASE,
+      apiBase,
       selectedThreadId,
       (envelope) => {
         const nativeEvent = envelope.native_event;
@@ -239,6 +297,7 @@ export default function App() {
       source.close();
     };
   }, [
+    apiBase,
     currentPage,
     isComposingNewRun,
     loadWorkflowDetails,
@@ -264,11 +323,14 @@ export default function App() {
     if (!isComposingNewRun && selectedThreadId) {
       await loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
     }
+    await loadRuntimeHealth(apiBase);
   }, [
+    apiBase,
     currentPage,
     isComposingNewRun,
     loadWorkflowDetails,
     loadWorkflowHistory,
+    loadRuntimeHealth,
     selectedThreadId,
   ]);
 
@@ -282,7 +344,7 @@ export default function App() {
     selectionVersionRef.current = selectionVersion;
     setIsStartingWorkflow(true);
     try {
-      const response = await fetch(`${API_BASE}/api/chat/run`, {
+      const response = await fetch(`${apiBase}/api/chat/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
@@ -306,7 +368,7 @@ export default function App() {
     } finally {
       setIsStartingWorkflow(false);
     }
-  }, [clearSelectedRunPanels, loadWorkflowDetails, loadWorkflowHistory, message]);
+  }, [apiBase, clearSelectedRunPanels, loadWorkflowDetails, loadWorkflowHistory, message]);
 
   const submitHitlDecision = useCallback(
     async (
@@ -315,8 +377,9 @@ export default function App() {
       comment: string,
     ) => {
       setIsActionLoading(true);
+      setActionError(null);
       try {
-        await fetch(`${API_BASE}/api/hitl/respond`, {
+        const response = await fetch(`${apiBase}/api/hitl/respond`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -326,6 +389,19 @@ export default function App() {
             comments: comment,
           }),
         });
+        if (!response.ok) {
+          let detail = `Unable to submit HITL decision (${response.status})`;
+          try {
+            const payload = (await response.json()) as { detail?: string };
+            if (payload.detail) {
+              detail = payload.detail;
+            }
+          } catch {
+            // Ignore JSON parsing errors and keep the HTTP status message.
+          }
+          setActionError(detail);
+          return;
+        }
 
         if (selectedThreadId) {
           await loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
@@ -335,7 +411,7 @@ export default function App() {
         setIsActionLoading(false);
       }
     },
-    [currentPage, loadWorkflowDetails, loadWorkflowHistory, selectedThreadId],
+    [apiBase, currentPage, loadWorkflowDetails, loadWorkflowHistory, selectedThreadId],
   );
 
   const selectWorkflow = (threadId: string) => {
@@ -382,9 +458,19 @@ export default function App() {
   const visibleActiveHistoryThreadId = isComposingNewRun
     ? null
     : activeHistoryThreadId;
+  const runtimeBadgeLabel = runtimeHealth
+    ? `${runtimeHealth.environment} • ${runtimeHealth.workflow_mode} • ${runtimeHealth.runtime_provider}/${runtimeHealth.runtime_mode}`
+    : runtimeHealthError
+      ? "Backend unavailable"
+      : "Checking backend health...";
 
   return (
-    <AppShell onNewRun={handleNewRun} onRefresh={() => void refreshAll()}>
+    <AppShell
+      onNewRun={handleNewRun}
+      onRefresh={() => void refreshAll()}
+      runtimeBadgeLabel={runtimeBadgeLabel}
+      runtimeHealthError={runtimeHealthError}
+    >
       <WorkflowHistorySidebar
         runs={filteredRuns}
         selectedThreadId={visibleActiveHistoryThreadId}
@@ -402,9 +488,7 @@ export default function App() {
         }}
         onSearchChange={setSearchTerm}
         onPreviousPage={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-        onNextPage={() =>
-          setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-        }
+        onNextPage={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
       />
 
       <section className="center-column">
@@ -416,6 +500,7 @@ export default function App() {
           onClear={() => setMessage("")}
         />
         <ManualTestPanel
+          apiBase={apiBase}
           onLoadPrompt={setMessage}
           onOpenWorkflow={openWorkflow}
         />
@@ -440,6 +525,7 @@ export default function App() {
         <HumanApprovalPanel
           approvals={pendingApprovals}
           isSubmitting={isActionLoading}
+          error={actionError}
           onDecision={submitHitlDecision}
         />
         <LatestOutputPanel

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.api.v1.routers.chat import router as chat_router
+from app.api.v1.routers.foundry import router as foundry_router
 from app.api.v1.routers.health import router as health_router
 from app.api.v1.routers.hitl import router as hitl_router
 from app.api.v1.routers.sessions import router as sessions_router
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(foundry_router)
 app.include_router(hitl_router)
 app.include_router(workflows_router)
 app.include_router(sessions_router)

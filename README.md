@@ -1,151 +1,35 @@
-# MAF Multi-Agent Orchestration Demo
+# MAF Order Resolution Agent
 
-Simple command flow to run the full POC with Docker and Make.
+## Goal
 
-## Project Goal
+Build a verifiable customer-support workflow that:
 
-Build a verifiable multi-agent order-resolution system that can automate routine support decisions, pause for human approval on risky actions, and preserve full workflow history for operational transparency and auditability.
+- auto-resolves low-risk cases,
+- pauses for human approval on risky cases,
+- preserves timeline and audit history end-to-end.
 
-## Business Use Case
+Primary scenarios include delayed delivery, damaged item, and policy-driven compensation decisions.
 
-Customer support teams handle issues like delayed delivery, damaged items, and wrong-item scenarios. This project provides:
+## Journey Status
 
-- deterministic triage -> policy -> resolution workflow execution,
-- human-in-the-loop gating for high-risk decisions,
-- persisted conversation/checkpoint/timeline history,
-- UI visibility for operators to inspect and resume workflows safely.
+| Stage                | Status      | Runtime path                                                                                            |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| Local MAF            | Implemented | WORKFLOW_MODE=maf_sdk                                                                                   |
+| Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                 |
+| Foundry hosted agent | In progress | Hosted invocations/responses endpoints are deployable and testable; fast three-target parity gate is enabled |
 
-## Verifiability
+## Quick Start (Local)
 
-System correctness is validated through three layers:
-
-- backend tests for low-risk and HITL workflows,
-- eval harness for expected HITL/no-HITL outcomes,
-- Playwright E2E tests for end-user workflow behavior.
-- Workflow Studio manual matrix panel for operator-visible PASS/FAIL checks against ORD-1001..ORD-1010 scenarios.
-
-Validation commands:
-
-```bash
-make test
-make eval-backend
-make test-e2e
-```
-
-High-level architecture reference:
-
-- `docs/architecture.md`
-
-## Journey Status (Local MAF -> Azure app-hosted -> Foundry-hosted)
-
-Current implementation status:
-
-| Stage               | Status      | Current reality in code                                                                                                 |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Local MAF (default) | Implemented | `WORKFLOW_MODE=maf_sdk` runs the sequential workflow with SSE events, checkpointing, HITL, and Postgres persistence.    |
-| Azure app-hosted    | Deployed    | ACA + Azure PostgreSQL + Foundry + App Insights path is deployed; runtime uses `STORE_PROVIDER=postgres` with Azure PostgreSQL. |
-| Foundry-hosted      | Scaffolded  | Config accepts `WORKFLOW_MODE=foundry_hosted`, but workflow factory raises not implemented.                             |
-
-Provider status:
-
-- RAG:
-  - `pgvector`: implemented (local pgvector-compatible retrieval persisted in Postgres).
-  - `azure_ai_search`, `foundry_vector`, `foundry_iq`: placeholder providers returning empty evidence. Azure AI Search is intentionally deferred until the Foundry retrieval architecture is selected.
-- Memory:
-  - `postgres`: implemented, durable.
-  - `foundry_memory`: in-process placeholder, not durable across process restarts.
-- Model client:
-  - Foundry Models project-first client is used when `FOUNDRY_PROJECTS_ENDPOINT`
-    and `FOUNDRY_MODEL_DEPLOYMENT_NAME` are set. Without Foundry config,
-    local/CI runs still complete through deterministic triage so tests and
-    demos do not require an LLM.
-
-## Fast Start (Recommended)
-
-### 1) Start all servers
-
-```bash
-make up
-```
-
-This starts:
-
-- backend on http://localhost:8000
-- frontend on http://localhost:5173
-- mock MCP server on http://localhost:8011
-
-### 2) View app
-
-Open http://localhost:5173
-
-### 3) Run tests
-
-```bash
-make test
-make docker-test
-```
-
-### 4) Stop all servers
-
-```bash
-make down
-```
-
-## Most Useful Commands
-
-```bash
-make help        # all targets
-make up          # build + start all services in background
-make ps          # list running containers
-make logs        # stream logs
-make down        # stop all services
-make test        # lint + backend tests (local)
-make test-e2e    # playwright tests (local)
-make validate-quick # fast redeploy validation (playwright + optional smoke)
-make validate-full  # full validation (test + eval + e2e + design-review)
-make manual-matrix # script-backed ORD-1001..ORD-1010 verification
-make docker-test # playwright tests in docker compose profile
-make deploy-app   # azd deploy (app-only)
-make deploy-full  # azd provision && azd deploy (infra + app)
-./scripts/skills/design-review-skill.sh # deterministic review + test gate
-```
-
-## Repository Skills
-
-Focused repository skills live under `.github/skills/` and should be composed rather than merged into one broad skill:
-
-- `design-review`: final deterministic local gate for backend lint/tests, evals, Playwright E2E, and rubric checks.
-- `docs-sync`: keep docs aligned with code, IaC, scripts, examples, and behavior changes.
-- `backend-boundary-review`: preserve API/modules/core/infrastructure/MAF separation and prevent new canonical imports from legacy shim paths.
-- `local-validation`: run local validation gates without doing design review.
-- `quick-validation`: run a fast validation gate for app-only redeployments.
-- `iac-review`: review Azure/Foundry IaC, Docker, AZD, RBAC, secrets, smoke scripts, and security without deploying.
-- `azure-validation`: validate deployable or deployed Azure app-hosted behavior without deploying.
-- `azure-deployment`: execute already validated Azure deployments and verify live endpoints.
-- `azure-telemetry-validation`: after hosted deployment, run App Insights KQL checks for requests, dependencies, HITL trace correlation, warnings, and exceptions.
-- `release-readiness`: orchestrate the focused skills for PR/release readiness, then run `design-review` last.
-
-Use `scripts/skills/deployment-mode-router.sh` to decide quick-vs-full validation and app-only-vs-full deployment from changed files.
-
-## Local (Non-Docker) Flow
-
-If `.venv` is missing, no problem. Use:
+1. Bootstrap dependencies.
 
 ```bash
 make bootstrap
-make run-backend
-make run-frontend
 ```
 
-`make bootstrap` creates `backend/.venv` and installs backend/frontend/playwright dependencies.
+2. Configure backend environment.
 
-## Azure App-Hosted Path
-
-Azure app-hosted deployment preparation is available under:
-
-- `infra/azure-apphosted/`
-
-It now includes AZD + Bicep IaC for Azure Container Apps backend/frontend, ACR, Azure Database for PostgreSQL Flexible Server, Key Vault, Log Analytics, Application Insights, Azure AI Foundry/Azure AI Services project and model deployments, managed identities, RBAC, runtime smoke tests, and GitHub Actions deployment wiring. The first Azure cutover intentionally preserves local runtime behavior:
+- Copy backend env template and edit values in [backend/.env.example](backend/.env.example) and [backend/.env](backend/.env).
+- Core local mode:
 
 ```bash
 WORKFLOW_MODE=maf_sdk
@@ -154,108 +38,117 @@ RAG_PROVIDER=pgvector
 MEMORY_PROVIDER=postgres
 ```
 
-Azure PostgreSQL is selected through `DATABASE_URL`; `STORE_PROVIDER=azure_postgres` and `RAG_PROVIDER=azure_ai_search` remain future provider contracts until those adapters are fully implemented.
+3. Start services.
 
-Azure app-hosted parity is green, and legacy compatibility shims have been removed. Use only canonical backend namespaces under `backend/app/api/v1`, `backend/app/core`, `backend/app/modules/order_resolution`, `backend/app/infrastructure`, and `backend/app/maf`.
+```bash
+make up
+```
 
-Foundry app-hosted IaC emits `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`, and `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME` for the backend model-client integration path. Model names, versions, SKU names, and capacities remain Bicep parameters for region/quota overrides.
+Or run backend/frontend separately:
 
-The LLM path is intentionally limited to triage summary generation. HITL
-approval remains deterministic: amount, issue type, and policy text still decide
-whether a checkpoint is required. This is why the workflow works without an LLM
-and why `ORD-1001`/`ORD-1009` validation remains stable in local, CI, and Azure
-app-hosted modes.
+```bash
+make run-backend
+make run-frontend
+```
 
-MAF telemetry is emitted by observing streamed executor I/O events from
-`workflow.run(..., stream=True)`: `executor_invoked`, `executor_completed`, and
-`output`. App Insights export is enabled with
-`APPLICATIONINSIGHTS_CONNECTION_STRING`; `ENABLE_TELEMETRY` gates telemetry,
-`ENABLE_INSTRUMENTATION` gates MAF/OpenTelemetry instrumentation, and
-`OTEL_RECORD_CONTENT=false` keeps prompt/output payload content out of spans by
-default.
+4. Open UI and health endpoints.
 
-MAF middleware centralizes workflow event enrichment, streamed model-event
-observation, usage telemetry hooks, and explicit failure-event emission. The
-legacy SSE stream remains stable, and an additive rich event stream is exposed
-at `/api/chat/stream/{thread_id}/rich`. The current UI consumes this rich stream
-for live timeline updates while preserving legacy event contracts.
+- Frontend: http://localhost:5173
+- Backend health: http://localhost:8000/health
 
-Foundry scaffolding remains available under:
+## Required Validation Gates
 
-- `infra/foundry-hosted/`
+Run these before considering a change complete:
 
-Each hosted path includes runtime `.env` samples, an entrypoint script, and a smoke-test script.
-These are additive and do not change local `make up` / `make test` workflows.
+```bash
+make test
+make eval-backend
+make test-e2e
+./scripts/skills/design-review-skill.sh
+```
 
-## Backend Package Boundaries
+Cross-target parity gate (requires endpoint matrix env vars):
 
-The backend follows the clean agent-style package layout with legacy shim paths removed:
+```bash
+make parity-all
+```
 
-- `backend/app/api/v1/routers/*`: stable FastAPI route contracts.
-- `backend/app/api/v1/schemas/*`: API request/response contracts.
-- `backend/app/modules/order_resolution/*`: API-facing service, HITL policy logic, workflow context/event models, ports, and read-model projection.
-- `backend/app/core/*`: config, database, telemetry, and composition root.
-- `backend/app/infrastructure/*`: repository-pattern/adapters namespace for persistence, events, RAG, MCP, and external integrations.
-- `backend/app/maf/*`: MAF workflow runtime namespace, tools, clients, agents, and prompts scaffolding.
+POC parity is intentionally fast while still covering all three targets (local + Azure + Foundry):
 
-Legacy `backend/app/models.py`, `backend/app/config.py`, `backend/app/db.py`, `backend/app/state.py`, `backend/app/workflow_run_repository.py`, `backend/app/rag_repository.py`, `backend/workflows/*`, and `backend/tools/*` paths have been removed.
+- manual baseline cases: ORD-1001 and ORD-1009
+- event contract checks: all contract cases
+- UI smoke checks: low-risk complete, high-risk approve, high-risk reject
 
-## Future Monorepo Direction
+Baseline behavior checks:
 
-The preferred future shape is a top-level README plus self-contained agent folders. Each agent folder should own its code, infra/IaC, CI/CD, SRE/runbooks, and docs. This repository currently contains the order-resolution agent; add additional agents as peer top-level folders only when a concrete second agent is introduced.
+- ORD-1001 should usually complete without HITL.
+- ORD-1009 should require HITL.
 
-## Notes
+## Deploy to Azure (App-Hosted Backend + Frontend)
 
-- Workflow state is persisted in Postgres (`postgres-data` Docker volume), including:
-  - conversation messages
-  - workflow runs and event timeline
-  - checkpoints and HITL approvals
-- Restarting backend/frontend does not lose workflow history as long as the Postgres volume is kept.
-- `make down` stops containers but keeps the Postgres volume; use `docker compose down -v` only when you want to wipe persisted state.
-- Workflow and provider mode are configured via:
-  - `WORKFLOW_MODE=maf_sdk`
-  - `STORE_PROVIDER=postgres|azure_postgres|app_db`
-  - `RAG_PROVIDER=pgvector|azure_ai_search|foundry_vector|foundry_iq`
-  - `MEMORY_PROVIDER=postgres|foundry_memory`
-  - `FOUNDRY_PROJECTS_ENDPOINT` + `FOUNDRY_MODEL_DEPLOYMENT_NAME` for Foundry
-    Models triage. `FOUNDRY_PROJECT_ENDPOINT`, `MAF_MODEL`, `FOUNDRY_MODEL`,
-    and `MAF_PROVIDER` remain compatibility aliases only.
-- Read-only model/MCP paths are retried with bounded attempts (`READ_RETRY_ATTEMPTS`, `READ_RETRY_DELAY_SECONDS`).
-- Business write actions are guarded by deterministic idempotency keys (`workflow_run_id:step_name:business_id`).
-- Local pgvector-compatible policy retrieval is enabled by default. `tool.call` payloads now include `policy_evidence_ids` for retrieved policy chunks.
-- Store provider switching is scaffolded but not runtime-enabled yet; current supported runtime value remains `STORE_PROVIDER=postgres`.
-- RAG provider options:
-  - `pgvector` (default, fully wired local pgvector-compatible retrieval)
-  - `azure_ai_search` (safe placeholder stub; deferred until Foundry retrieval direction is decided)
-  - `foundry_vector` (safe placeholder stub)
-  - `foundry_iq` (safe placeholder stub)
-- Memory provider switching is available through `MEMORY_PROVIDER`:
-  - `postgres` (default, persisted in Postgres)
-  - `foundry_memory` (placeholder in-process stub for Foundry integration)
-- API supports workflow/session history pagination:
-  - `/api/workflows` accepts `page`, `page_size`, and `pageSize` (legacy alias).
-  - `/api/workflows/{thread_id}/events` and `/api/sessions/{session_id}/messages` use cursor pagination (`limit`, `cursor`).
+1. Make sure azd environment is selected and configured.
+2. Deploy app services:
 
-## Human Approval Trigger Rules (HITL)
+```bash
+azd deploy
+```
 
-For test design, use the exact trigger matrix documented here:
+3. Verify deployed health:
 
-- `docs/design/hitl-approval-conditions.md`
+```bash
+eval "$(azd env get-values)"
+curl -fsS "$API_URL/health"
+```
 
-Quick summary:
+## Deploy to Foundry (Hosted Agent)
 
-- Approval is required when refund/risk amount is `>= 100`.
-- Approval is required for damaged-item flows.
-- Approval is required when a policy string includes `manual_review`.
-- Otherwise, the workflow completes without approval.
+Deploy hosted agent package:
 
-## Design Docs
+```bash
+azd deploy order-resolution-hosted --no-prompt
+```
 
-- `docs/architecture.md`
-- `docs/design/prd.md`
-- `docs/design/techstack.md`
-- `docs/design/projectstructure.md`
-- `docs/design/schema-io-telemetry.md`
-- `docs/design/userflow.md`
-- `docs/design/implementation-phases.md`
-- `docs/design/hitl-approval-conditions.md`
+Verify and invoke:
+
+```bash
+azd ai agent show order-resolution-hosted --output json
+azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
+azd ai agent invoke order-resolution-hosted '{"input":"health check"}' --protocol responses --no-prompt
+```
+
+Note: when multiple protocols are declared, pass --protocol explicitly.
+
+## Environment Model Configuration
+
+For app-hosted model client mode (maf_sdk + foundry_models), model/deployment config is read from backend environment:
+
+- FOUNDRY_PROJECTS_ENDPOINT
+- FOUNDRY_MODEL_DEPLOYMENT_NAME
+- FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME
+
+Current default examples in checked-in templates use gpt-4.1-mini for chat deployment.
+
+## Foundry-Hosted Wiring (Local Adapter Mode)
+
+When using WORKFLOW_MODE=foundry_hosted in local backend adapter mode, configure:
+
+- FOUNDRY_HOSTED_INVOCATIONS_URL (required)
+- FOUNDRY_HOSTED_PROTOCOL=invocations|dual|responses
+- FOUNDRY_HOSTED_CONVERSATION_SHADOW_PROVIDER=none|responses (optional)
+- FOUNDRY_HOSTED_RESPONSES_URL (optional)
+- FOUNDRY_HOSTED_API_KEY (optional if Entra token flow is available)
+
+## Troubleshooting
+
+- If parity fails with 429 session_quota_exceeded from Foundry, reduce test concurrency, add case delays, or clear/raise session quota.
+- If hosted invokes fail in dual protocol mode, verify protocol-specific endpoint and pass --protocol on azd ai agent invoke.
+
+## Documentation Map
+
+- System architecture: [docs/design/architecture.md](docs/design/architecture.md)
+- Project phases and milestone history: [docs/design/implementation-phases.md](docs/design/implementation-phases.md)
+- Runtime decisions (Local -> Azure -> Foundry): [docs/design/local-azure-foundry-decisions.md](docs/design/local-azure-foundry-decisions.md)
+- HITL rules and test baseline: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)
+- IO and telemetry schema: [docs/design/schema-io-telemetry.md](docs/design/schema-io-telemetry.md)
+- Backend operational details: [backend/README.md](backend/README.md)
+- Scripts and parity/e2e usage: [scripts/README.md](scripts/README.md)

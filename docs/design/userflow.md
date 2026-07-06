@@ -14,7 +14,7 @@ Current status:
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | Local MAF        | Implemented | End-to-end workflow path is active via `WORKFLOW_MODE=maf_sdk`.                                                  |
 | Azure app-hosted | Scaffolded  | Config values exist (`STORE_PROVIDER=azure_postgres|app_db`), but startup still enforces `STORE_PROVIDER=postgres`. |
-| Foundry-hosted   | Scaffolded  | `WORKFLOW_MODE=foundry_hosted` exists as config contract but runtime is not implemented yet.                     |
+| Foundry-hosted   | In progress | `WORKFLOW_MODE=foundry_hosted` routes through the hosted `invocations` adapter and requires `FOUNDRY_HOSTED_INVOCATIONS_URL`; the cutover hosted runtime uses `FOUNDRY_HOSTED_PROTOCOL=dual` to expose both `invocations` and additive `responses` routes. |
 
 ## Current Runtime User Flow (Implemented Path)
 

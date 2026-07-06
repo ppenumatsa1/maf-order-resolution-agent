@@ -5,7 +5,7 @@ This document defines the exact conditions that trigger human approval (`hitl.re
 ## Journey Context (Local MAF -> Azure app-hosted -> Foundry-hosted)
 
 - Local MAF path is implemented and currently active (`WORKFLOW_MODE=maf_sdk`).
-- Azure app-hosted and Foundry-hosted modes are scaffolded for future phases.
+- Azure app-hosted is deployed; Foundry-hosted invocation mode is now in progress.
 - Therefore, the trigger behavior below is the **current production contract** for this repository runtime.
 
 ## Scope

@@ -1,8 +1,10 @@
 SHELL := /bin/bash
+COMPOSE_ENV_FILE ?= backend/.env
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
 	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
-	run-mock-mcp up down logs ps docker-test validate-quick validate-full deploy-app deploy-full clean
+	parity-all run-mock-mcp up down logs ps docker-test \
+	validate-quick validate-full deploy-app deploy-full clean
 
 help:
 	@echo "Available targets:"
@@ -20,6 +22,7 @@ help:
 	@echo "  eval-backend    - Run workflow eval harness"
 	@echo "  test-e2e        - Run Playwright tests locally"
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
+	@echo "  parity-all      - Run fast parity gate across local + Azure + Foundry"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
 	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
@@ -83,25 +86,47 @@ test-e2e:
 manual-matrix:
 	scripts/manual/run-manual-matrix.sh "$${API_URL:-http://localhost:8000}" $${MANUAL_MATRIX_ARGS:-}
 
+parity-all:
+	scripts/parity/run-parity-matrix.sh --targets local azure foundry --profile fast
+
 run-mock-mcp: ensure-backend-env
 	. backend/.venv/bin/activate && uvicorn scripts.mcp.mock_mcp_server:app --reload --port 8011
 
 up:
-	docker compose up --build -d backend frontend mock-mcp
+	@set -euo pipefail; \
+	workflow_mode="$$(grep -E '^[[:space:]]*WORKFLOW_MODE=' $(COMPOSE_ENV_FILE) | tail -1 | cut -d= -f2- | tr -d '"' || true)"; \
+	hosted_key="$$(grep -E '^[[:space:]]*FOUNDRY_HOSTED_API_KEY=' $(COMPOSE_ENV_FILE) | tail -1 | cut -d= -f2- | tr -d '"' || true)"; \
+	if [[ "$$workflow_mode" == "foundry_hosted" && -z "$$hosted_key" ]]; then \
+		if command -v az >/dev/null 2>&1; then \
+			token="$$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv 2>/dev/null || true)"; \
+			if [[ -n "$$token" ]]; then \
+				echo "Using host Azure CLI token for Foundry hosted invocations."; \
+				FOUNDRY_HOSTED_API_KEY="Bearer $$token" docker compose --env-file $(COMPOSE_ENV_FILE) up --build -d backend frontend mock-mcp; \
+			else \
+				echo "WARN: Could not acquire Azure CLI token. Set FOUNDRY_HOSTED_API_KEY in $(COMPOSE_ENV_FILE)."; \
+				docker compose --env-file $(COMPOSE_ENV_FILE) up --build -d backend frontend mock-mcp; \
+			fi; \
+		else \
+			echo "WARN: Azure CLI not found on host. Set FOUNDRY_HOSTED_API_KEY in $(COMPOSE_ENV_FILE)."; \
+			docker compose --env-file $(COMPOSE_ENV_FILE) up --build -d backend frontend mock-mcp; \
+		fi; \
+	else \
+		docker compose --env-file $(COMPOSE_ENV_FILE) up --build -d backend frontend mock-mcp; \
+	fi
 	@echo "Frontend: http://localhost:5173"
 	@echo "Backend health: http://localhost:8000/health"
 
 down:
-	docker compose down --remove-orphans
+	docker compose --env-file $(COMPOSE_ENV_FILE) down --remove-orphans
 
 logs:
-	docker compose logs -f --tail=200
+	docker compose --env-file $(COMPOSE_ENV_FILE) logs -f --tail=200
 
 ps:
-	docker compose ps
+	docker compose --env-file $(COMPOSE_ENV_FILE) ps
 
 docker-test:
-	docker compose --profile test up --build --abort-on-container-exit playwright
+	docker compose --env-file $(COMPOSE_ENV_FILE) --profile test up --build --abort-on-container-exit playwright
 
 validate-quick:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \

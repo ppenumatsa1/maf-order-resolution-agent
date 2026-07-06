@@ -11,7 +11,20 @@ client = TestClient(app)
 def test_health_endpoint() -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["workflow_mode"] in {"maf_sdk", "foundry_hosted"}
+    assert isinstance(payload["runtime_provider"], str)
+    assert isinstance(payload["runtime_mode"], str)
+    assert isinstance(payload["environment"], str)
+
+
+def test_api_health_endpoint_alias() -> None:
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["service"] == "maf-orchestration-backend"
 
 
 def test_chat_run_starts_workflow() -> None:

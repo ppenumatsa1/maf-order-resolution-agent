@@ -39,6 +39,105 @@ Notes:
 - This phase is network-foundation only; tools-behind-vnet and full ingress
   hardening are deferred.
 
+## How to test (end-to-end)
+
+### 1) Infrastructure template compile checks
+
+Run Bicep build for all touched templates:
+
+```bash
+az bicep build --file infra/foundry-hosted/iac/main.bicep
+az bicep build --file infra/foundry-hosted/iac/modules/vnet.bicep
+az bicep build --file infra/foundry-hosted/iac/modules/private-dns.bicep
+az bicep build --file infra/foundry-hosted/iac/modules/private-endpoint.bicep
+```
+
+Expected result:
+
+- All templates compile.
+- Current non-blocking warnings may still appear:
+  - `no-hardcoded-env-urls` for private DNS zone constants.
+  - `BCP081` for App Configuration preview resource typing.
+
+### 2) Azure what-if checks (baseline vs private mode)
+
+Create a test resource group once:
+
+```bash
+az group create --name rg-maf-foundry-vnet-test --location eastus
+```
+
+Run default mode (`enablePrivateNetworking=false`):
+
+```bash
+az deployment group what-if \
+  --resource-group rg-maf-foundry-vnet-test \
+  --template-file infra/foundry-hosted/iac/main.bicep \
+  --parameters @infra/foundry-hosted/iac/parameters.dev.json \
+  --no-pretty-print -o json > /tmp/foundry-public-whatif.json
+
+jq -r '.status, (.changes|length), ([.changes[] | select(.changeType=="Create")] | length)' /tmp/foundry-public-whatif.json
+```
+
+Run private mode (`enablePrivateNetworking=true`):
+
+```bash
+az deployment group what-if \
+  --resource-group rg-maf-foundry-vnet-test \
+  --template-file infra/foundry-hosted/iac/main.bicep \
+  --parameters @infra/foundry-hosted/iac/parameters.dev.json enablePrivateNetworking=true \
+  --no-pretty-print -o json > /tmp/foundry-private-whatif.json
+
+jq -r '.status, (.changes|length), ([.changes[] | select(.changeType=="Create")] | length)' /tmp/foundry-private-whatif.json
+```
+
+Interpretation:
+
+- Default mode should only plan shared resources (storage + app config).
+- Private mode should additionally plan VNet, subnet-linked private DNS zones,
+  VNet links, and private endpoints for storage/app config.
+- Foundry account private endpoint is only created when
+  `existingFoundryAccountResourceId` is supplied.
+
+### 3) Repository regression gates
+
+Run required local checks from repository root:
+
+```bash
+make test
+make eval-backend
+make test-e2e
+./scripts/skills/design-review-skill.sh
+```
+
+Expected result:
+
+- All checks pass.
+- Known warning set can include FastAPI lifecycle deprecation and experimental
+  upstream library warnings.
+
+## Validation record (2026-07-06)
+
+Executed on branch: `feature/foundry-private-network-vnet`
+
+Infrastructure checks:
+
+- Bicep build: PASS for `main.bicep` and all new modules.
+- What-if (default mode): `status=Succeeded`, `changes=2`, `creates=2`.
+- What-if (private mode): `status=Succeeded`, `changes=17`, `creates=17`.
+
+Repository quality gates:
+
+- `make test`: PASS (`85 passed`).
+- `make eval-backend`: PASS (`10/10`, `100%`).
+- `make test-e2e`: PASS (`7/7`).
+- `./scripts/skills/design-review-skill.sh`: PASS.
+
+Artifacts produced during validation:
+
+- `/tmp/foundry-public-whatif.json`
+- `/tmp/foundry-private-whatif.json`
+
 ## Runtime wiring
 
 The backend-facing sample is aligned with current config literals and invocation

@@ -3,149 +3,192 @@ targetScope = 'resourceGroup'
 @description('Deployment location')
 param location string = resourceGroup().location
 
-@description('Prefix used for shared resources')
+@description('Prefix used for deterministic naming and defaults')
 @minLength(3)
 param namePrefix string = 'maffd'
 
-@description('Foundry hosted invocations endpoint URL wired into backend runtime (optional during scaffold).')
-param foundryHostedInvocationsUrl string = ''
+@description('Foundry hosted invocations endpoint URL wired into backend runtime')
+param foundryHostedInvocationsUrl string
 
-@description('Name of the callback token setting used by backend event ingress.')
+@description('Name of the callback token setting used by backend event ingress')
 param foundryEventCallbackTokenSettingName string = 'FOUNDRY_EVENT_CALLBACK_TOKEN'
 
-@description('Enable private networking resources (VNet, DNS, and private endpoints).')
-param enablePrivateNetworking bool = false
+@description('Name of the existing AI Foundry account')
+param foundryAccountName string
 
-@description('Optional virtual network name. When empty, a deterministic name is generated.')
-param vnetName string = ''
+@description('Name of the existing AI Foundry project')
+param foundryProjectName string
 
-@description('Address space for the private networking VNet.')
-param vnetAddressPrefix string = '192.168.0.0/16'
+@description('Name of the existing AI Search service')
+param aiSearchName string
 
-@description('Subnet name for Foundry agent network injection.')
-param agentSubnetName string = 'agent-subnet'
+@description('Name of the existing Storage account')
+param storageAccountName string
 
-@description('Address prefix for the Foundry agent subnet.')
-param agentSubnetPrefix string = '192.168.0.0/24'
+@description('Name of the existing Cosmos DB account')
+param cosmosAccountName string
 
-@description('Subnet name for private endpoints.')
-param privateEndpointSubnetName string = 'pe-subnet'
+@description('Optional override for Cosmos connection name inside the project')
+param cosmosConnectionName string = ''
 
-@description('Address prefix for the private endpoint subnet.')
-param privateEndpointSubnetPrefix string = '192.168.1.0/24'
+@description('Optional override for Storage connection name inside the project')
+param storageConnectionName string = ''
 
-@description('Private DNS zones created and linked when private networking is enabled.')
-#disable-next-line no-hardcoded-env-urls
-param privateDnsZoneNames array = [
-  'privatelink.blob.core.windows.net'
-  'privatelink.azconfig.io'
-  'privatelink.services.ai.azure.com'
-  'privatelink.cognitiveservices.azure.com'
-  'privatelink.openai.azure.com'
-]
+@description('Optional override for AI Search connection name inside the project')
+param aiSearchConnectionName string = ''
 
-@description('Optional existing Foundry account resource ID for private endpoint creation.')
-param existingFoundryAccountResourceId string = ''
+@description('Name of the account-level capability host')
+param accountCapabilityHostName string = '${foundryAccountName}-aml-aiagentservice'
+
+@description('Name of the project-level capability host')
+param projectCapabilityHostName string = 'caphostproj'
+
+@description('Resource ID of the existing virtual network used for private DNS links')
+param virtualNetworkResourceId string
+
+@description('Resource ID of the delegated agent subnet for account capability host customerSubnet')
+param agentSubnetResourceId string
+
+@description('Resource ID of the private-endpoint subnet')
+param privateEndpointSubnetResourceId string
+
+@description('Private DNS zones used for private endpoint resolution')
+param privateDnsZoneNames array
+
+@description('Create private DNS VNet links. Set false when the VNet is already linked to these zones.')
+param createPrivateDnsVnetLinks bool = false
+
+@description('Create private endpoints for dependent services. Set false when BYO private endpoints already exist.')
+param createPrivateEndpoints bool = false
+
+@description('Assign pre-capability-host RBAC (Storage Blob Data Contributor, Cosmos DB Operator, Search roles).')
+param assignPreCaphostRbac bool = true
+
+@description('Assign post-capability-host RBAC (Storage Blob Data Owner conditional and Cosmos SQL role).')
+param assignPostCaphostRbac bool = true
+
+@description('Create or update account-level capability host configuration.')
+param createAccountCapabilityHost bool = true
+
+@description('Subscription ID containing AI Search (defaults to current)')
+param aiSearchSubscriptionId string = subscription().subscriptionId
+
+@description('Resource group containing AI Search (defaults to current)')
+param aiSearchResourceGroupName string = resourceGroup().name
+
+@description('Subscription ID containing Storage account (defaults to current)')
+param storageSubscriptionId string = subscription().subscriptionId
+
+@description('Resource group containing Storage account (defaults to current)')
+param storageResourceGroupName string = resourceGroup().name
+
+@description('Subscription ID containing Cosmos DB account (defaults to current)')
+param cosmosSubscriptionId string = subscription().subscriptionId
+
+@description('Resource group containing Cosmos DB account (defaults to current)')
+param cosmosResourceGroupName string = resourceGroup().name
 
 var suffix = toLower(uniqueString(resourceGroup().id))
-var safeNamePrefix = take('${toLower(replace(namePrefix, '-', ''))}maf', 8)
-var storageAccountName = take('${safeNamePrefix}st${suffix}', 24)
-var appConfigName = take('${namePrefix}-appcs-${suffix}', 50)
-var effectiveVnetName = empty(vnetName) ? '${namePrefix}-vnet-${suffix}' : vnetName
+var effectiveCosmosConnectionName = empty(cosmosConnectionName) ? '${cosmosAccountName}-${foundryProjectName}' : cosmosConnectionName
+var effectiveStorageConnectionName = empty(storageConnectionName) ? '${storageAccountName}-${foundryProjectName}' : storageConnectionName
+var effectiveAiSearchConnectionName = empty(aiSearchConnectionName) ? '${aiSearchName}-${foundryProjectName}' : aiSearchConnectionName
 
-resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+#disable-next-line no-hardcoded-env-urls
+var blobZoneName = 'privatelink.blob.core.windows.net'
+#disable-next-line no-hardcoded-env-urls
+var searchZoneName = 'privatelink.search.windows.net'
+#disable-next-line no-hardcoded-env-urls
+var cosmosZoneName = 'privatelink.documents.azure.com'
+#disable-next-line no-hardcoded-env-urls
+var foundryServicesZoneName = 'privatelink.services.ai.azure.com'
+#disable-next-line no-hardcoded-env-urls
+var foundryCognitiveZoneName = 'privatelink.cognitiveservices.azure.com'
+#disable-next-line no-hardcoded-env-urls
+var foundryOpenAiZoneName = 'privatelink.openai.azure.com'
+
+var blobZoneIndex = indexOf(privateDnsZoneNames, blobZoneName)
+var searchZoneIndex = indexOf(privateDnsZoneNames, searchZoneName)
+var cosmosZoneIndex = indexOf(privateDnsZoneNames, cosmosZoneName)
+var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryServicesZoneName)
+var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryCognitiveZoneName)
+var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryOpenAiZoneName)
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
-  location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    allowBlobPublicAccess: false
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
+  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
 }
 
-resource appConfig 'Microsoft.AppConfiguration/configurationStores@2024-06-01-preview' = {
-  name: appConfigName
-  location: location
-  sku: {
-    name: 'standard'
-  }
-  properties: {
-    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
-  }
+resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' existing = {
+  name: aiSearchName
+  scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
 }
 
-module vnet './modules/vnet.bicep' = {
-  name: 'private-network-vnet'
-  params: {
-    enabled: enablePrivateNetworking
-    location: location
-    vnetName: effectiveVnetName
-    vnetAddressPrefix: vnetAddressPrefix
-    agentSubnetName: agentSubnetName
-    agentSubnetPrefix: agentSubnetPrefix
-    privateEndpointSubnetName: privateEndpointSubnetName
-    privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
-  }
+resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' existing = {
+  name: cosmosAccountName
+  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
+}
+
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+  name: foundryAccountName
 }
 
 module privateDns './modules/private-dns.bicep' = {
   name: 'private-network-dns'
   params: {
-    enabled: enablePrivateNetworking
-    virtualNetworkId: vnet.outputs.id
+    enabled: true
+    virtualNetworkId: virtualNetworkResourceId
     zoneNames: privateDnsZoneNames
+    createVnetLinks: createPrivateDnsVnetLinks
   }
 }
-
-#disable-next-line no-hardcoded-env-urls
-var storageZoneName = 'privatelink.blob.core.windows.net'
-var appConfigZoneName = 'privatelink.azconfig.io'
-var foundryZoneNames = [
-  'privatelink.services.ai.azure.com'
-  'privatelink.cognitiveservices.azure.com'
-  'privatelink.openai.azure.com'
-]
-var storageZoneIndex = indexOf(privateDnsZoneNames, storageZoneName)
-var appConfigZoneIndex = indexOf(privateDnsZoneNames, appConfigZoneName)
-var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryZoneNames[0])
-var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryZoneNames[1])
-var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryZoneNames[2])
 
 module storagePrivateEndpoint './modules/private-endpoint.bicep' = {
   name: 'private-endpoint-storage'
   params: {
-    enabled: enablePrivateNetworking
+    enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-storage-pe-${suffix}'
-    subnetId: vnet.outputs.privateEndpointSubnetId
+    subnetId: privateEndpointSubnetResourceId
     targetResourceId: storage.id
     groupIds: [
       'blob'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[storageZoneIndex]
+      privateDns.outputs.zoneIds[blobZoneIndex]
     ]
   }
 }
 
-module appConfigPrivateEndpoint './modules/private-endpoint.bicep' = {
-  name: 'private-endpoint-appconfig'
+module searchPrivateEndpoint './modules/private-endpoint.bicep' = {
+  name: 'private-endpoint-search'
   params: {
-    enabled: enablePrivateNetworking
+    enabled: createPrivateEndpoints
     location: location
-    name: '${namePrefix}-appconfig-pe-${suffix}'
-    subnetId: vnet.outputs.privateEndpointSubnetId
-    targetResourceId: appConfig.id
+    name: '${namePrefix}-search-pe-${suffix}'
+    subnetId: privateEndpointSubnetResourceId
+    targetResourceId: aiSearch.id
     groupIds: [
-      'configurationStores'
+      'searchService'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[appConfigZoneIndex]
+      privateDns.outputs.zoneIds[searchZoneIndex]
+    ]
+  }
+}
+
+module cosmosPrivateEndpoint './modules/private-endpoint.bicep' = {
+  name: 'private-endpoint-cosmos'
+  params: {
+    enabled: createPrivateEndpoints
+    location: location
+    name: '${namePrefix}-cosmos-pe-${suffix}'
+    subnetId: privateEndpointSubnetResourceId
+    targetResourceId: cosmosDB.id
+    groupIds: [
+      'Sql'
+    ]
+    privateDnsZoneIds: [
+      privateDns.outputs.zoneIds[cosmosZoneIndex]
     ]
   }
 }
@@ -153,11 +196,11 @@ module appConfigPrivateEndpoint './modules/private-endpoint.bicep' = {
 module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
   name: 'private-endpoint-foundry-account'
   params: {
-    enabled: enablePrivateNetworking && !empty(existingFoundryAccountResourceId)
+    enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-foundry-pe-${suffix}'
-    subnetId: vnet.outputs.privateEndpointSubnetId
-    targetResourceId: existingFoundryAccountResourceId
+    subnetId: privateEndpointSubnetResourceId
+    targetResourceId: foundryAccount.id
     groupIds: [
       'account'
     ]
@@ -169,17 +212,147 @@ module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
   }
 }
 
-output storageAccountId string = storage.id
-output appConfigurationId string = appConfig.id
+module projectConnections './modules/foundry-project-existing-connections.bicep' = {
+  name: 'project-connections-${suffix}'
+  params: {
+    accountName: foundryAccountName
+    projectName: foundryProjectName
+    location: location
+    aiSearchName: aiSearchName
+    aiSearchSubscriptionId: aiSearchSubscriptionId
+    aiSearchResourceGroupName: aiSearchResourceGroupName
+    storageAccountName: storageAccountName
+    storageSubscriptionId: storageSubscriptionId
+    storageResourceGroupName: storageResourceGroupName
+    cosmosAccountName: cosmosAccountName
+    cosmosSubscriptionId: cosmosSubscriptionId
+    cosmosResourceGroupName: cosmosResourceGroupName
+    cosmosConnectionName: effectiveCosmosConnectionName
+    storageConnectionName: effectiveStorageConnectionName
+    aiSearchConnectionName: effectiveAiSearchConnectionName
+  }
+}
+
+module formatProjectWorkspaceId './modules/format-project-workspace-id.bicep' = {
+  name: 'format-workspace-id-${suffix}'
+  params: {
+    projectWorkspaceId: projectConnections.outputs.projectWorkspaceId
+  }
+}
+
+module storageAccountRoleAssignment './modules/azure-storage-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
+  name: 'storage-account-rbac-${suffix}'
+  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
+  params: {
+    storageAccountName: storageAccountName
+    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+  }
+  dependsOn: [
+    storagePrivateEndpoint
+  ]
+}
+
+module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
+  name: 'cosmos-account-rbac-${suffix}'
+  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
+  params: {
+    cosmosDBName: cosmosAccountName
+    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+  }
+  dependsOn: [
+    cosmosPrivateEndpoint
+  ]
+}
+
+module aiSearchRoleAssignments './modules/ai-search-role-assignments.bicep' = if (assignPreCaphostRbac) {
+  name: 'search-account-rbac-${suffix}'
+  scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
+  params: {
+    aiSearchName: aiSearchName
+    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+  }
+  dependsOn: [
+    searchPrivateEndpoint
+  ]
+}
+
+module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = if (createAccountCapabilityHost) {
+  name: 'account-capability-host-${suffix}'
+  params: {
+    accountName: foundryAccountName
+    accountCapabilityHostName: accountCapabilityHostName
+    agentSubnetResourceId: agentSubnetResourceId
+  }
+  dependsOn: [
+    foundryPrivateEndpoint
+  ]
+}
+
+module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = {
+  name: 'project-capability-host-${suffix}'
+  params: {
+    accountName: foundryAccountName
+    projectName: foundryProjectName
+    projectCapabilityHostName: projectCapabilityHostName
+    cosmosConnectionName: projectConnections.outputs.cosmosConnection
+    storageConnectionName: projectConnections.outputs.storageConnection
+    aiSearchConnectionName: projectConnections.outputs.aiSearchConnection
+  }
+  dependsOn: [
+    addAccountCapabilityHost
+    storageAccountRoleAssignment
+    cosmosAccountRoleAssignments
+    aiSearchRoleAssignments
+  ]
+}
+
+module storageContainersRoleAssignment './modules/blob-storage-container-role-assignments.bicep' = if (assignPostCaphostRbac) {
+  name: 'storage-container-rbac-${suffix}'
+  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
+  params: {
+    aiProjectPrincipalId: projectConnections.outputs.projectPrincipalId
+    storageName: storageAccountName
+    workspaceId: formatProjectWorkspaceId.outputs.projectWorkspaceIdGuid
+  }
+  dependsOn: [
+    addProjectCapabilityHost
+  ]
+}
+
+module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignments.bicep' = if (assignPostCaphostRbac) {
+  name: 'cosmos-container-rbac-${suffix}'
+  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
+  params: {
+    cosmosAccountName: cosmosAccountName
+    projectWorkspaceId: formatProjectWorkspaceId.outputs.projectWorkspaceIdGuid
+    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+  }
+  dependsOn: [
+    addProjectCapabilityHost
+    storageContainersRoleAssignment
+  ]
+}
+
 output foundryHostedInvocationsUrl string = foundryHostedInvocationsUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
-output privateNetworkingEnabled bool = enablePrivateNetworking
-output vnetId string = enablePrivateNetworking ? vnet.outputs.id : ''
-output privateEndpointSubnetId string = enablePrivateNetworking ? vnet.outputs.privateEndpointSubnetId : ''
-output foundryPrivateEndpointId string = (enablePrivateNetworking && !empty(existingFoundryAccountResourceId)) ? foundryPrivateEndpoint.outputs.id : ''
+output accountCapabilityHost string = addAccountCapabilityHost.outputs.accountCapabilityHostName
+output projectCapabilityHost string = addProjectCapabilityHost.outputs.projectCapabilityHostName
+output projectPrincipalId string = projectConnections.outputs.projectPrincipalId
+output projectWorkspaceId string = projectConnections.outputs.projectWorkspaceId
+output connectionNames object = {
+  cosmos: projectConnections.outputs.cosmosConnection
+  storage: projectConnections.outputs.storageConnection
+  aiSearch: projectConnections.outputs.aiSearchConnection
+}
+output privateEndpointIds object = {
+  storage: storagePrivateEndpoint.outputs.id
+  aiSearch: searchPrivateEndpoint.outputs.id
+  cosmos: cosmosPrivateEndpoint.outputs.id
+  foundry: foundryPrivateEndpoint.outputs.id
+}
 output requiredBackendSettings array = [
   'WORKFLOW_MODE=foundry_hosted'
   'FOUNDRY_HOSTED_INVOCATIONS_URL=<hosted-agent-invocations-endpoint>'
   '${foundryEventCallbackTokenSettingName}=<shared-callback-token>'
 ]
-output nextStep string = enablePrivateNetworking ? 'Validate private endpoint approvals and DNS resolution, then bind hosted agent endpoint/callback token and run azd ai agent show/invoke validation.' : 'Bind hosted agent deployment endpoint and callback token, then run azd ai agent show/invoke validation.'
+output nextStep string = 'Approve all private endpoints, validate private DNS resolution, and run hosted-agent invoke validation.'

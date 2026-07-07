@@ -33,3 +33,7 @@ scripts/parity/reports/
 # Local runtime config
 local.ini
 *.local.ini
+
+# Generated Bicep build artifacts (keep parameters.dev.json tracked)
+infra/foundry-hosted/iac/main.json
+infra/foundry-hosted/iac/modules/*.json

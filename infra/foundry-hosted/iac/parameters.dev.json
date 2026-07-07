@@ -6,46 +6,71 @@
       "value": "eastus"
     },
     "namePrefix": {
-      "value": "maffddev"
+      "value": "aifndcustom"
     },
     "foundryHostedInvocationsUrl": {
-      "value": ""
+      "value": "https://mafs5ixpqx3hitri-foundry.services.ai.azure.com/api/projects/mafs5ixpqx3hitri-project/agents/order-resolution-hosted/endpoint/protocols/invocations?api-version=v1"
     },
     "foundryEventCallbackTokenSettingName": {
       "value": "FOUNDRY_EVENT_CALLBACK_TOKEN"
     },
-    "enablePrivateNetworking": {
+    "accountCapabilityHostName": {
+      "value": "caphostacct"
+    },
+    "projectCapabilityHostName": {
+      "value": "caphostproj"
+    },
+    "foundryAccountName": {
+      "value": "aifndcustomvnetacct"
+    },
+    "foundryProjectName": {
+      "value": "private-project"
+    },
+    "aiSearchName": {
+      "value": "aifpv7jq3mklubce-search-basic"
+    },
+    "aiSearchResourceGroupName": {
+      "value": "rg-fa-dev2"
+    },
+    "createPrivateDnsVnetLinks": {
       "value": false
     },
-    "vnetName": {
-      "value": ""
+    "createPrivateEndpoints": {
+      "value": false
     },
-    "vnetAddressPrefix": {
-      "value": "192.168.0.0/16"
+    "assignPreCaphostRbac": {
+      "value": false
     },
-    "agentSubnetName": {
-      "value": "agent-subnet"
+    "assignPostCaphostRbac": {
+      "value": false
     },
-    "agentSubnetPrefix": {
-      "value": "192.168.0.0/24"
+    "createAccountCapabilityHost": {
+      "value": false
     },
-    "privateEndpointSubnetName": {
-      "value": "pe-subnet"
+    "storageAccountName": {
+      "value": "aifndcustoruqfvo5aqt"
     },
-    "privateEndpointSubnetPrefix": {
-      "value": "192.168.1.0/24"
+    "cosmosAccountName": {
+      "value": "aifndcustomvnet-cosmos-ruqfv"
+    },
+    "virtualNetworkResourceId": {
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet"
+    },
+    "agentSubnetResourceId": {
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet/subnets/snet-agent-host"
+    },
+    "privateEndpointSubnetResourceId": {
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet/subnets/snet-private-endpoints"
     },
     "privateDnsZoneNames": {
       "value": [
         "privatelink.blob.core.windows.net",
-        "privatelink.azconfig.io",
+        "privatelink.search.windows.net",
+        "privatelink.documents.azure.com",
         "privatelink.services.ai.azure.com",
         "privatelink.cognitiveservices.azure.com",
         "privatelink.openai.azure.com"
       ]
-    },
-    "existingFoundryAccountResourceId": {
-      "value": ""
     }
   }
 }

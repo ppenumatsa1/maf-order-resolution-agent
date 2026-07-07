@@ -3,10 +3,10 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "eastus"
+      "value": "centralus"
     },
     "namePrefix": {
-      "value": "aifndcustom"
+      "value": "maforacentral"
     },
     "foundryHostedInvocationsUrl": {
       "value": "https://mafs5ixpqx3hitri-foundry.services.ai.azure.com/api/projects/mafs5ixpqx3hitri-project/agents/order-resolution-hosted/endpoint/protocols/invocations?api-version=v1"
@@ -21,16 +21,16 @@
       "value": "caphostproj"
     },
     "foundryAccountName": {
-      "value": "aifndcustomvnetacct"
+      "value": "maforacentralaiazv4nl"
     },
     "foundryProjectName": {
-      "value": "private-project"
+      "value": "order-resolution"
     },
     "aiSearchName": {
-      "value": "aifpv7jq3mklubce-search-basic"
+      "value": "maforacentralsrchazv4nl"
     },
     "aiSearchResourceGroupName": {
-      "value": "rg-fa-dev2"
+      "value": "rg-maf-ora-central"
     },
     "createPrivateDnsVnetLinks": {
       "value": false
@@ -47,20 +47,23 @@
     "createAccountCapabilityHost": {
       "value": false
     },
+    "createProjectCapabilityHost": {
+      "value": false
+    },
     "storageAccountName": {
-      "value": "aifndcustoruqfvo5aqt"
+      "value": "maforacentralstazv4nl"
     },
     "cosmosAccountName": {
-      "value": "aifndcustomvnet-cosmos-ruqfv"
+      "value": "maforacentralcosazv4nl"
     },
     "virtualNetworkResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet"
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus"
     },
     "agentSubnetResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet/subnets/snet-agent-host"
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus/subnets/fap-sn"
     },
     "privateEndpointSubnetResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-foundry-custom-vnet/providers/Microsoft.Network/virtualNetworks/aifndcustomvnet-vnet/subnets/snet-private-endpoints"
+      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus/subnets/pe-sn"
     },
     "privateDnsZoneNames": {
       "value": [

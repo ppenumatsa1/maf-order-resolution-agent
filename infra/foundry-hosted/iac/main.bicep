@@ -70,6 +70,9 @@ param assignPostCaphostRbac bool = true
 @description('Create or update account-level capability host configuration.')
 param createAccountCapabilityHost bool = true
 
+@description('Create or update project-level capability host configuration.')
+param createProjectCapabilityHost bool = true
+
 @description('Subscription ID containing AI Search (defaults to current)')
 param aiSearchSubscriptionId string = subscription().subscriptionId
 
@@ -288,7 +291,7 @@ module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = 
   ]
 }
 
-module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = {
+module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = if (createProjectCapabilityHost) {
   name: 'project-capability-host-${suffix}'
   params: {
     accountName: foundryAccountName
@@ -306,7 +309,7 @@ module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = 
   ]
 }
 
-module storageContainersRoleAssignment './modules/blob-storage-container-role-assignments.bicep' = if (assignPostCaphostRbac) {
+module storageContainersRoleAssignment './modules/blob-storage-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost) {
   name: 'storage-container-rbac-${suffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
@@ -319,7 +322,7 @@ module storageContainersRoleAssignment './modules/blob-storage-container-role-as
   ]
 }
 
-module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignments.bicep' = if (assignPostCaphostRbac) {
+module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost) {
   name: 'cosmos-container-rbac-${suffix}'
   scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
   params: {
@@ -335,8 +338,8 @@ module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignmen
 
 output foundryHostedInvocationsUrl string = foundryHostedInvocationsUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
-output accountCapabilityHost string = addAccountCapabilityHost.outputs.accountCapabilityHostName
-output projectCapabilityHost string = addProjectCapabilityHost.outputs.projectCapabilityHostName
+output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost.outputs.accountCapabilityHostName : ''
+output projectCapabilityHost string = createProjectCapabilityHost ? addProjectCapabilityHost.outputs.projectCapabilityHostName : ''
 output projectPrincipalId string = projectConnections.outputs.projectPrincipalId
 output projectWorkspaceId string = projectConnections.outputs.projectWorkspaceId
 output connectionNames object = {

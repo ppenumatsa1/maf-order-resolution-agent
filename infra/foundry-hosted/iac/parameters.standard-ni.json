@@ -1,0 +1,99 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "centralus"
+    },
+    "cosmosLocation": {
+      "value": "centralus"
+    },
+    "cosmosAccountName": {
+      "value": "maforanicosmoscuzp2uk"
+    },
+    "namePrefix": {
+      "value": "maforanicu"
+    },
+    "foundryProjectName": {
+      "value": "order-resolution-ni"
+    },
+    "hostedAgentName": {
+      "value": "order-resolution-hosted"
+    },
+    "enableStandardAgentNetworkInjection": {
+      "value": true
+    },
+    "createPrivateDnsVnetLinks": {
+      "value": false
+    },
+    "createPrivateEndpoints": {
+      "value": true
+    },
+    "createNatGateway": {
+      "value": true
+    },
+    "createPrivateRunnerAccess": {
+      "value": true
+    },
+    "createBastionHost": {
+      "value": true
+    },
+    "createRunnerVm": {
+      "value": true
+    },
+    "runnerVmName": {
+      "value": "vm-maforani-runner"
+    },
+    "runnerVmSize": {
+      "value": "Standard_B2s"
+    },
+    "runnerVmAdminUsername": {
+      "value": "azureuser"
+    },
+    "runnerSubnetPrefix": {
+      "value": "192.168.2.0/24"
+    },
+    "bastionSubnetPrefix": {
+      "value": "192.168.3.0/26"
+    },
+    "runnerSubnetNsgName": {
+      "value": "nsg-maforani-runner"
+    },
+    "bastionHostName": {
+      "value": "bas-maforani"
+    },
+    "bastionPublicIpName": {
+      "value": "pip-maforani-bastion"
+    },
+    "assignPreCaphostRbac": {
+      "value": true
+    },
+    "assignPostCaphostRbac": {
+      "value": true
+    },
+    "createAccountCapabilityHost": {
+      "value": false
+    },
+    "createProjectCapabilityHost": {
+      "value": true
+    },
+    "manageProjectConnections": {
+      "value": false
+    },
+    "vnetAddressPrefix": {
+      "value": "192.168.0.0/16"
+    },
+    "agentSubnetName": {
+      "value": "agent-subnet"
+    },
+    "agentSubnetPrefix": {
+      "value": "192.168.0.0/24"
+    },
+    "privateEndpointSubnetName": {
+      "value": "pe-subnet"
+    },
+    "privateEndpointSubnetPrefix": {
+      "value": "192.168.1.0/24"
+    }
+  }
+}

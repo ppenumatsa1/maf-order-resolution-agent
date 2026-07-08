@@ -91,6 +91,12 @@ jobs:
           azd env set AZURE_AI_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
           azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
           azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
+          if [[ -n "${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}" ]]; then
+            azd env set POSTGRES_ADMIN_PASSWORD "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          else
+            generated_pg_password="$(openssl rand -base64 36 | tr -d '\n' | tr '/+' 'Aa' | cut -c1-32)"
+            azd env set POSTGRES_ADMIN_PASSWORD "$generated_pg_password"
+          fi
 
       - name: Sync env into azd and runtime mirrors
         run: |

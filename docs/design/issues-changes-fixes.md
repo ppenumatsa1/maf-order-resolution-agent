@@ -258,6 +258,24 @@ Expected effect:
 
 - `azd provision` runs non-interactively without subscription prompts.
 
+## Latest execution update (2026-07-08, postgres admin password input)
+
+Failure observed:
+
+- Provision initialization still failed with missing required input:
+  - `postgresAdministratorPassword`
+  - expected env var `POSTGRES_ADMIN_PASSWORD`
+
+Change made:
+
+- In provision workflow env-seeding step:
+  - use `secrets.POSTGRES_ADMIN_PASSWORD` when available
+  - otherwise generate a strong fallback password and set `POSTGRES_ADMIN_PASSWORD` in azd env
+
+Expected effect:
+
+- `azd provision --no-prompt` no longer blocks on missing Postgres admin password.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

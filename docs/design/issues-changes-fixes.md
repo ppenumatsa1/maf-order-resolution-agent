@@ -3,6 +3,50 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-08, post-RBAC-IaC rerun on private VM)
+
+Completed in this pass:
+
+- Confirmed IaC RBAC module changes are pushed to branch `feature/foundry-private-network-vnet` (`1eccddc`).
+- Re-ran end-to-end flow from private VM path (provision -> deploy -> smoke -> e2e -> telemetry query).
+- Found and fixed an azd environment corruption on VM at:
+  - `.azure/ora-private-uami/.env`
+  - Corruption pattern was escaped quote pollution (`\"...`) introduced by prior env mutation attempts.
+- Repaired VM env by copying clean env from:
+  - `infra/foundry-hosted/.azure/ora-private-uami/.env`
+
+Current blocker outcomes after rerun:
+
+- Provision still fails at subscription validation due to RBAC:
+  - `AuthorizationFailed`
+  - principal: `1aefdd7d-d497-434f-815a-89ce3b335edb` (object `d77e1944-7251-41ef-be3b-883d0e503046`)
+  - missing action: `Microsoft.Resources/deployments/validate/action`
+  - scope: subscription `4f18d577-3506-4a11-85e5-a83b14727a84`
+- Deploy fails with region support error:
+  - `Unsupported region for Foundry Hosted Agents`
+  - request id: `9a24c095d1df32441f472f010fb2e095`
+- Smoke invoke fails expectedly after deploy failure:
+  - `404 Agent 'order-resolution-hosted' not found`
+  - request id: `f6756982cadc36031350b290423cc94d`
+- E2E fails because runtime/API endpoint is unavailable and VM lacks npm:
+  - repeated `curl: (7) Failed to connect to 127.0.0.1:<port>`
+  - `bash: npm: command not found`
+- App Insights query fails for current caller with insufficient access:
+  - `InsufficientAccessError: The provided credentials have insufficient access to perform the requested operation`
+
+Status codes from this run:
+
+- `PROVISION_RC=1`
+- `DEPLOY_RC=1`
+- `SMOKE_RC=1`
+- `E2E_RC=2`
+
+Open external blockers (unchanged priority):
+
+1. Subscription-scope RBAC for runner identity still insufficient for deployment validation.
+2. Hosted agent region support mismatch remains (`centralus` path warning/error context).
+3. Telemetry verification requires additional App Insights read permissions for the executing identity.
+
 ## Latest verification update (2026-07-08, RBAC recurrence guard)
 
 ## Latest execution update (2026-07-08, GitHub private-runner automation)

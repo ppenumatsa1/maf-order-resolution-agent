@@ -231,6 +231,13 @@ Change made:
 - Added explicit extension install/update step in both provision and deploy workflows:
   - `azd extension install azure.ai.agents` (or update if already present)
 
+Correction:
+
+- Initial workflow logic checked for extension presence by ID only, which is always listed even when not installed.
+- Updated logic now checks `Installed Version` from `azd extension show azure.ai.agents` and then:
+  - installs if `N/A`
+  - upgrades if already installed
+
 Expected effect:
 
 - `azd` recognizes `azure.ai.agent` host in CI and proceeds with provision/deploy.

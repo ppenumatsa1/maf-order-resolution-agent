@@ -61,10 +61,11 @@ jobs:
       - name: Install required azd extension
         run: |
           set -euo pipefail
-          if azd extension list | grep -q '^azure.ai.agents\b'; then
-            azd extension update azure.ai.agents || true
+          installed_version="$(azd extension show azure.ai.agents | awk -F': ' '/Installed Version/{print $2}' | tr -d '\r')"
+          if [[ -n "$installed_version" && "$installed_version" != "N/A" ]]; then
+            azd extension upgrade azure.ai.agents --no-prompt || true
           else
-            azd extension install azure.ai.agents
+            azd extension install azure.ai.agents --no-prompt
           fi
 
       - name: AZD login via managed identity

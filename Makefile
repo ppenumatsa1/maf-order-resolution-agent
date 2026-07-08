@@ -181,6 +181,7 @@ foundry-sync-env:
 		echo "APPLICATIONINSIGHTS_CONNECTION_STRING must be set in infra/foundry-hosted/runtime/.env"; \
 		exit 1; \
 	fi; \
+	mkdir -p agent/runtime ../../backend/foundry/runtime; \
 	cp runtime/.env agent/runtime/.env; \
 	cp runtime/.env ../../backend/foundry/runtime/.env; \
 	echo "derived agent/runtime/.env and backend/foundry/runtime/.env from runtime/.env"; \

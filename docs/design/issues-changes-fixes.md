@@ -155,6 +155,26 @@ Expected effect:
 
 - Managed identity login and subsequent `az`/`azd` operations should no longer fail due to root disk exhaustion.
 
+## Latest execution update (2026-07-08, foundry-sync-env path fix)
+
+Failure observed:
+
+- Provision progressed to `make foundry-sync-env` and failed with:
+  - `cp: cannot create regular file 'agent/runtime/.env': No such file or directory`
+
+Root cause:
+
+- `agent/runtime` may be absent in a fresh checkout if directory is empty/untracked.
+
+Change made:
+
+- Updated `Makefile` target `foundry-sync-env` to create destination folders before copy:
+  - `mkdir -p agent/runtime ../../backend/foundry/runtime`
+
+Expected effect:
+
+- Env mirroring step is robust across clean runner checkouts.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

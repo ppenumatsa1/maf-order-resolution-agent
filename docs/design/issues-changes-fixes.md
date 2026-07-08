@@ -31,6 +31,82 @@ Validation notes:
 - Workflow YAML parsed successfully after changes.
 - Full end-to-end runtime validation still depends on running the workflows in GitHub against the private runner.
 
+## Latest execution update (2026-07-08, orchestrator dispatch blocker)
+
+Completed:
+
+- Successfully bootstrapped GitHub repo/environment configuration from local env sources:
+  - environment: `foundry-private-env`
+  - repo variables: runner label, Azure IDs, Foundry IDs/endpoints, App Insights app id
+  - environment secret: `FOUNDRY_RUNTIME_ENV`
+- Pushed workflow updates to branch `feature/foundry-private-network-vnet`.
+- Triggered orchestrator run via branch push:
+  - run id: `28970241915`
+  - workflow: `Foundry Orchestrator`
+
+Observed blocker:
+
+- Provision job remains queued with labels `self-hosted,foundry-private`.
+- Repository self-hosted runner inventory returned `total_count: 0`.
+
+Learning:
+
+- Workflow wiring is valid, but execution cannot start unless at least one online repo (or eligible org) runner advertises label `foundry-private`.
+- Keep `workflow_dispatch` path for post-merge default-branch usage, and use branch `push` trigger for pre-merge validation.
+
+Next unblocking step:
+
+- Register/start the self-hosted runner for this repo with label `foundry-private`, then rerun or resume orchestrator to complete provision/deploy/smoke/telemetry gates.
+
+## Latest execution update (2026-07-08, runner registration attempts)
+
+Completed:
+
+- Confirmed the orchestrator run exists and is waiting on labels:
+  - run id: `28970241915`
+  - queued job label requirement: `self-hosted,foundry-private`
+- Confirmed repo runner inventory is empty:
+  - `actions/runners -> total_count: 0`
+- Added helper automation script for VM-side runner registration:
+  - `scripts/github/register_vm_runner.sh`
+
+Observed blocker:
+
+- Azure VM command channel (`RunCommand`) is stuck in `Another execution in progress` state, which prevented reliable remote runner bootstrap from this session.
+
+Learning:
+
+- When remote bootstrap scripts are interrupted mid-stream, `RunCommand` can remain locked and block subsequent automation.
+- Keep runner bootstrap idempotent and prefer persistent VM startup/service provisioning for the GitHub runner rather than one-off ad-hoc shell sessions.
+
+Immediate next step to unblock:
+
+- SSH/Bastion into `vm-maforani-runner` and run `scripts/github/register_vm_runner.sh` logic locally on the VM (or install the runner service manually) so the runner appears with label `foundry-private`.
+- Once the runner is online, rerun or resume `Foundry Orchestrator` and continue with provision/deploy/smoke/telemetry validation.
+
+## Latest execution update (2026-07-08, workflow auth mode correction)
+
+Completed:
+
+- Brought the GitHub self-hosted runner online with required label:
+  - `vm-maforani-runner-foundry-private`
+- Captured provision failure root cause from workflow logs:
+  - `AADSTS70025` on `azure/login@v2` using OIDC for client `uami-maffnd-runner`.
+
+Learning:
+
+- For this self-hosted runner model (GitHub runner running on Azure VM with UAMI), workflow auth should use VM managed identity login:
+  - `az login --identity --client-id <UAMI_CLIENT_ID>`
+- OIDC federated login via `azure/login@v2` requires federated credentials configured on the Entra app/service principal and was not configured for this UAMI.
+
+Change made:
+
+- Updated workflows to authenticate with managed identity on-runner instead of `azure/login@v2` OIDC.
+
+Next step:
+
+- Re-run orchestrator and continue with provision, deploy, smoke, and telemetry gate checks.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

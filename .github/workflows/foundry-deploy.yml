@@ -60,7 +60,16 @@ jobs:
           az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
           az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
-      - uses: Azure/setup-azd@v2
+      - name: Configure writable azd paths on data disk
+        run: |
+          set -euo pipefail
+          mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp
+          echo "HOME=/mnt/.home" >> "$GITHUB_ENV"
+          echo "AZD_CONFIG_DIR=/mnt/.azd" >> "$GITHUB_ENV"
+          echo "TMPDIR=/mnt/.tmp" >> "$GITHUB_ENV"
+
+      - name: Verify azd availability
+        run: azd version
 
       - name: Prepare runtime env file for Foundry
         run: |

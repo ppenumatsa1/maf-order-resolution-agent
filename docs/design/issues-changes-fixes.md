@@ -107,6 +107,33 @@ Next step:
 
 - Re-run orchestrator and continue with provision, deploy, smoke, and telemetry gate checks.
 
+## Latest execution update (2026-07-08, azd installer failure on full root disk)
+
+Failure observed:
+
+- `Foundry Orchestrator` run `28972606141` failed in provision at step `Azure/setup-azd@v2`.
+- Error details:
+  - `mkdir: cannot create directory '/root/.azd': No space left on device`
+  - runner warning showed root disk at 100%.
+
+Learning:
+
+- Runner already had `azd` preinstalled (`azd version 1.27.0`).
+- Installing `azd` via setup action was unnecessary and used root paths that are currently full.
+
+Change made:
+
+- Removed `Azure/setup-azd@v2` from provision/deploy workflows.
+- Added workflow step to force writable paths on `/mnt`:
+  - `HOME=/mnt/.home`
+  - `AZD_CONFIG_DIR=/mnt/.azd`
+  - `TMPDIR=/mnt/.tmp`
+- Added `azd version` verification step.
+
+Next step:
+
+- Re-run orchestrator and verify full chain: provision -> deploy -> smoke -> telemetry gate.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

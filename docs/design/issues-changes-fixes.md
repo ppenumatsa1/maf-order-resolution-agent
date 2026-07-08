@@ -214,6 +214,27 @@ Expected effect:
 
 - `azd provision` and `azd deploy` can execute under managed identity in CI.
 
+## Latest execution update (2026-07-08, azd host extension requirement)
+
+Failure observed:
+
+- `azd provision` failed with:
+  - `service host 'azure.ai.agent' for service 'order-resolution-hosted' is unsupported`
+  - CI cannot auto-install extensions.
+
+Root cause:
+
+- Project host in `azure.yaml` requires azd extension `azure.ai.agents`.
+
+Change made:
+
+- Added explicit extension install/update step in both provision and deploy workflows:
+  - `azd extension install azure.ai.agents` (or update if already present)
+
+Expected effect:
+
+- `azd` recognizes `azure.ai.agent` host in CI and proceeds with provision/deploy.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

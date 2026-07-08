@@ -74,6 +74,15 @@ jobs:
       - name: Verify azd availability
         run: azd version
 
+      - name: Install required azd extension
+        run: |
+          set -euo pipefail
+          if azd extension list | grep -q '^azure.ai.agents\b'; then
+            azd extension update azure.ai.agents || true
+          else
+            azd extension install azure.ai.agents
+          fi
+
       - name: AZD login via managed identity
         run: |
           set -euo pipefail

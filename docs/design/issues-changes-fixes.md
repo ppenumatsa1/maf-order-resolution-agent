@@ -276,6 +276,33 @@ Expected effect:
 
 - `azd provision --no-prompt` no longer blocks on missing Postgres admin password.
 
+## Latest execution update (2026-07-08, final provisioning blocker)
+
+Current status:
+
+- Provision pipeline now gets through auth, azd extension install, env sync, and non-interactive input seeding.
+- Provision stops at Azure deployment validation with RBAC failure.
+
+Blocking error:
+
+- `AuthorizationFailed` for client `1aefdd7d-d497-434f-815a-89ce3b335edb` (object `d77e1944-7251-41ef-be3b-883d0e503046`)
+- Missing permission for action:
+  - `Microsoft.Resources/deployments/validate/action`
+- Scope:
+  - `/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84`
+
+Operational note:
+
+- Runner runtime prerequisites were remediated (disk, DNS, azd extension, docker install/access), and those are no longer the active blocker.
+
+Additional warning seen during validation:
+
+- Model `gpt-4.1-mini` (`GlobalStandard`, version `2024-07-18`) not found in `centralus`; even after RBAC is fixed, this model mapping may require adjustment.
+
+Required external action:
+
+- Grant the runner identity sufficient RBAC at subscription/resource-group scope (Contributor minimum, and Owner/User Access Administrator if role assignments are created by template), then rerun orchestrator.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

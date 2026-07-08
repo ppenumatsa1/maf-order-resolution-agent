@@ -65,6 +65,35 @@ Result:
 - Subscription validation-permission blocker (`Microsoft.Resources/deployments/validate/action`) is no longer the first failing gate after RBAC fix.
 - Remaining unblock path is region/model alignment for Foundry account/project and model deployment.
 
+## Latest execution update (2026-07-08, tracked-source fixes + endpoint retarget)
+
+Completed in this pass:
+
+- Applied and pushed repository fixes so VM/CI no longer depend on local-only files:
+  - tracked `infra/foundry-hosted/azure.yaml`
+  - tracked `infra/foundry-hosted/iac/modules/private-runner-access.bicep`
+  - tracked `infra/foundry-hosted/agent/*` source files needed by azd packaging
+  - aligned VNet module interface consumed by `main.bicep`
+  - fixed Bicep compile-time condition (`BCP177`) in runner subscription RBAC module gating
+- Validation after these fixes:
+  - `azd provision --preview` now succeeds from `infra/foundry-hosted` and plans `gpt-4o-mini` + `text-embedding-3-small` (no `gpt-4.1-mini` validation failure on this path).
+- Retargeted azd environment to newly provisioned Foundry project:
+  - account: `maffndaizb4lxy66zp2uk`
+  - project: `order-resolution`
+  - updated env keys: `AZURE_AI_PROJECT_ID`, `FOUNDRY_PROJECT_ID`, `FOUNDRY_PROJECT_ENDPOINT`
+
+Current blockers after retarget:
+
+1. Deploy/invoke now fail with network access error on new account endpoint:
+   - `403 Public access is disabled. Please configure private endpoint.`
+   - indicates deploy is finally targeting new account/project but private-link access path for that endpoint is not yet effective for VM path.
+2. Deploy against old endpoint still fails with hosted-agent regional support error.
+
+Net result:
+
+- RBAC and source-control hygiene blockers are substantially reduced.
+- Remaining blockers are private endpoint routing/policy for the new Foundry account and hosted-agent regional capability for the legacy endpoint.
+
 ## Latest execution update (2026-07-08, post-RBAC-IaC rerun on private VM)
 
 Completed in this pass:

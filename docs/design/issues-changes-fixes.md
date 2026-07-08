@@ -134,6 +134,27 @@ Next step:
 
 - Re-run orchestrator and verify full chain: provision -> deploy -> smoke -> telemetry gate.
 
+## Latest execution update (2026-07-08, runner disk emergency remediation)
+
+Root cause confirmed:
+
+- VM root disk was full because Azure RunCommand extension artifacts under:
+  - `/var/lib/waagent/run-command/download/*/stdout`
+- Three stale `stdout` files consumed ~27 GB.
+
+Actions taken:
+
+- Truncated stale large files and restored root free space:
+  - before: `/` 100% used
+  - after: `/` 10% used (~27 GB free)
+- Fixed hostname mapping so `sudo` no longer emits host-resolution warnings.
+- Hardened workflows to force Azure CLI config/log path onto `/mnt` by setting:
+  - `AZURE_CONFIG_DIR=/mnt/.azure`
+
+Expected effect:
+
+- Managed identity login and subsequent `az`/`azd` operations should no longer fail due to root disk exhaustion.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

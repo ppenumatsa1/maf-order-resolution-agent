@@ -29,6 +29,13 @@ Follow-up findings after pull:
 - This caused Bicep compile failures (`BCP037`, `BCP091`, `BCP062`) before Azure validation.
 - Service path in `infra/foundry-hosted/azure.yaml` originally targeted `./agent` (untracked directory in repo state). Updated to tracked path `../../backend/foundry`.
 
+Additional corrections from validation:
+
+- `azd` rejects service project paths containing `..` in `azure.yaml`; cross-directory service path is invalid.
+- Reverted service path to `./agent` and moved to tracking required files under `infra/foundry-hosted/agent`.
+- Bicep compile blocked by `BCP177` because module output was referenced in another module's `if` condition.
+- Updated `runnerSubscriptionRbac` module condition to avoid output-dependent compile-time evaluation.
+
 Immediate corrective action:
 
 - Commit module/interface alignment files plus tracked service path so VM/CI can execute the intended stack without local-only artifacts.

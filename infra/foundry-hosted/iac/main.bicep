@@ -471,7 +471,7 @@ module privateRunnerAccess './modules/private-runner-access.bicep' = if (createP
   ]
 }
 
-module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (createPrivateRunnerAccess && createRunnerVm && assignRunnerSubscriptionRbac && !empty(privateRunnerAccess.outputs.runnerUamiPrincipalId)) {
+module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (createPrivateRunnerAccess && createRunnerVm && assignRunnerSubscriptionRbac) {
   name: 'runner-subscription-rbac-${suffix}'
   scope: subscription()
   params: {

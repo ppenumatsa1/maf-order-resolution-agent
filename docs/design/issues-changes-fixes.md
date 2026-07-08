@@ -242,6 +242,22 @@ Expected effect:
 
 - `azd` recognizes `azure.ai.agent` host in CI and proceeds with provision/deploy.
 
+## Latest execution update (2026-07-08, non-interactive subscription input)
+
+Failure observed:
+
+- `azd provision --no-prompt` failed with `prompt required` and reported missing input:
+  - `subscription` (`AZURE_SUBSCRIPTION_ID`)
+
+Change made:
+
+- Added explicit azd environment seeding in provision/deploy workflows:
+  - `azd env set AZURE_SUBSCRIPTION_ID ${{ vars.AZURE_SUBSCRIPTION_ID }}`
+
+Expected effect:
+
+- `azd provision` runs non-interactively without subscription prompts.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

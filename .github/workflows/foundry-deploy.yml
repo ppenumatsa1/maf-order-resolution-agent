@@ -74,6 +74,11 @@ jobs:
       - name: Verify azd availability
         run: azd version
 
+      - name: AZD login via managed identity
+        run: |
+          set -euo pipefail
+          azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
+
       - name: Prepare runtime env file for Foundry
         run: |
           set -euo pipefail

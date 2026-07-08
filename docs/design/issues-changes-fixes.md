@@ -194,6 +194,26 @@ Expected effect:
 
 - Provision no longer depends on Makefile state for env synchronization in CI.
 
+## Latest execution update (2026-07-08, azd managed-identity auth)
+
+Failure observed:
+
+- Provision reached `azd provision` and failed with:
+  - `ERROR: not logged in, run azd auth login to login`
+
+Root cause:
+
+- `az login --identity` authenticates Azure CLI, but `azd` keeps independent auth state.
+
+Change made:
+
+- Added explicit non-interactive azd login in both provision and deploy workflows:
+  - `azd auth login --managed-identity --client-id <AZURE_CLIENT_ID> --tenant-id <AZURE_TENANT_ID> --no-prompt`
+
+Expected effect:
+
+- `azd provision` and `azd deploy` can execute under managed identity in CI.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

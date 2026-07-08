@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: maf-order-resolution-foundry-hosted
+services:
+    order-resolution-hosted:
+        project: ./agent
+        host: azure.ai.agent
+        language: python
+        docker:
+            remoteBuild: true
+        config:
+            container:
+                resources:
+                    cpu: "0.5"
+                    memory: 1Gi
+infra:
+    provider: bicep
+    path: ./iac

@@ -3,6 +3,24 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-08, azd project-root mismatch root cause)
+
+New root cause identified:
+
+- `infra/foundry-hosted/azure.yaml` was present only in local workspace and not tracked in git.
+- On VM/CI checkouts, that file was missing, so running `azd` from `infra/foundry-hosted` resolved upward to repo-root `azure.yaml`.
+- Repo-root `azure.yaml` points to `infra/azure-apphosted/iac`, which carries chat model defaults tied to the recurring `gpt-4.1-mini` validation failure.
+
+Impact:
+
+- Prior attempts that appeared to run "foundry-hosted" were actually provisioning the apphosted stack.
+- This explains persistent `gpt-4.1-mini` validation errors even when foundry-hosted Bicep defaults had `gpt-4o-mini`.
+
+Action in progress:
+
+- Track and commit `infra/foundry-hosted/azure.yaml` so VM/CI resolves to the intended foundry-hosted azd project.
+- Re-run provision/deploy from VM after pull to separate true regional platform blockers from wrong-project execution.
+
 ## Latest execution update (2026-07-08, unblock actions applied)
 
 Completed in this pass:

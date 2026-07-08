@@ -3,6 +3,31 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-08, unblock actions applied)
+
+Completed in this pass:
+
+- Applied subscription-scope RBAC to runner identity `d77e1944-7251-41ef-be3b-883d0e503046`:
+  - `Contributor`
+  - `User Access Administrator`
+- Re-ran private VM flow after RBAC update and repaired env corruption source in root azd env path.
+- Seeded `POSTGRES_ADMIN_PASSWORD` non-interactively to clear provisioning input prompt.
+
+Current blockers after rerun (updated):
+
+1. Provision is now blocked by model support mismatch, not RBAC:
+  - `DeploymentModelNotSupported`
+  - model: `gpt-4.1-mini` version `2024-07-18`
+  - region: `centralus`
+2. Deploy remains blocked by hosted-agent regional support:
+  - `Unsupported region for Foundry Hosted Agents`
+  - request id: `345c50279ccfac14e00bb67a5cd9f12a`
+
+Result:
+
+- Subscription validation-permission blocker (`Microsoft.Resources/deployments/validate/action`) is no longer the first failing gate after RBAC fix.
+- Remaining unblock path is region/model alignment for Foundry account/project and model deployment.
+
 ## Latest execution update (2026-07-08, post-RBAC-IaC rerun on private VM)
 
 Completed in this pass:

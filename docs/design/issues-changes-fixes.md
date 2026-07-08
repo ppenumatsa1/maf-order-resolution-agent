@@ -21,6 +21,18 @@ Action in progress:
 - Track and commit `infra/foundry-hosted/azure.yaml` so VM/CI resolves to the intended foundry-hosted azd project.
 - Re-run provision/deploy from VM after pull to separate true regional platform blockers from wrong-project execution.
 
+Follow-up findings after pull:
+
+- Once `infra/foundry-hosted/azure.yaml` became available on VM, additional repository tracking gaps surfaced:
+  - `infra/foundry-hosted/iac/modules/private-runner-access.bicep` was not tracked in git.
+  - `infra/foundry-hosted/iac/modules/vnet.bicep` local changes (new params consumed by `main.bicep`) were not yet committed.
+- This caused Bicep compile failures (`BCP037`, `BCP091`, `BCP062`) before Azure validation.
+- Service path in `infra/foundry-hosted/azure.yaml` originally targeted `./agent` (untracked directory in repo state). Updated to tracked path `../../backend/foundry`.
+
+Immediate corrective action:
+
+- Commit module/interface alignment files plus tracked service path so VM/CI can execute the intended stack without local-only artifacts.
+
 ## Latest execution update (2026-07-08, unblock actions applied)
 
 Completed in this pass:

@@ -3,7 +3,7 @@
 name: maf-order-resolution-foundry-hosted
 services:
     order-resolution-hosted:
-        project: ./agent
+        project: ../../backend/foundry
         host: azure.ai.agent
         language: python
         docker:

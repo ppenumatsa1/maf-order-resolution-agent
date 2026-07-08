@@ -5,96 +5,203 @@ param location string = resourceGroup().location
 
 @description('Prefix used for deterministic naming and defaults')
 @minLength(3)
-param namePrefix string = 'maffd'
+param namePrefix string = 'maffnd'
 
-@description('Foundry hosted invocations endpoint URL wired into backend runtime')
-param foundryHostedInvocationsUrl string
+@description('Foundry project name')
+param foundryProjectName string = 'order-resolution'
+
+@description('Hosted agent name used to compose default invocations URL')
+param hostedAgentName string = 'order-resolution-hosted'
+
+@description('Optional override for Foundry account name')
+param foundryAccountName string = ''
+
+@description('Optional override for Storage account name')
+param storageAccountName string = ''
+
+@description('Optional override for Cosmos DB account name')
+param cosmosAccountName string = ''
+
+@description('Optional Cosmos DB region override when primary region has capacity issues')
+param cosmosLocation string = ''
+
+@description('Optional override for AI Search service name')
+param aiSearchName string = ''
+
+@description('Optional override for ACR name')
+param containerRegistryName string = ''
 
 @description('Name of the callback token setting used by backend event ingress')
 param foundryEventCallbackTokenSettingName string = 'FOUNDRY_EVENT_CALLBACK_TOKEN'
 
-@description('Name of the existing AI Foundry account')
-param foundryAccountName string
-
-@description('Name of the existing AI Foundry project')
-param foundryProjectName string
-
-@description('Name of the existing AI Search service')
-param aiSearchName string
-
-@description('Name of the existing Storage account')
-param storageAccountName string
-
-@description('Name of the existing Cosmos DB account')
-param cosmosAccountName string
-
-@description('Optional override for Cosmos connection name inside the project')
-param cosmosConnectionName string = ''
-
-@description('Optional override for Storage connection name inside the project')
-param storageConnectionName string = ''
-
-@description('Optional override for AI Search connection name inside the project')
-param aiSearchConnectionName string = ''
-
 @description('Name of the account-level capability host')
-param accountCapabilityHostName string = '${foundryAccountName}-aml-aiagentservice'
+param accountCapabilityHostName string = 'caphostacct'
 
 @description('Name of the project-level capability host')
 param projectCapabilityHostName string = 'caphostproj'
 
-@description('Resource ID of the existing virtual network used for private DNS links')
-param virtualNetworkResourceId string
+@description('Virtual network name')
+param virtualNetworkName string = ''
 
-@description('Resource ID of the delegated agent subnet for account capability host customerSubnet')
-param agentSubnetResourceId string
+@description('VNet address prefix')
+param vnetAddressPrefix string = '10.90.0.0/16'
 
-@description('Resource ID of the private-endpoint subnet')
-param privateEndpointSubnetResourceId string
+@description('Agent subnet name')
+param agentSubnetName string = 'snet-agent-host'
+
+@description('Agent subnet prefix')
+param agentSubnetPrefix string = '10.90.1.0/24'
+
+@description('Private endpoint subnet name')
+param privateEndpointSubnetName string = 'snet-private-endpoints'
+
+@description('Private endpoint subnet prefix')
+param privateEndpointSubnetPrefix string = '10.90.2.0/24'
+
+@description('Create NAT gateway for controlled outbound from the agent subnet.')
+param createNatGateway bool = true
+
+@description('Optional override for NAT gateway name')
+param natGatewayName string = ''
+
+@description('Optional override for NAT public IP name')
+param natPublicIpName string = ''
+
+@description('Enable private runner access resources (runner subnet, Bastion, and VM).')
+param createPrivateRunnerAccess bool = false
+
+@description('Assign subscription-scope RBAC to runner UAMI so azd can validate and run deployments non-interactively.')
+param assignRunnerSubscriptionRbac bool = true
+
+@description('Also assign User Access Administrator for runner UAMI when templates create role assignments.')
+param assignRunnerUserAccessAdministrator bool = false
+
+@description('Runner subnet name')
+param runnerSubnetName string = 'snet-runner'
+
+@description('Runner subnet prefix')
+param runnerSubnetPrefix string = '10.90.3.0/24'
+
+@description('Azure Bastion subnet name. Must be AzureBastionSubnet.')
+param bastionSubnetName string = 'AzureBastionSubnet'
+
+@description('Azure Bastion subnet prefix (minimum /26).')
+param bastionSubnetPrefix string = '10.90.4.0/26'
+
+@description('Create Azure Bastion host for browser/SSH tunneling access.')
+param createBastionHost bool = true
+
+@description('Create a private VM runner in the runner subnet.')
+param createRunnerVm bool = true
+
+@description('Runner VM name')
+param runnerVmName string = 'vm-maffnd-runner'
+
+@description('Runner VM size')
+param runnerVmSize string = 'Standard_D4s_v5'
+
+@description('Runner VM admin username')
+param runnerVmAdminUsername string = 'azureuser'
+
+@description('SSH public key for runner VM admin user. Required when createRunnerVm is true.')
+param runnerVmSshPublicKey string = ''
+
+@description('Runner subnet NSG name')
+param runnerSubnetNsgName string = 'nsg-maffnd-runner'
+
+@description('Azure Bastion host name')
+param bastionHostName string = 'bas-maffnd'
+
+@description('Azure Bastion public IP name')
+param bastionPublicIpName string = 'pip-maffnd-bastion'
 
 @description('Private DNS zones used for private endpoint resolution')
-param privateDnsZoneNames array
+param privateDnsZoneNames array = [
+  'privatelink.blob.core.windows.net'
+  'privatelink.search.windows.net'
+  'privatelink.documents.azure.com'
+  'privatelink.services.ai.azure.com'
+  'privatelink.cognitiveservices.azure.com'
+  'privatelink.openai.azure.com'
+]
 
-@description('Create private DNS VNet links. Set false when the VNet is already linked to these zones.')
-param createPrivateDnsVnetLinks bool = false
+@description('Create private DNS VNet links.')
+param createPrivateDnsVnetLinks bool = true
 
-@description('Create private endpoints for dependent services. Set false when BYO private endpoints already exist.')
-param createPrivateEndpoints bool = false
+@description('Create private endpoints for dependent services.')
+param createPrivateEndpoints bool = true
 
 @description('Assign pre-capability-host RBAC (Storage Blob Data Contributor, Cosmos DB Operator, Search roles).')
-param assignPreCaphostRbac bool = true
+param assignPreCaphostRbac bool = false
 
 @description('Assign post-capability-host RBAC (Storage Blob Data Owner conditional and Cosmos SQL role).')
-param assignPostCaphostRbac bool = true
+param assignPostCaphostRbac bool = false
 
 @description('Create or update account-level capability host configuration.')
-param createAccountCapabilityHost bool = true
+param createAccountCapabilityHost bool = false
 
 @description('Create or update project-level capability host configuration.')
-param createProjectCapabilityHost bool = true
+param createProjectCapabilityHost bool = false
 
-@description('Subscription ID containing AI Search (defaults to current)')
-param aiSearchSubscriptionId string = subscription().subscriptionId
+@description('Manage project connections through the connections API. Disable on reruns when capability host already owns these connections.')
+param manageProjectConnections bool = true
 
-@description('Resource group containing AI Search (defaults to current)')
-param aiSearchResourceGroupName string = resourceGroup().name
+@description('Enable Standard Agent network injection scenario on newly created Foundry account.')
+param enableStandardAgentNetworkInjection bool = true
 
-@description('Subscription ID containing Storage account (defaults to current)')
-param storageSubscriptionId string = subscription().subscriptionId
+@description('Foundry chat deployment name')
+param foundryChatDeploymentName string = 'gpt-4o-mini'
 
-@description('Resource group containing Storage account (defaults to current)')
-param storageResourceGroupName string = resourceGroup().name
+@description('Foundry chat model format')
+param foundryChatModelFormat string = 'OpenAI'
 
-@description('Subscription ID containing Cosmos DB account (defaults to current)')
-param cosmosSubscriptionId string = subscription().subscriptionId
+@description('Foundry chat model name')
+param foundryChatModelName string = 'gpt-4o-mini'
 
-@description('Resource group containing Cosmos DB account (defaults to current)')
-param cosmosResourceGroupName string = resourceGroup().name
+@description('Foundry chat model version')
+param foundryChatModelVersion string = '2024-07-18'
+
+@description('Foundry chat deployment SKU name')
+param foundryChatDeploymentSkuName string = 'GlobalStandard'
+
+@description('Foundry chat deployment capacity')
+param foundryChatDeploymentCapacity int = 1
+
+@description('Foundry embeddings deployment name')
+param foundryEmbeddingsDeploymentName string = 'text-embedding-3-small'
+
+@description('Foundry embeddings model format')
+param foundryEmbeddingsModelFormat string = 'OpenAI'
+
+@description('Foundry embeddings model name')
+param foundryEmbeddingsModelName string = 'text-embedding-3-small'
+
+@description('Foundry embeddings model version')
+param foundryEmbeddingsModelVersion string = '1'
+
+@description('Foundry embeddings deployment SKU name')
+param foundryEmbeddingsDeploymentSkuName string = 'GlobalStandard'
+
+@description('Foundry embeddings deployment capacity')
+param foundryEmbeddingsDeploymentCapacity int = 1
+
+@description('Responsible AI policy name applied to model deployments')
+param foundryRaiPolicyName string = 'Microsoft.Default'
 
 var suffix = toLower(uniqueString(resourceGroup().id))
-var effectiveCosmosConnectionName = empty(cosmosConnectionName) ? '${cosmosAccountName}-${foundryProjectName}' : cosmosConnectionName
-var effectiveStorageConnectionName = empty(storageConnectionName) ? '${storageAccountName}-${foundryProjectName}' : storageConnectionName
-var effectiveAiSearchConnectionName = empty(aiSearchConnectionName) ? '${aiSearchName}-${foundryProjectName}' : aiSearchConnectionName
+var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
+var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalizedPrefix}ai${suffix}', 64) : foundryAccountName
+var effectiveStorageAccountName = empty(storageAccountName) ? take('${normalizedPrefix}st${suffix}', 24) : storageAccountName
+var effectiveCosmosAccountName = empty(cosmosAccountName) ? take('${normalizedPrefix}cosmos${suffix}', 44) : cosmosAccountName
+var effectiveAiSearchName = empty(aiSearchName) ? take('${normalizedPrefix}srch${suffix}', 60) : aiSearchName
+var effectiveContainerRegistryName = empty(containerRegistryName) ? take('${normalizedPrefix}acr${suffix}', 50) : containerRegistryName
+var effectiveVirtualNetworkName = empty(virtualNetworkName) ? '${normalizedPrefix}-vnet' : virtualNetworkName
+var effectiveNatGatewayName = empty(natGatewayName) ? take('${namePrefix}-nat-${suffix}', 80) : natGatewayName
+var effectiveNatPublicIpName = empty(natPublicIpName) ? take('${namePrefix}-nat-pip-${suffix}', 80) : natPublicIpName
+var effectiveCosmosConnectionName = '${effectiveCosmosAccountName}-${foundryProjectName}'
+var effectiveStorageConnectionName = '${effectiveStorageAccountName}-${foundryProjectName}'
+var effectiveAiSearchConnectionName = '${effectiveAiSearchName}-${foundryProjectName}'
+var effectiveCosmosLocation = empty(cosmosLocation) ? location : cosmosLocation
 
 #disable-next-line no-hardcoded-env-urls
 var blobZoneName = 'privatelink.blob.core.windows.net'
@@ -115,31 +222,273 @@ var cosmosZoneIndex = indexOf(privateDnsZoneNames, cosmosZoneName)
 var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryServicesZoneName)
 var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryCognitiveZoneName)
 var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryOpenAiZoneName)
+var resolvedProjectPrincipalId = manageProjectConnections ? projectConnections.outputs.projectPrincipalId : foundryProject.identity.principalId
+var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections.outputs.projectWorkspaceId : ''
+var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections.outputs.cosmosConnection : effectiveCosmosConnectionName
+var resolvedStorageConnectionName = manageProjectConnections ? projectConnections.outputs.storageConnection : effectiveStorageConnectionName
+var resolvedAiSearchConnectionName = manageProjectConnections ? projectConnections.outputs.aiSearchConnection : effectiveAiSearchConnectionName
 
-resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageAccountName
-  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: effectiveContainerRegistryName
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
+  }
 }
 
-resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' existing = {
-  name: aiSearchName
-  scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: take('${namePrefix}-mon-${suffix}-law', 63)
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
 }
 
-resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' existing = {
-  name: cosmosAccountName
-  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: take('${namePrefix}-mon-${suffix}-appi', 260)
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+  }
 }
 
-resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
-  name: foundryAccountName
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: effectiveStorageAccountName
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    allowBlobPublicAccess: false
+    minimumTlsVersion: 'TLS1_2'
+    publicNetworkAccess: 'Disabled'
+  }
+}
+
+resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
+  name: effectiveAiSearchName
+  location: location
+  sku: {
+    name: 'basic'
+  }
+  properties: {
+    publicNetworkAccess: 'disabled'
+  }
+}
+
+resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' = {
+  name: effectiveCosmosAccountName
+  location: effectiveCosmosLocation
+  kind: 'GlobalDocumentDB'
+  properties: {
+    databaseAccountOfferType: 'Standard'
+    locations: [
+      {
+        locationName: effectiveCosmosLocation
+        failoverPriority: 0
+        isZoneRedundant: false
+      }
+    ]
+    publicNetworkAccess: 'Disabled'
+    disableLocalAuth: true
+  }
+}
+
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+  name: effectiveFoundryAccountName
+  location: location
+  kind: 'AIServices'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  sku: {
+    name: 'S0'
+  }
+  properties: {
+    allowProjectManagement: true
+    customSubDomainName: effectiveFoundryAccountName
+    disableLocalAuth: true
+    publicNetworkAccess: 'Disabled'
+    #disable-next-line BCP037
+    networkInjections: enableStandardAgentNetworkInjection ? [
+      {
+        #disable-next-line BCP037
+        scenario: 'agent'
+        #disable-next-line BCP037
+        subnetArmId: resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
+      }
+    ] : []
+  }
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+  parent: foundryAccount
+  name: foundryProjectName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    displayName: foundryProjectName
+    description: 'MAF order resolution Foundry-hosted project'
+  }
+}
+
+resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundryAccount
+  name: foundryChatDeploymentName
+  sku: {
+    name: foundryChatDeploymentSkuName
+    capacity: foundryChatDeploymentCapacity
+  }
+  properties: {
+    model: {
+      format: foundryChatModelFormat
+      name: foundryChatModelName
+      version: foundryChatModelVersion
+    }
+    raiPolicyName: foundryRaiPolicyName
+  }
+}
+
+resource embeddingsDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundryAccount
+  name: foundryEmbeddingsDeploymentName
+  sku: {
+    name: foundryEmbeddingsDeploymentSkuName
+    capacity: foundryEmbeddingsDeploymentCapacity
+  }
+  properties: {
+    model: {
+      format: foundryEmbeddingsModelFormat
+      name: foundryEmbeddingsModelName
+      version: foundryEmbeddingsModelVersion
+    }
+    raiPolicyName: foundryRaiPolicyName
+  }
+  dependsOn: [
+    chatDeployment
+  ]
+}
+
+resource projectFoundryUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, foundryProject.id, 'project-foundry-user')
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource natPublicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = if (createNatGateway) {
+  name: effectiveNatPublicIpName
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+resource natGateway 'Microsoft.Network/natGateways@2023-09-01' = if (createNatGateway) {
+  name: effectiveNatGatewayName
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    idleTimeoutInMinutes: 10
+    publicIpAddresses: [
+      {
+        id: natPublicIp.id
+      }
+    ]
+  }
+}
+
+module virtualNetwork './modules/vnet.bicep' = {
+  name: 'foundry-vnet-${suffix}'
+  params: {
+    enabled: true
+    location: location
+    vnetName: effectiveVirtualNetworkName
+    vnetAddressPrefix: vnetAddressPrefix
+    agentSubnetName: agentSubnetName
+    agentSubnetPrefix: agentSubnetPrefix
+    natGatewayResourceId: createNatGateway ? natGateway.id : ''
+    privateEndpointSubnetName: privateEndpointSubnetName
+    privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
+    createRunnerSubnet: createPrivateRunnerAccess
+    runnerSubnetName: runnerSubnetName
+    runnerSubnetPrefix: runnerSubnetPrefix
+    runnerSubnetNsgResourceId: ''
+    createBastionSubnet: createPrivateRunnerAccess && createBastionHost
+    bastionSubnetName: bastionSubnetName
+    bastionSubnetPrefix: bastionSubnetPrefix
+  }
+}
+
+module privateRunnerAccess './modules/private-runner-access.bicep' = if (createPrivateRunnerAccess) {
+  name: 'private-runner-access-${suffix}'
+  params: {
+    enabled: createPrivateRunnerAccess
+    location: location
+    vnetName: effectiveVirtualNetworkName
+    runnerSubnetName: runnerSubnetName
+    runnerSubnetPrefix: runnerSubnetPrefix
+    createRunnerSubnet: false
+    bastionSubnetName: bastionSubnetName
+    bastionSubnetPrefix: bastionSubnetPrefix
+    createBastionSubnet: false
+    runnerNsgName: runnerSubnetNsgName
+    createBastion: createBastionHost
+    createRunnerVm: createRunnerVm
+    runnerVmName: runnerVmName
+    runnerVmSize: runnerVmSize
+    runnerAdminUsername: runnerVmAdminUsername
+    runnerSshPublicKey: runnerVmSshPublicKey
+    bastionName: bastionHostName
+    bastionPublicIpName: bastionPublicIpName
+  }
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (createPrivateRunnerAccess && createRunnerVm && assignRunnerSubscriptionRbac && !empty(privateRunnerAccess.outputs.runnerUamiPrincipalId)) {
+  name: 'runner-subscription-rbac-${suffix}'
+  scope: subscription()
+  params: {
+    principalId: privateRunnerAccess.outputs.runnerUamiPrincipalId
+    assignContributor: true
+    assignUserAccessAdministrator: assignRunnerUserAccessAdministrator
+  }
+  dependsOn: [
+    privateRunnerAccess
+  ]
 }
 
 module privateDns './modules/private-dns.bicep' = {
   name: 'private-network-dns'
   params: {
     enabled: true
-    virtualNetworkId: virtualNetworkResourceId
+    virtualNetworkId: virtualNetwork.outputs.id
     zoneNames: privateDnsZoneNames
     createVnetLinks: createPrivateDnsVnetLinks
   }
@@ -151,7 +500,7 @@ module storagePrivateEndpoint './modules/private-endpoint.bicep' = {
     enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-storage-pe-${suffix}'
-    subnetId: privateEndpointSubnetResourceId
+    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
     targetResourceId: storage.id
     groupIds: [
       'blob'
@@ -168,7 +517,7 @@ module searchPrivateEndpoint './modules/private-endpoint.bicep' = {
     enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-search-pe-${suffix}'
-    subnetId: privateEndpointSubnetResourceId
+    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
     targetResourceId: aiSearch.id
     groupIds: [
       'searchService'
@@ -185,7 +534,7 @@ module cosmosPrivateEndpoint './modules/private-endpoint.bicep' = {
     enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-cosmos-pe-${suffix}'
-    subnetId: privateEndpointSubnetResourceId
+    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
     targetResourceId: cosmosDB.id
     groupIds: [
       'Sql'
@@ -202,7 +551,7 @@ module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
     enabled: createPrivateEndpoints
     location: location
     name: '${namePrefix}-foundry-pe-${suffix}'
-    subnetId: privateEndpointSubnetResourceId
+    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
     targetResourceId: foundryAccount.id
     groupIds: [
       'account'
@@ -215,40 +564,45 @@ module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
   }
 }
 
-module projectConnections './modules/foundry-project-existing-connections.bicep' = {
+module projectConnections './modules/foundry-project-existing-connections.bicep' = if (manageProjectConnections) {
   name: 'project-connections-${suffix}'
   params: {
-    accountName: foundryAccountName
+    accountName: effectiveFoundryAccountName
     projectName: foundryProjectName
     location: location
-    aiSearchName: aiSearchName
-    aiSearchSubscriptionId: aiSearchSubscriptionId
-    aiSearchResourceGroupName: aiSearchResourceGroupName
-    storageAccountName: storageAccountName
-    storageSubscriptionId: storageSubscriptionId
-    storageResourceGroupName: storageResourceGroupName
-    cosmosAccountName: cosmosAccountName
-    cosmosSubscriptionId: cosmosSubscriptionId
-    cosmosResourceGroupName: cosmosResourceGroupName
+    aiSearchName: effectiveAiSearchName
+    aiSearchSubscriptionId: subscription().subscriptionId
+    aiSearchResourceGroupName: resourceGroup().name
+    storageAccountName: effectiveStorageAccountName
+    storageSubscriptionId: subscription().subscriptionId
+    storageResourceGroupName: resourceGroup().name
+    cosmosAccountName: effectiveCosmosAccountName
+    cosmosSubscriptionId: subscription().subscriptionId
+    cosmosResourceGroupName: resourceGroup().name
     cosmosConnectionName: effectiveCosmosConnectionName
     storageConnectionName: effectiveStorageConnectionName
     aiSearchConnectionName: effectiveAiSearchConnectionName
   }
+  dependsOn: [
+    foundryProject
+    aiSearch
+    storage
+    cosmosDB
+  ]
 }
 
-module formatProjectWorkspaceId './modules/format-project-workspace-id.bicep' = {
+module formatProjectWorkspaceId './modules/format-project-workspace-id.bicep' = if (manageProjectConnections) {
   name: 'format-workspace-id-${suffix}'
   params: {
-    projectWorkspaceId: projectConnections.outputs.projectWorkspaceId
+    projectWorkspaceId: resolvedProjectWorkspaceId
   }
 }
 
 module storageAccountRoleAssignment './modules/azure-storage-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
   name: 'storage-account-rbac-${suffix}'
-  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
-    storageAccountName: storageAccountName
-    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+    storageAccountName: effectiveStorageAccountName
+    projectPrincipalId: resolvedProjectPrincipalId
   }
   dependsOn: [
     storagePrivateEndpoint
@@ -257,10 +611,9 @@ module storageAccountRoleAssignment './modules/azure-storage-account-role-assign
 
 module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
   name: 'cosmos-account-rbac-${suffix}'
-  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
   params: {
-    cosmosDBName: cosmosAccountName
-    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+    cosmosDBName: effectiveCosmosAccountName
+    projectPrincipalId: resolvedProjectPrincipalId
   }
   dependsOn: [
     cosmosPrivateEndpoint
@@ -269,10 +622,9 @@ module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.
 
 module aiSearchRoleAssignments './modules/ai-search-role-assignments.bicep' = if (assignPreCaphostRbac) {
   name: 'search-account-rbac-${suffix}'
-  scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
   params: {
-    aiSearchName: aiSearchName
-    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+    aiSearchName: effectiveAiSearchName
+    projectPrincipalId: resolvedProjectPrincipalId
   }
   dependsOn: [
     searchPrivateEndpoint
@@ -282,9 +634,9 @@ module aiSearchRoleAssignments './modules/ai-search-role-assignments.bicep' = if
 module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = if (createAccountCapabilityHost) {
   name: 'account-capability-host-${suffix}'
   params: {
-    accountName: foundryAccountName
+    accountName: effectiveFoundryAccountName
     accountCapabilityHostName: accountCapabilityHostName
-    agentSubnetResourceId: agentSubnetResourceId
+    agentSubnetResourceId: virtualNetwork.outputs.agentSubnetId
   }
   dependsOn: [
     foundryPrivateEndpoint
@@ -294,12 +646,12 @@ module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = 
 module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = if (createProjectCapabilityHost) {
   name: 'project-capability-host-${suffix}'
   params: {
-    accountName: foundryAccountName
+    accountName: effectiveFoundryAccountName
     projectName: foundryProjectName
     projectCapabilityHostName: projectCapabilityHostName
-    cosmosConnectionName: projectConnections.outputs.cosmosConnection
-    storageConnectionName: projectConnections.outputs.storageConnection
-    aiSearchConnectionName: projectConnections.outputs.aiSearchConnection
+    cosmosConnectionName: resolvedCosmosConnectionName
+    storageConnectionName: resolvedStorageConnectionName
+    aiSearchConnectionName: resolvedAiSearchConnectionName
   }
   dependsOn: [
     addAccountCapabilityHost
@@ -309,26 +661,24 @@ module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = 
   ]
 }
 
-module storageContainersRoleAssignment './modules/blob-storage-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost) {
+module storageContainersRoleAssignment './modules/blob-storage-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost && manageProjectConnections) {
   name: 'storage-container-rbac-${suffix}'
-  scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
-    aiProjectPrincipalId: projectConnections.outputs.projectPrincipalId
-    storageName: storageAccountName
-    workspaceId: formatProjectWorkspaceId.outputs.projectWorkspaceIdGuid
+    aiProjectPrincipalId: resolvedProjectPrincipalId
+    storageName: effectiveStorageAccountName
+    workspaceId: formatProjectWorkspaceId!.outputs.projectWorkspaceIdGuid
   }
   dependsOn: [
     addProjectCapabilityHost
   ]
 }
 
-module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost) {
+module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignments.bicep' = if (assignPostCaphostRbac && createProjectCapabilityHost && manageProjectConnections) {
   name: 'cosmos-container-rbac-${suffix}'
-  scope: resourceGroup(cosmosSubscriptionId, cosmosResourceGroupName)
   params: {
-    cosmosAccountName: cosmosAccountName
-    projectWorkspaceId: formatProjectWorkspaceId.outputs.projectWorkspaceIdGuid
-    projectPrincipalId: projectConnections.outputs.projectPrincipalId
+    cosmosAccountName: effectiveCosmosAccountName
+    projectWorkspaceId: formatProjectWorkspaceId!.outputs.projectWorkspaceIdGuid
+    projectPrincipalId: resolvedProjectPrincipalId
   }
   dependsOn: [
     addProjectCapabilityHost
@@ -336,16 +686,31 @@ module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignmen
   ]
 }
 
+var foundryProjectEndpoint = 'https://${effectiveFoundryAccountName}.services.ai.azure.com/api/projects/${foundryProjectName}'
+var foundryHostedInvocationsUrl = '${foundryProjectEndpoint}/agents/${hostedAgentName}/endpoint/protocols/invocations?api-version=v1'
+
+output foundryAccountName string = foundryAccount.name
+output foundryProjectName string = foundryProject.name
+output foundryProjectEndpoint string = foundryProjectEndpoint
+output natGatewayId string = createNatGateway ? natGateway.id : ''
 output foundryHostedInvocationsUrl string = foundryHostedInvocationsUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
-output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost.outputs.accountCapabilityHostName : ''
-output projectCapabilityHost string = createProjectCapabilityHost ? addProjectCapabilityHost.outputs.projectCapabilityHostName : ''
-output projectPrincipalId string = projectConnections.outputs.projectPrincipalId
-output projectWorkspaceId string = projectConnections.outputs.projectWorkspaceId
+output containerRegistryLoginServer string = containerRegistry.properties.loginServer
+output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
+output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost!.outputs.accountCapabilityHostName : ''
+output projectCapabilityHost string = createProjectCapabilityHost ? addProjectCapabilityHost!.outputs.projectCapabilityHostName : ''
+output projectPrincipalId string = resolvedProjectPrincipalId
+output projectWorkspaceId string = resolvedProjectWorkspaceId
 output connectionNames object = {
-  cosmos: projectConnections.outputs.cosmosConnection
-  storage: projectConnections.outputs.storageConnection
-  aiSearch: projectConnections.outputs.aiSearchConnection
+  cosmos: resolvedCosmosConnectionName
+  storage: resolvedStorageConnectionName
+  aiSearch: resolvedAiSearchConnectionName
+}
+output virtualNetwork object = {
+  name: virtualNetwork.outputs.name
+  id: virtualNetwork.outputs.id
+  agentSubnetId: virtualNetwork.outputs.agentSubnetId
+  privateEndpointSubnetId: virtualNetwork.outputs.privateEndpointSubnetId
 }
 output privateEndpointIds object = {
   storage: storagePrivateEndpoint.outputs.id
@@ -353,9 +718,33 @@ output privateEndpointIds object = {
   cosmos: cosmosPrivateEndpoint.outputs.id
   foundry: foundryPrivateEndpoint.outputs.id
 }
+output privateRunnerAccess object = createPrivateRunnerAccess ? {
+  enabled: true
+  runnerSubnetId: privateRunnerAccess!.outputs.runnerSubnetId
+  bastionSubnetId: privateRunnerAccess!.outputs.bastionSubnetId
+  runnerVmId: privateRunnerAccess!.outputs.runnerVmId
+  runnerVmPrincipalId: privateRunnerAccess!.outputs.runnerVmPrincipalId
+  runnerUamiId: privateRunnerAccess!.outputs.runnerUamiId
+  runnerUamiPrincipalId: privateRunnerAccess!.outputs.runnerUamiPrincipalId
+  runnerUamiClientId: privateRunnerAccess!.outputs.runnerUamiClientId
+  bastionHostId: privateRunnerAccess!.outputs.bastionHostId
+  bastionPublicIpId: privateRunnerAccess!.outputs.bastionPublicIpId
+} : {
+  enabled: false
+  runnerSubnetId: ''
+  bastionSubnetId: ''
+  runnerVmId: ''
+  runnerVmPrincipalId: ''
+  runnerUamiId: ''
+  runnerUamiPrincipalId: ''
+  runnerUamiClientId: ''
+  bastionHostId: ''
+  bastionPublicIpId: ''
+}
 output requiredBackendSettings array = [
   'WORKFLOW_MODE=foundry_hosted'
-  'FOUNDRY_HOSTED_INVOCATIONS_URL=<hosted-agent-invocations-endpoint>'
+  'FOUNDRY_HOSTED_INVOCATIONS_URL=${foundryHostedInvocationsUrl}'
   '${foundryEventCallbackTokenSettingName}=<shared-callback-token>'
+  'APPLICATIONINSIGHTS_CONNECTION_STRING=${applicationInsights.properties.ConnectionString}'
 ]
-output nextStep string = 'Approve all private endpoints, validate private DNS resolution, and run hosted-agent invoke validation.'
+output nextStep string = 'Run azd deploy order-resolution-hosted, then azd ai agent invoke for invocations/responses protocols and verify Foundry + App Insights telemetry.'

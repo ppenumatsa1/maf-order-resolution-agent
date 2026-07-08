@@ -175,6 +175,25 @@ Expected effect:
 
 - Env mirroring step is robust across clean runner checkouts.
 
+## Latest execution update (2026-07-08, workflow-level sync hardening)
+
+Observation:
+
+- Despite Makefile update, repeated job attempts still executed a stale `foundry-sync-env` recipe on runner and failed on `agent/runtime/.env` copy.
+
+Change made:
+
+- Moved env sync logic directly into `.github/workflows/foundry-provision.yml` step `Sync env into azd and runtime mirrors`.
+- The step now:
+  - validates runtime env file and App Insights connection string
+  - creates required destination directories
+  - mirrors env file to runtime locations
+  - syncs all key/value pairs into azd environment
+
+Expected effect:
+
+- Provision no longer depends on Makefile state for env synchronization in CI.
+
 We hit a repeat of the VM-side invoke/RBAC loop in the current region.
 
 What was validated:

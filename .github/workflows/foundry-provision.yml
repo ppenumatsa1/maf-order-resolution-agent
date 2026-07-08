@@ -77,7 +77,28 @@ jobs:
           azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
 
       - name: Sync env into azd and runtime mirrors
-        run: make foundry-sync-env
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          if [[ ! -f runtime/.env ]]; then
+            echo "Missing infra/foundry-hosted/runtime/.env"
+            exit 1
+          fi
+          appinsights_line="$(grep -E '^APPLICATIONINSIGHTS_CONNECTION_STRING=' runtime/.env || true)"
+          if [[ -z "$appinsights_line" || "$appinsights_line" == 'APPLICATIONINSIGHTS_CONNECTION_STRING=' ]]; then
+            echo "APPLICATIONINSIGHTS_CONNECTION_STRING must be set in infra/foundry-hosted/runtime/.env"
+            exit 1
+          fi
+          mkdir -p agent/runtime ../../backend/foundry/runtime
+          cp runtime/.env agent/runtime/.env
+          cp runtime/.env ../../backend/foundry/runtime/.env
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            key="${line%%=*}"
+            value="${line#*=}"
+            azd env set "$key" "$value" >/dev/null
+            echo "synced $key"
+          done < runtime/.env
 
       - name: Provision infrastructure
         run: make foundry-provision

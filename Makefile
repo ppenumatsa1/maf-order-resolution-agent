@@ -4,7 +4,8 @@ COMPOSE_ENV_FILE ?= backend/.env
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
 	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
 	parity-all run-mock-mcp up down logs ps docker-test \
-	validate-quick validate-full deploy-app deploy-full clean
+	validate-quick validate-full deploy-app deploy-full clean \
+	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path foundry-sync-env
 
 help:
 	@echo "Available targets:"
@@ -29,6 +30,12 @@ help:
 	@echo "  validate-full   - Full validation (test + eval + e2e + design-review)"
 	@echo "  deploy-app      - App-only Azure deploy (azd deploy)"
 	@echo "  deploy-full     - Infra + app Azure deploy (azd provision && azd deploy)"
+	@echo "  foundry-up      - Self-contained Foundry hosted-agent azd up (BYO VNET + private deps)"
+	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
+	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
+	@echo "  foundry-sync-env - Sync infra/foundry-hosted/runtime/.env into current azd env"
+	@echo "  foundry-smoke   - Invoke hosted agent health check via invocations protocol"
+	@echo "  foundry-access-path - Deploy private runner/Bastion access path via Bicep"
 	@echo "  clean           - Remove caches and test artifacts"
 
 bootstrap: install-backend install-frontend
@@ -152,6 +159,48 @@ deploy-app:
 deploy-full:
 	azd provision
 	azd deploy
+
+foundry-up:
+	cd infra/foundry-hosted && azd up --no-prompt
+
+foundry-provision:
+	cd infra/foundry-hosted && azd provision --no-prompt
+
+foundry-deploy:
+	cd infra/foundry-hosted && azd deploy order-resolution-hosted --no-prompt
+
+foundry-sync-env:
+	@set -euo pipefail; \
+	cd infra/foundry-hosted; \
+	if [[ ! -f runtime/.env ]]; then \
+		echo "Missing infra/foundry-hosted/runtime/.env"; \
+		exit 1; \
+	fi; \
+	appinsights_line="$$(grep -E '^APPLICATIONINSIGHTS_CONNECTION_STRING=' runtime/.env || true)"; \
+	if [[ -z "$$appinsights_line" || "$$appinsights_line" == 'APPLICATIONINSIGHTS_CONNECTION_STRING=' ]]; then \
+		echo "APPLICATIONINSIGHTS_CONNECTION_STRING must be set in infra/foundry-hosted/runtime/.env"; \
+		exit 1; \
+	fi; \
+	cp runtime/.env agent/runtime/.env; \
+	cp runtime/.env ../../backend/foundry/runtime/.env; \
+	echo "derived agent/runtime/.env and backend/foundry/runtime/.env from runtime/.env"; \
+	while IFS= read -r line; do \
+		[[ -z "$$line" || "$$line" =~ ^[[:space:]]*# ]] && continue; \
+		key="$${line%%=*}"; \
+		value="$${line#*=}"; \
+		azd env set "$$key" "$$value" >/dev/null; \
+		echo "synced $$key"; \
+	done < runtime/.env
+
+foundry-smoke:
+	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
+
+foundry-access-path:
+	cd infra/foundry-hosted && az deployment group create \
+		--resource-group "$${FOUNDRY_ACCESS_RG:-rg-maf-ora-ni-eus-07080910}" \
+		--template-file iac/access-path.bicep \
+		--parameters @iac/access-path.parameters.json \
+		--parameters runnerVmSshPublicKey="$$(cat "$${RUNNER_SSH_PUBKEY_PATH:-$$HOME/.ssh/id_rsa.pub}")"
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +

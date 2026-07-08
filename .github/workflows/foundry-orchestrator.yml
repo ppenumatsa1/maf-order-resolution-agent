@@ -1,0 +1,72 @@
+name: Foundry Orchestrator
+
+on:
+  push:
+    branches:
+      - feature/foundry-private-network-vnet
+    paths:
+      - .github/workflows/foundry-orchestrator.yml
+      - .github/workflows/foundry-provision.yml
+      - .github/workflows/foundry-deploy.yml
+      - scripts/github/bootstrap_foundry_github_config.sh
+      - Makefile
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: Self-hosted runner label
+        required: false
+        default: foundry-private
+      environment:
+        description: GitHub environment
+        required: false
+        default: foundry-private-env
+      run_provision:
+        description: Run infrastructure provision pipeline
+        required: false
+        default: "true"
+      run_deploy:
+        description: Run code deploy pipeline
+        required: false
+        default: "true"
+      run_smoke:
+        description: Run smoke invoke in deploy pipeline
+        required: false
+        default: "true"
+      run_telemetry_gate:
+        description: Run telemetry gate in deploy pipeline
+        required: false
+        default: "true"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  provision:
+    if: ${{ github.event_name == 'push' || github.event.inputs.run_provision == 'true' }}
+    uses: ./.github/workflows/foundry-provision.yml
+    with:
+      runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+      environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
+    secrets: inherit
+
+  deploy_after_provision:
+    if: ${{ github.event_name == 'push' || (github.event.inputs.run_deploy == 'true' && github.event.inputs.run_provision == 'true') }}
+    needs: [provision]
+    uses: ./.github/workflows/foundry-deploy.yml
+    with:
+      runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+      environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
+      run_smoke: ${{ github.event.inputs.run_smoke || 'true' }}
+      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'true' }}
+    secrets: inherit
+
+  deploy_only:
+    if: ${{ github.event.inputs.run_deploy == 'true' && github.event.inputs.run_provision != 'true' }}
+    uses: ./.github/workflows/foundry-deploy.yml
+    with:
+      runner_label: ${{ github.event.inputs.runner_label }}
+      environment: ${{ github.event.inputs.environment }}
+      run_smoke: ${{ github.event.inputs.run_smoke }}
+      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate }}
+    secrets: inherit

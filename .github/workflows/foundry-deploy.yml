@@ -181,12 +181,16 @@ jobs:
 
                   # Wait up to 10 minutes for ingestion after deploy+invoke
                   for i in $(seq 1 20); do
-                    COUNT=$(az monitor app-insights query --app "$APP_ID" \
-                      --analytics-query "union traces,requests,dependencies,exceptions
+                    telemetry_query=$(cat <<EOF
+union traces,requests,dependencies,exceptions
 | where timestamp > ago(20m)
 | extend workflowThreadId = tostring(customDimensions['workflow.thread_id'])
 | where workflowThreadId == '${THREAD_ID}'
-| summarize count()" \
+| summarize count()
+EOF
+                    )
+                    COUNT=$(az monitor app-insights query --app "$APP_ID" \
+                      --analytics-query "$telemetry_query" \
                       --query "tables[0].rows[0][0]" -o tsv)
                     COUNT=${COUNT:-0}
                     echo "telemetry_count=$COUNT thread_id=$THREAD_ID (attempt $i/20)"

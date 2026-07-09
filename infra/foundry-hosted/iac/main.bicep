@@ -319,6 +319,15 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     allowProjectManagement: true
     customSubDomainName: effectiveFoundryAccountName
     disableLocalAuth: true
+    networkAcls: {
+      defaultAction: 'Deny'
+      virtualNetworkRules: [
+        {
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
+          ignoreMissingVnetServiceEndpoint: false
+        }
+      ]
+    }
     publicNetworkAccess: 'Disabled'
     #disable-next-line BCP037
     networkInjections: enableStandardAgentNetworkInjection ? [
@@ -439,6 +448,7 @@ module virtualNetwork './modules/vnet.bicep' = {
     runnerSubnetName: runnerSubnetName
     runnerSubnetPrefix: runnerSubnetPrefix
     runnerSubnetNsgResourceId: ''
+    runnerSubnetNatGatewayResourceId: createNatGateway ? natGateway.id : ''
     // Keep AzureBastionSubnet declared in VNet to avoid deletion attempts when Bastion already exists.
     createBastionSubnet: true
     bastionSubnetName: bastionSubnetName

@@ -37,6 +37,9 @@ param runnerSubnetPrefix string = '192.168.2.0/24'
 @description('Optional NSG resource ID for runner subnet')
 param runnerSubnetNsgResourceId string = ''
 
+@description('Optional NAT gateway resource ID attached to the runner subnet')
+param runnerSubnetNatGatewayResourceId string = ''
+
 @description('Whether to include Azure Bastion subnet in the VNet subnet collection')
 param createBastionSubnet bool = false
 
@@ -89,6 +92,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
             addressPrefix: runnerSubnetPrefix
             networkSecurityGroup: empty(runnerSubnetNsgResourceId) ? null : {
               id: runnerSubnetNsgResourceId
+            }
+            natGateway: empty(runnerSubnetNatGatewayResourceId) ? null : {
+              id: runnerSubnetNatGatewayResourceId
             }
           }
         }

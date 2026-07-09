@@ -17,9 +17,16 @@ invoke() {
   local payload="$1"
   local raw
   raw="$(azd ai agent invoke order-resolution-hosted "$payload" --protocol invocations --no-prompt)"
-  # azd emits summary lines before the JSON body in default output mode.
+  # azd emits summary lines (and sometimes prefixes like "[agent] ") before JSON.
   # Keep only the JSON payload so jq-based assertions remain deterministic.
-  printf '%s\n' "$raw" | sed -n '/^{/,$p'
+  printf '%s\n' "$raw" | awk '
+    found { print; next }
+    /\{/ {
+      found = 1
+      sub(/^[^{]*/, "")
+      print
+    }
+  '
 }
 
 assert_has_event() {

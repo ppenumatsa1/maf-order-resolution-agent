@@ -54,6 +54,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 jobs:
   runner_preflight:

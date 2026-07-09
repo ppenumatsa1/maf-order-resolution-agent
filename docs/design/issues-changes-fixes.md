@@ -48,6 +48,42 @@ Current hard blocker:
 - EastUS2 Search service capacity exhaustion (`InsufficientResourcesAvailable`) is the only remaining provision failure gate in current runs.
 - Because provision fails at this platform gate, downstream `deploy_after_provision` is skipped even though deploy-only flow previously passed.
 
+## Latest execution update (2026-07-09, full-cloud closure achieved)
+
+Completed in this pass:
+
+- Implemented deterministic Search capacity fallback while keeping Foundry private VNet in East US 2:
+  - `infra/foundry-hosted/iac/main.bicep`
+    - added `aiSearchLocation` parameter and defaulted Search provisioning region to `eastus`.
+  - `.github/workflows/foundry-provision.yml`
+    - seeds `aiSearchLocation` in azd env for provision workflow runs.
+- Re-ran full orchestrator after fallback and captured a fully passing run:
+  - `29041614595`
+  - `runner_preflight`: success
+  - `provision / Provision Foundry Infra`: success
+  - `deploy_after_provision / Deploy Foundry Hosted Agent`: success
+
+End-to-end evidence from passing run `29041614595`:
+
+- Hosted agent deploy succeeded with endpoint outputs emitted by azd.
+- Smoke invoke succeeded with correlated thread:
+  - `thread_id=foundry-smoke-29041614595-1`
+  - emitted HITL events (`checkpoint.created`, `hitl.request`).
+- Hosted E2E suite passed:
+  - `Foundry hosted E2E passed for thread base: foundry-e2e-29041614595-1`
+- App Insights telemetry gate passed with correlated thread id:
+  - attempt 1: `telemetry_count=0`
+  - attempt 2: `telemetry_count=1`
+  - `Telemetry gate passed`
+
+Result:
+
+- Goal path is now proven end-to-end through GitHub self-hosted private runner flow:
+  - BYO VNet Foundry infra provisioned
+  - hosted agent deployed
+  - smoke + E2E checks passed
+  - telemetry verified in App Insights
+
 Completed in this pass:
 
 - Added VM host bootstrap script for GitHub runner prerequisites:

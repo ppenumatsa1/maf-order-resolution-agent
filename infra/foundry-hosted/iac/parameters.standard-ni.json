@@ -3,10 +3,10 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "centralus"
+      "value": "eastus2"
     },
     "cosmosLocation": {
-      "value": "centralus"
+      "value": "eastus2"
     },
     "cosmosAccountName": {
       "value": "maforanicosmoscuzp2uk"

@@ -3,40 +3,73 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "centralus"
+      "value": "eastus2"
     },
     "namePrefix": {
       "value": "maforacentral"
     },
-    "foundryHostedInvocationsUrl": {
-      "value": "https://mafs5ixpqx3hitri-foundry.services.ai.azure.com/api/projects/mafs5ixpqx3hitri-project/agents/order-resolution-hosted/endpoint/protocols/invocations?api-version=v1"
-    },
-    "foundryEventCallbackTokenSettingName": {
-      "value": "FOUNDRY_EVENT_CALLBACK_TOKEN"
-    },
-    "accountCapabilityHostName": {
-      "value": "caphostacct"
-    },
-    "projectCapabilityHostName": {
-      "value": "caphostproj"
-    },
-    "foundryAccountName": {
-      "value": "maforacentralaiazv4nl"
-    },
     "foundryProjectName": {
       "value": "order-resolution"
     },
-    "aiSearchName": {
-      "value": "maforacentralsrchazv4nl"
-    },
-    "aiSearchResourceGroupName": {
-      "value": "rg-maf-ora-central"
+    "hostedAgentName": {
+      "value": "order-resolution-hosted"
     },
     "createPrivateDnsVnetLinks": {
-      "value": false
+      "value": true
     },
     "createPrivateEndpoints": {
-      "value": false
+      "value": true
+    },
+    "createNatGateway": {
+      "value": true
+    },
+    "natGatewayName": {
+      "value": "maforacentral-nat"
+    },
+    "natPublicIpName": {
+      "value": "maforacentral-nat-pip"
+    },
+    "createPrivateRunnerAccess": {
+      "value": true
+    },
+    "runnerSubnetName": {
+      "value": "snet-runner"
+    },
+    "runnerSubnetPrefix": {
+      "value": "10.90.3.0/24"
+    },
+    "bastionSubnetName": {
+      "value": "AzureBastionSubnet"
+    },
+    "bastionSubnetPrefix": {
+      "value": "10.90.4.0/26"
+    },
+    "createBastionHost": {
+      "value": true
+    },
+    "createRunnerVm": {
+      "value": true
+    },
+    "runnerVmName": {
+      "value": "vm-maffnd-runner"
+    },
+    "runnerVmSize": {
+      "value": "Standard_D4s_v5"
+    },
+    "runnerVmAdminUsername": {
+      "value": "azureuser"
+    },
+    "runnerVmSshPublicKey": {
+      "value": ""
+    },
+    "runnerSubnetNsgName": {
+      "value": "nsg-maffnd-runner"
+    },
+    "bastionHostName": {
+      "value": "bas-maffnd"
+    },
+    "bastionPublicIpName": {
+      "value": "pip-maffnd-bastion"
     },
     "assignPreCaphostRbac": {
       "value": false
@@ -49,21 +82,6 @@
     },
     "createProjectCapabilityHost": {
       "value": false
-    },
-    "storageAccountName": {
-      "value": "maforacentralstazv4nl"
-    },
-    "cosmosAccountName": {
-      "value": "maforacentralcosazv4nl"
-    },
-    "virtualNetworkResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus"
-    },
-    "agentSubnetResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus/subnets/fap-sn"
-    },
-    "privateEndpointSubnetResourceId": {
-      "value": "/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-common/providers/Microsoft.Network/virtualNetworks/vnet-common-cus/subnets/pe-sn"
     },
     "privateDnsZoneNames": {
       "value": [

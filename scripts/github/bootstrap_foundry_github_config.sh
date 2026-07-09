@@ -14,6 +14,7 @@ set -euo pipefail
 #   export FOUNDRY_PROJECT_ID=/subscriptions/.../accounts/.../projects/order-resolution-ni
 #   export FOUNDRY_PROJECT_ENDPOINT=https://...services.ai.azure.com/api/projects/order-resolution-ni
 #   export APPINSIGHTS_APP_ID=...
+#   export AZURE_CLIENT_SECRET=...   # required when deploy auth mode is service-principal
 #   export FOUNDRY_RUNTIME_ENV_FILE=infra/foundry-hosted/runtime/.env
 #   ./scripts/github/bootstrap_foundry_github_config.sh
 
@@ -39,7 +40,8 @@ require_bin jq
 ENV_NAME="${ENV_NAME:-foundry-private-env}"
 RUNNER_LABEL="${RUNNER_LABEL:-foundry-private}"
 FOUNDRY_AZD_ENV_NAME="${FOUNDRY_AZD_ENV_NAME:-foundry-private-env}"
-FOUNDRY_LOCATION="${FOUNDRY_LOCATION:-centralus}"
+FOUNDRY_LOCATION="${FOUNDRY_LOCATION:-eastus2}"
+FOUNDRY_DEPLOY_AUTH_MODE="${FOUNDRY_DEPLOY_AUTH_MODE:-service-principal}"
 FOUNDRY_RUNTIME_ENV_FILE="${FOUNDRY_RUNTIME_ENV_FILE:-infra/foundry-hosted/runtime/.env}"
 
 if [[ -z "$REPO" ]]; then
@@ -81,13 +83,19 @@ gh variable set FOUNDRY_PROJECT_ID -R "$REPO" -b "$FOUNDRY_PROJECT_ID"
 gh variable set FOUNDRY_PROJECT_ENDPOINT -R "$REPO" -b "$FOUNDRY_PROJECT_ENDPOINT"
 gh variable set FOUNDRY_AZD_ENV_NAME -R "$REPO" -b "$FOUNDRY_AZD_ENV_NAME"
 gh variable set FOUNDRY_LOCATION -R "$REPO" -b "$FOUNDRY_LOCATION"
+gh variable set FOUNDRY_DEPLOY_AUTH_MODE -R "$REPO" -b "$FOUNDRY_DEPLOY_AUTH_MODE"
 gh variable set APPINSIGHTS_APP_ID -R "$REPO" -b "$APPINSIGHTS_APP_ID"
 
 echo "Setting environment secret FOUNDRY_RUNTIME_ENV in $ENV_NAME"
 gh secret set FOUNDRY_RUNTIME_ENV -R "$REPO" -e "$ENV_NAME" < "$FOUNDRY_RUNTIME_ENV_FILE"
+if [[ "$FOUNDRY_DEPLOY_AUTH_MODE" == "service-principal" ]]; then
+  : "${AZURE_CLIENT_SECRET:?AZURE_CLIENT_SECRET is required when FOUNDRY_DEPLOY_AUTH_MODE=service-principal}"
+  echo "Setting environment secret AZURE_CLIENT_SECRET in $ENV_NAME"
+  gh secret set AZURE_CLIENT_SECRET -R "$REPO" -e "$ENV_NAME" -b "$AZURE_CLIENT_SECRET"
+fi
 
 echo "Validation: variables"
-gh variable list -R "$REPO" --json name | jq -r '.[].name' | grep -E 'RUNNER_LABEL|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID|FOUNDRY_RESOURCE_GROUP|FOUNDRY_PROJECT_ID|FOUNDRY_PROJECT_ENDPOINT|FOUNDRY_AZD_ENV_NAME|FOUNDRY_LOCATION|APPINSIGHTS_APP_ID' || true
+gh variable list -R "$REPO" --json name | jq -r '.[].name' | grep -E 'RUNNER_LABEL|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID|FOUNDRY_RESOURCE_GROUP|FOUNDRY_PROJECT_ID|FOUNDRY_PROJECT_ENDPOINT|FOUNDRY_AZD_ENV_NAME|FOUNDRY_LOCATION|FOUNDRY_DEPLOY_AUTH_MODE|APPINSIGHTS_APP_ID' || true
 
 echo "Validation: environment exists"
 gh api "repos/$REPO/environments/$ENV_NAME" --jq '.name'

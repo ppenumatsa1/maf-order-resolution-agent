@@ -6,7 +6,7 @@
       "value": "eastus2"
     },
     "namePrefix": {
-      "value": "maforacentral"
+      "value": "maforanieus2"
     },
     "foundryProjectName": {
       "value": "order-resolution"
@@ -24,10 +24,10 @@
       "value": true
     },
     "natGatewayName": {
-      "value": "maforacentral-nat"
+      "value": "maforanieus2-nat"
     },
     "natPublicIpName": {
-      "value": "maforacentral-nat-pip"
+      "value": "maforanieus2-nat-pip"
     },
     "createPrivateRunnerAccess": {
       "value": true
@@ -72,16 +72,19 @@
       "value": "pip-maffnd-bastion"
     },
     "assignPreCaphostRbac": {
-      "value": false
+      "value": true
     },
     "assignPostCaphostRbac": {
-      "value": false
+      "value": true
     },
     "createAccountCapabilityHost": {
-      "value": false
+      "value": true
     },
     "createProjectCapabilityHost": {
-      "value": false
+      "value": true
+    },
+    "manageProjectConnections": {
+      "value": true
     },
     "privateDnsZoneNames": {
       "value": [

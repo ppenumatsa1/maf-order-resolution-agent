@@ -23,6 +23,7 @@ on:
                 default: foundry-private-env
 
 permissions:
+    id-token: write
     contents: read
 
 jobs:
@@ -38,22 +39,51 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Azure login via VM managed identity
+            - name: Azure and AZD login
+              env:
+                  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
               run: |
                   set -euo pipefail
-                  mkdir -p /mnt/.azure
-                  export AZURE_CONFIG_DIR=/mnt/.azure
-                  az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
+                  auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
+                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
+                  if mkdir -p /mnt/.azure /mnt/.azd 2>/dev/null; then
+                    cfg_root="/mnt"
+                  fi
+                  mkdir -p "${cfg_root}/.azure" "${cfg_root}/.azd"
+                  export AZURE_CONFIG_DIR="${cfg_root}/.azure"
+                  export AZD_CONFIG_DIR="${cfg_root}/.azd"
+                  if [[ "$auth_mode" == "service-principal" ]]; then
+                    if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
+                      echo "AZURE_CLIENT_SECRET environment secret is required for service-principal auth mode"
+                      exit 1
+                    fi
+                    az login --service-principal \
+                      --username "${{ vars.AZURE_CLIENT_ID }}" \
+                      --password "$AZURE_CLIENT_SECRET" \
+                      --tenant "${{ vars.AZURE_TENANT_ID }}"
+                    azd auth login \
+                      --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                      --client-secret "$AZURE_CLIENT_SECRET" \
+                      --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                      --no-prompt
+                  else
+                    az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
+                    azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
+                  fi
                   az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
             - name: Configure writable azd paths on data disk
               run: |
                   set -euo pipefail
-                  mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp /mnt/.azure
-                  echo "HOME=/mnt/.home" >> "$GITHUB_ENV"
-                  echo "AZD_CONFIG_DIR=/mnt/.azd" >> "$GITHUB_ENV"
-                  echo "TMPDIR=/mnt/.tmp" >> "$GITHUB_ENV"
-                  echo "AZURE_CONFIG_DIR=/mnt/.azure" >> "$GITHUB_ENV"
+                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
+                  if mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp /mnt/.azure 2>/dev/null; then
+                    cfg_root="/mnt"
+                  fi
+                  mkdir -p "${cfg_root}/.home" "${cfg_root}/.azd" "${cfg_root}/.tmp" "${cfg_root}/.azure"
+                  echo "HOME=${cfg_root}/.home" >> "$GITHUB_ENV"
+                  echo "AZD_CONFIG_DIR=${cfg_root}/.azd" >> "$GITHUB_ENV"
+                  echo "TMPDIR=${cfg_root}/.tmp" >> "$GITHUB_ENV"
+                  echo "AZURE_CONFIG_DIR=${cfg_root}/.azure" >> "$GITHUB_ENV"
 
             - name: Verify azd availability
               run: azd version
@@ -67,11 +97,6 @@ jobs:
                   else
                     azd extension install azure.ai.agents --no-prompt
                   fi
-
-            - name: AZD login via managed identity
-              run: |
-                  set -euo pipefail
-                  azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
 
             - name: Prepare runtime env file for Foundry
               run: |

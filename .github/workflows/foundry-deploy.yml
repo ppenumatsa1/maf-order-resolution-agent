@@ -19,6 +19,10 @@ on:
                 description: Validate fresh App Insights telemetry after deploy
                 required: false
                 default: "true"
+            run_e2e:
+                description: Run Foundry hosted E2E suite
+                required: false
+                default: "true"
     workflow_call:
         inputs:
             runner_label:
@@ -37,8 +41,13 @@ on:
                 required: false
                 type: string
                 default: "true"
+            run_e2e:
+                required: false
+                type: string
+                default: "true"
 
 permissions:
+    id-token: write
     contents: read
 
 jobs:
@@ -54,22 +63,51 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Azure login via VM managed identity
+            - name: Azure and AZD login
+              env:
+                  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
               run: |
                   set -euo pipefail
-                  mkdir -p /mnt/.azure
-                  export AZURE_CONFIG_DIR=/mnt/.azure
-                  az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
+                  auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
+                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
+                  if mkdir -p /mnt/.azure /mnt/.azd 2>/dev/null; then
+                    cfg_root="/mnt"
+                  fi
+                  mkdir -p "${cfg_root}/.azure" "${cfg_root}/.azd"
+                  export AZURE_CONFIG_DIR="${cfg_root}/.azure"
+                  export AZD_CONFIG_DIR="${cfg_root}/.azd"
+                  if [[ "$auth_mode" == "service-principal" ]]; then
+                    if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
+                      echo "AZURE_CLIENT_SECRET environment secret is required for service-principal auth mode"
+                      exit 1
+                    fi
+                    az login --service-principal \
+                      --username "${{ vars.AZURE_CLIENT_ID }}" \
+                      --password "$AZURE_CLIENT_SECRET" \
+                      --tenant "${{ vars.AZURE_TENANT_ID }}"
+                    azd auth login \
+                      --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                      --client-secret "$AZURE_CLIENT_SECRET" \
+                      --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                      --no-prompt
+                  else
+                    az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
+                    azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
+                  fi
                   az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
             - name: Configure writable azd paths on data disk
               run: |
                   set -euo pipefail
-                  mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp /mnt/.azure
-                  echo "HOME=/mnt/.home" >> "$GITHUB_ENV"
-                  echo "AZD_CONFIG_DIR=/mnt/.azd" >> "$GITHUB_ENV"
-                  echo "TMPDIR=/mnt/.tmp" >> "$GITHUB_ENV"
-                  echo "AZURE_CONFIG_DIR=/mnt/.azure" >> "$GITHUB_ENV"
+                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
+                  if mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp /mnt/.azure 2>/dev/null; then
+                    cfg_root="/mnt"
+                  fi
+                  mkdir -p "${cfg_root}/.home" "${cfg_root}/.azd" "${cfg_root}/.tmp" "${cfg_root}/.azure"
+                  echo "HOME=${cfg_root}/.home" >> "$GITHUB_ENV"
+                  echo "AZD_CONFIG_DIR=${cfg_root}/.azd" >> "$GITHUB_ENV"
+                  echo "TMPDIR=${cfg_root}/.tmp" >> "$GITHUB_ENV"
+                  echo "AZURE_CONFIG_DIR=${cfg_root}/.azure" >> "$GITHUB_ENV"
 
             - name: Verify azd availability
               run: azd version
@@ -83,11 +121,6 @@ jobs:
                   else
                     azd extension install azure.ai.agents --no-prompt
                   fi
-
-            - name: AZD login via managed identity
-              run: |
-                  set -euo pipefail
-                  azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
 
             - name: Prepare runtime env file for Foundry
               run: |
@@ -116,10 +149,23 @@ jobs:
 
             - name: Smoke test Foundry hosted agent invoke
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-              run: make foundry-smoke
+              run: |
+                  set -euo pipefail
+                  THREAD_ID="foundry-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+                  MESSAGE="ORD-1009 delayed order telemetry gate ${THREAD_ID}"
+                  echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
+                  echo "FOUNDRY_SMOKE_MESSAGE=$MESSAGE" >> "$GITHUB_ENV"
+                  make foundry-smoke SMOKE_THREAD_ID="$THREAD_ID" SMOKE_MESSAGE="$MESSAGE"
+
+            - name: Foundry hosted E2E regression
+              if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'true') == 'true' }}
+              run: |
+                  set -euo pipefail
+                  chmod +x scripts/github/foundry_hosted_e2e.sh
+                  scripts/github/foundry_hosted_e2e.sh "foundry-e2e-${{ github.run_id }}-${{ github.run_attempt }}"
 
             - name: Telemetry gate (App Insights)
-              if: ${{ (inputs.run_telemetry_gate || github.event.inputs.run_telemetry_gate || 'true') == 'true' }}
+              if: ${{ (inputs.run_telemetry_gate || github.event.inputs.run_telemetry_gate || 'true') == 'true' && (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
               run: |
                   set -euo pipefail
                   APP_ID="${{ vars.APPINSIGHTS_APP_ID }}"
@@ -127,14 +173,23 @@ jobs:
                     echo "APPINSIGHTS_APP_ID variable is required for telemetry gate"
                     exit 1
                   fi
+                  THREAD_ID="${FOUNDRY_SMOKE_THREAD_ID:-}"
+                  if [[ -z "$THREAD_ID" ]]; then
+                    echo "FOUNDRY_SMOKE_THREAD_ID is missing; telemetry gate requires correlated smoke execution"
+                    exit 1
+                  fi
 
                   # Wait up to 10 minutes for ingestion after deploy+invoke
                   for i in $(seq 1 20); do
                     COUNT=$(az monitor app-insights query --app "$APP_ID" \
-                      --analytics-query "union traces,requests,dependencies,exceptions | where timestamp > ago(15m) | summarize count()" \
+                      --analytics-query "union traces,requests,dependencies,exceptions
+| where timestamp > ago(20m)
+| extend workflowThreadId = tostring(customDimensions['workflow.thread_id'])
+| where workflowThreadId == '${THREAD_ID}'
+| summarize count()" \
                       --query "tables[0].rows[0][0]" -o tsv)
                     COUNT=${COUNT:-0}
-                    echo "telemetry_count=$COUNT (attempt $i/20)"
+                    echo "telemetry_count=$COUNT thread_id=$THREAD_ID (attempt $i/20)"
                     if [[ "$COUNT" =~ ^[0-9]+$ ]] && [[ "$COUNT" -gt 0 ]]; then
                       echo "Telemetry gate passed"
                       exit 0
@@ -142,5 +197,5 @@ jobs:
                     sleep 30
                   done
 
-                  echo "Telemetry gate failed: no fresh App Insights data in the expected window"
+                  echo "Telemetry gate failed: no correlated App Insights data for thread_id=$THREAD_ID"
                   exit 1

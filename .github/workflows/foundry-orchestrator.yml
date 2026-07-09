@@ -9,7 +9,17 @@ on:
       - .github/workflows/foundry-provision.yml
       - .github/workflows/foundry-deploy.yml
       - scripts/github/bootstrap_foundry_github_config.sh
+      - scripts/github/register_vm_runner.sh
+      - scripts/github/bootstrap_vm_runner_host.sh
+      - scripts/github/verify_foundry_runner_ready.sh
+      - scripts/github/foundry_hosted_e2e.sh
       - Makefile
+      - infra/foundry-hosted/azure.yaml
+      - infra/foundry-hosted/iac/**
+      - infra/foundry-hosted/agent/**
+      - infra/foundry-hosted/runtime/**
+      - infra/foundry-hosted/README.md
+      - docs/design/issues-changes-fixes.md
   workflow_dispatch:
     inputs:
       runner_label:
@@ -36,14 +46,33 @@ on:
         description: Run telemetry gate in deploy pipeline
         required: false
         default: "true"
+      run_e2e:
+        description: Run Foundry hosted E2E suite in deploy pipeline
+        required: false
+        default: "true"
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  runner_preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify self-hosted runner availability
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUNNER_LABEL: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/github/verify_foundry_runner_ready.sh
+          scripts/github/verify_foundry_runner_ready.sh
+
   provision:
     if: ${{ github.event_name == 'push' || github.event.inputs.run_provision == 'true' }}
+    needs: [runner_preflight]
     uses: ./.github/workflows/foundry-provision.yml
     with:
       runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
@@ -59,14 +88,17 @@ jobs:
       environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
       run_smoke: ${{ github.event.inputs.run_smoke || 'true' }}
       run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'true' }}
+      run_e2e: ${{ github.event.inputs.run_e2e || 'true' }}
     secrets: inherit
 
   deploy_only:
     if: ${{ github.event.inputs.run_deploy == 'true' && github.event.inputs.run_provision != 'true' }}
+    needs: [runner_preflight]
     uses: ./.github/workflows/foundry-deploy.yml
     with:
       runner_label: ${{ github.event.inputs.runner_label }}
       environment: ${{ github.event.inputs.environment }}
       run_smoke: ${{ github.event.inputs.run_smoke }}
       run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate }}
+      run_e2e: ${{ github.event.inputs.run_e2e }}
     secrets: inherit

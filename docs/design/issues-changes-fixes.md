@@ -3,6 +3,28 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-09, runner readiness hardening)
+
+Completed in this pass:
+
+- Added VM host bootstrap script for GitHub runner prerequisites:
+  - `scripts/github/bootstrap_vm_runner_host.sh`
+  - installs/verifies `git`, `curl`, `jq`, `tar`, `unzip`, `make`, `python3`, docker, Azure CLI, and `azd`
+  - configures `/mnt` tool paths used by Foundry workflows
+- Hardened runner registration script:
+  - `scripts/github/register_vm_runner.sh`
+  - now runs host bootstrap by default and performs explicit preflight checks (`git`, `docker`, `az`, `azd`)
+- Added runner readiness verification script:
+  - `scripts/github/verify_foundry_runner_ready.sh`
+  - validates that a `foundry-private` labeled runner is online in GitHub before dispatch
+- Added orchestrator preflight job:
+  - `.github/workflows/foundry-orchestrator.yml` now checks runner readiness on `ubuntu-latest` before provision/deploy jobs
+- Updated Foundry README with VM runbook and troubleshooting for offline/queued runner scenarios.
+
+Current blocker:
+
+- Existing orchestrator run remains queued until the registered runner transitions to `online` in GitHub.
+
 ## Latest execution update (2026-07-08, azd project-root mismatch root cause)
 
 New root cause identified:

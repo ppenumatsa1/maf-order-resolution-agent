@@ -24,7 +24,7 @@
       "value": true
     },
     "createPrivateDnsVnetLinks": {
-      "value": true
+      "value": false
     },
     "createPrivateEndpoints": {
       "value": true
@@ -39,7 +39,7 @@
       "value": true
     },
     "createRunnerVm": {
-      "value": true
+      "value": false
     },
     "runnerVmName": {
       "value": "vm-maforani-runner"
@@ -66,19 +66,19 @@
       "value": "pip-maforani-bastion"
     },
     "assignPreCaphostRbac": {
-      "value": true
+      "value": false
     },
     "assignPostCaphostRbac": {
-      "value": true
+      "value": false
     },
     "createAccountCapabilityHost": {
-      "value": true
+      "value": false
     },
     "createProjectCapabilityHost": {
-      "value": true
+      "value": false
     },
     "manageProjectConnections": {
-      "value": true
+      "value": false
     },
     "vnetAddressPrefix": {
       "value": "192.168.0.0/16"

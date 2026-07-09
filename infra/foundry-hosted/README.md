@@ -1,117 +1,134 @@
-# Foundry-Hosted Private-Only (Sample-15 Aligned)
+# Foundry-Hosted Private VNet Deployment
 
-This stack is now a direct private-only BYO resource wiring for Foundry-hosted execution.
+This stack provisions and deploys a Foundry-hosted agent path using `azd` + Bicep from `infra/foundry-hosted`.
 
-- No public-mode toggle.
-- No dual setup paths.
-- Existing Foundry account/project, Search, Storage, Cosmos, and VNet/subnets are required.
-- Capability hosts and project connections follow the sample-15 ordering model.
+Primary target region for this path is **eastus2**.
 
-## Layout
+## What this stack includes
 
-- `iac/main.bicep`: private-only orchestration entrypoint.
-- `iac/modules/foundry-project-existing-connections.bicep`: updates existing project connections for Cosmos, Storage, and Search.
-- `iac/modules/add-account-capability-host.bicep`: account-level capability host (`Agents`) with `customerSubnet`.
-- `iac/modules/add-project-capability-host.bicep`: project capability host (`Agents`) with thread/storage/vector connection bindings.
-- `iac/modules/azure-storage-account-role-assignment.bicep`: Storage Blob Data Contributor role before project caphost.
-- `iac/modules/cosmosdb-account-role-assignment.bicep`: Cosmos DB Operator role before project caphost.
-- `iac/modules/ai-search-role-assignments.bicep`: Search role assignments before project caphost.
-- `iac/modules/blob-storage-container-role-assignments.bicep`: Storage Blob Data Owner conditional role after project caphost.
-- `iac/modules/cosmos-container-role-assignments.bicep`: Cosmos SQL role assignment after project caphost.
-- `iac/modules/format-project-workspace-id.bicep`: extracts workspace GUID for role scoping.
-- `iac/modules/private-dns.bicep`: private DNS zones and VNet links.
-- `iac/modules/private-endpoint.bicep`: private endpoints (storage/search/cosmos/foundry account).
-- `iac/parameters.dev.json`: dev template for required BYO inputs.
+- `azure.yaml` service host: `azure.ai.agent` (`order-resolution-hosted`)
+- Bicep orchestration in `iac/main.bicep` for:
+  - Foundry account/project + model deployments
+  - VNet + agent subnet + private endpoint subnet
+  - private DNS zones and private endpoints
+  - NAT gateway
+  - optional private runner access (runner subnet, Bastion, VM, UAMI, subscription RBAC)
+  - Storage, Search, Cosmos, ACR, Log Analytics, App Insights
+  - capability-host and connection modules
 
-## Deployment Inputs
+## Parameter profiles
 
-Mandatory BYO parameters in `iac/parameters.dev.json`:
+- `iac/parameters.standard-ni.json`  
+  First-provision standard profile (eastus2) with DNS links, project connections, and capability-host sequencing enabled.
+- `iac/parameters.standard-ni.rerun.json`  
+  Rerun/repair profile for existing environments (capability-host/connections disabled, runner VM creation disabled).
+- `iac/parameters.dev.json`  
+  Dev profile aligned to eastus2 defaults.
 
-- `foundryAccountName`
-- `foundryProjectName`
-- `aiSearchName`
-- `storageAccountName`
-- `cosmosAccountName`
-- `virtualNetworkResourceId`
-- `agentSubnetResourceId`
-- `privateEndpointSubnetResourceId`
-- `foundryHostedInvocationsUrl`
+## CI/CD workflows
 
-Optional overrides:
+- `.github/workflows/foundry-provision.yml`
+- `.github/workflows/foundry-deploy.yml`
+- `.github/workflows/foundry-orchestrator.yml`
 
-- `cosmosConnectionName`
-- `storageConnectionName`
-- `aiSearchConnectionName`
-- `accountCapabilityHostName`
-- `projectCapabilityHostName`
+The private-runner workflow path supports:
 
-Cross-RG/subscription inputs default to current context and can be overridden with:
+1. `azd provision`
+2. `azd deploy order-resolution-hosted`
+3. smoke invoke
+4. hosted E2E regression
+5. App Insights telemetry gate (thread-correlated)
 
-- `aiSearchSubscriptionId`, `aiSearchResourceGroupName`
-- `storageSubscriptionId`, `storageResourceGroupName`
-- `cosmosSubscriptionId`, `cosmosResourceGroupName`
+## Authentication mode
 
-## Private DNS Zones
+Workflow auth mode is controlled by repo variable `FOUNDRY_DEPLOY_AUTH_MODE`.
 
-Default private DNS zone list:
+- `service-principal` (default): requires environment secret `AZURE_CLIENT_SECRET`
+- `managed-identity`: uses VM UAMI login
 
-- `privatelink.blob.core.windows.net`
-- `privatelink.search.windows.net`
-- `privatelink.documents.azure.com`
-- `privatelink.services.ai.azure.com`
-- `privatelink.cognitiveservices.azure.com`
-- `privatelink.openai.azure.com`
+Bootstrap GitHub variables/secrets with:
 
-## Ordering Model
+```bash
+./scripts/github/bootstrap_foundry_github_config.sh
+```
 
-1. Private DNS and private endpoints are created for Storage, Search, Cosmos, and Foundry account.
-2. Existing project connections are created/updated.
-3. Pre-caphost RBAC is assigned:
-   - Storage Blob Data Contributor
-   - Cosmos DB Operator
-   - Search roles
-4. Account capability host is created.
-5. Project capability host is created.
-6. Post-caphost RBAC is assigned:
-   - Storage Blob Data Owner (conditioned to workspace-scoped containers)
-   - Cosmos SQL role assignment
+## Private runner bootstrap
 
-## Build And Validate
+Prepare and register/start the private self-hosted runner on the VM with:
 
-Compile all templates:
+```bash
+./scripts/github/bootstrap_vm_runner_host.sh
+./scripts/github/register_vm_runner.sh
+```
+
+Required environment variables include:
+
+- `GH_RUNNER_PAT`
+- `REPO` (owner/repo)
+
+Optional defaults:
+
+- `RUNNER_LABEL` (default: `foundry-private`)
+- `RUNNER_VERSION` (default: `2.328.0`)
+
+## Runner readiness check (before orchestrator dispatch)
+
+Verify GitHub sees an online runner for the required label:
+
+```bash
+REPO=ppenumatsa1/maf-order-resolution-agent \
+RUNNER_LABEL=foundry-private \
+./scripts/github/verify_foundry_runner_ready.sh
+```
+
+The orchestrator workflow now runs this check as a preflight job.
+
+## Existing VM runbook
+
+Run this on each private runner VM (`vm-maffnd-runner`, `vm-maffnd-runner-iac`) via SSH/Bastion:
+
+```bash
+cd /path/to/repo
+export GH_RUNNER_PAT=<github_pat_with_repo_workflow_scope>
+export REPO=ppenumatsa1/maf-order-resolution-agent
+export RUNNER_LABEL=foundry-private
+
+./scripts/github/bootstrap_vm_runner_host.sh
+./scripts/github/register_vm_runner.sh
+```
+
+Then verify from your operator host:
+
+```bash
+gh api repos/ppenumatsa1/maf-order-resolution-agent/actions/runners \
+  --jq '.runners[] | {name,status,busy,labels:[.labels[].name]}'
+```
+
+## Troubleshooting
+
+- VM is running but workflow job is queued:
+  - Runner service may be stopped or runner may be offline in GitHub.
+  - Run `sudo ./svc.sh status && sudo ./svc.sh start` in runner directory.
+- Azure RunCommand reports `Conflict ... execution is in progress`:
+  - Use direct SSH/Bastion for bootstrap/register actions.
+- Runner label mismatch:
+  - Ensure runner is configured with `self-hosted,foundry-private`.
+- Missing tools on runner host:
+  - Re-run `./scripts/github/bootstrap_vm_runner_host.sh`.
+
+## Local validation
 
 ```bash
 az bicep build --file infra/foundry-hosted/iac/main.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/foundry-project-existing-connections.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/add-account-capability-host.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/add-project-capability-host.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/azure-storage-account-role-assignment.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/cosmosdb-account-role-assignment.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/ai-search-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/blob-storage-container-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/cosmos-container-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/format-project-workspace-id.bicep
+az bicep build --file infra/foundry-hosted/iac/modules/private-runner-access.bicep
+az bicep build --file infra/foundry-hosted/iac/modules/vnet.bicep
 az bicep build --file infra/foundry-hosted/iac/modules/private-dns.bicep
 az bicep build --file infra/foundry-hosted/iac/modules/private-endpoint.bicep
 ```
 
-Run what-if:
+Repository deterministic gates remain:
 
-```bash
-az deployment group what-if \
-  --resource-group <rg-name> \
-  --template-file infra/foundry-hosted/iac/main.bicep \
-  --parameters @infra/foundry-hosted/iac/parameters.dev.json
-```
-
-## Required Backend Settings
-
-- `WORKFLOW_MODE=foundry_hosted`
-- `FOUNDRY_HOSTED_INVOCATIONS_URL=<hosted-agent-invocations-endpoint>`
-- `FOUNDRY_EVENT_CALLBACK_TOKEN=<shared-callback-token>`
-
-## Notes
-
-- This path assumes Foundry-only operation for this stack.
-- Approve private endpoint connections and verify DNS resolution before runtime validation.
-- Existing repo validation gates remain unchanged (`make test`, `make eval-backend`, `make test-e2e`, `./scripts/skills/design-review-skill.sh`).
+- `make test`
+- `make eval-backend`
+- `make test-e2e`
+- `./scripts/skills/design-review-skill.sh`

@@ -78,6 +78,11 @@ test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
 		cd scripts/playwright && npm run test:e2e; \
 	else \
+		health_json="$$(curl -fsS http://localhost:8000/api/health 2>/dev/null || true)"; \
+		if [[ -z "$$health_json" || "$$health_json" != *'"workflow_mode":"maf_sdk"'* ]]; then \
+			echo "Ensuring deterministic local backend for E2E (WORKFLOW_MODE=maf_sdk)."; \
+			$(MAKE) COMPOSE_ENV_FILE=backend/.env.e2e up; \
+		fi; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
 		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
@@ -194,7 +199,7 @@ foundry-sync-env:
 	done < runtime/.env
 
 foundry-smoke:
-	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
+	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "{\"thread_id\":\"$${SMOKE_THREAD_ID:-foundry-smoke}\",\"message\":\"$${SMOKE_MESSAGE:-ORD-1009 delayed order}\"}" --protocol invocations --no-prompt
 
 foundry-access-path:
 	cd infra/foundry-hosted && az deployment group create \

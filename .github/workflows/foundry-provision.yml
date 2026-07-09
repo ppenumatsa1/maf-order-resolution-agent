@@ -134,6 +134,9 @@ jobs:
                   azd env set AZURE_AI_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
                   azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
                   azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
+                  # Preserve runner and bastion subnets on shared VNet during incremental provision.
+                  azd env set createPrivateRunnerAccess "true"
+                  azd env set createRunnerVm "false"
                   if [[ -n "${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}" ]]; then
                     azd env set POSTGRES_ADMIN_PASSWORD "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
                   else

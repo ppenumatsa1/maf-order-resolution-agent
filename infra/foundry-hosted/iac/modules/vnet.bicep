@@ -55,53 +55,53 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
         vnetAddressPrefix
       ]
     }
-  }
-}
-
-resource agentSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = if (enabled) {
-  parent: vnet
-  name: agentSubnetName
-  properties: {
-    addressPrefix: agentSubnetPrefix
-    natGateway: empty(natGatewayResourceId) ? null : {
-      id: natGatewayResourceId
-    }
-    delegations: [
-      {
-        name: 'Microsoft.App/environments'
-        properties: {
-          serviceName: 'Microsoft.App/environments'
+    subnets: concat(
+      [
+        {
+          name: agentSubnetName
+          properties: {
+            addressPrefix: agentSubnetPrefix
+            natGateway: empty(natGatewayResourceId) ? null : {
+              id: natGatewayResourceId
+            }
+            delegations: [
+              {
+                name: 'Microsoft.App/environments'
+                properties: {
+                  serviceName: 'Microsoft.App/environments'
+                }
+              }
+            ]
+          }
         }
-      }
-    ]
-  }
-}
-
-resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = if (enabled) {
-  parent: vnet
-  name: privateEndpointSubnetName
-  properties: {
-    addressPrefix: privateEndpointSubnetPrefix
-    privateEndpointNetworkPolicies: 'Disabled'
-  }
-}
-
-resource runnerSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = if (enabled && createRunnerSubnet) {
-  parent: vnet
-  name: runnerSubnetName
-  properties: {
-    addressPrefix: runnerSubnetPrefix
-    networkSecurityGroup: empty(runnerSubnetNsgResourceId) ? null : {
-      id: runnerSubnetNsgResourceId
-    }
-  }
-}
-
-resource bastionSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = if (enabled && createBastionSubnet) {
-  parent: vnet
-  name: bastionSubnetName
-  properties: {
-    addressPrefix: bastionSubnetPrefix
+        {
+          name: privateEndpointSubnetName
+          properties: {
+            addressPrefix: privateEndpointSubnetPrefix
+            privateEndpointNetworkPolicies: 'Disabled'
+          }
+        }
+      ],
+      createRunnerSubnet ? [
+        {
+          name: runnerSubnetName
+          properties: {
+            addressPrefix: runnerSubnetPrefix
+            networkSecurityGroup: empty(runnerSubnetNsgResourceId) ? null : {
+              id: runnerSubnetNsgResourceId
+            }
+          }
+        }
+      ] : [],
+      createBastionSubnet ? [
+        {
+          name: bastionSubnetName
+          properties: {
+            addressPrefix: bastionSubnetPrefix
+          }
+        }
+      ] : []
+    )
   }
 }
 

@@ -61,10 +61,7 @@ assert_has_event "$high_result" "workflow.stage"
 assert_has_event "$high_result" "tool.call"
 assert_has_event "$high_result" "checkpoint.created"
 assert_has_event "$high_result" "hitl.request"
-checkpoint_id="$(echo "$high_result" | jq -r '.events[] | select(.type=="checkpoint.created") | .payload.checkpoint_id' | head -n1)"
-if [[ -z "$checkpoint_id" || "$checkpoint_id" == "null" ]]; then
-  checkpoint_id="$(echo "$high_result" | jq -r '.events[] | select(.type=="hitl.request") | .payload.checkpoint_id' | head -n1)"
-fi
+checkpoint_id="$(echo "$high_result" | jq -r '.. | objects | .checkpoint_id? // empty' | head -n1)"
 if [[ -z "$checkpoint_id" || "$checkpoint_id" == "null" ]]; then
   echo "Missing checkpoint_id in high-risk HITL flow"
   echo "$high_result"

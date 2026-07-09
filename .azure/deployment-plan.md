@@ -1,6 +1,6 @@
 # Azure Deployment Plan
 
-> **Status:** Deployed and Telemetry Verified (shim removal, MAF middleware, rich events, and frontend API proxy update)
+> **Status:** Deployed and Telemetry Verified — Redeployment Ready (format fix committed; app-only deploy validated locally; Azure-dependent steps require `azd auth login` + `azd deploy` from a machine with AZD installed)
 
 Generated: 2026-06-10
 
@@ -372,3 +372,76 @@ evidence for the existing `centralus` environment.
 
 1. Compatibility shims have been removed after Azure app-hosted parity and CI/CD stayed green; continue using only canonical backend namespaces.
 2. Continue using `azure-telemetry-validation` after future hosted deployments to verify App Insights request, dependency, HITL correlation, warning, and exception data.
+
+---
+
+### 2026-07-09 Release Readiness: Redeployment Runbook
+
+**Change set:** format fix to `backend/foundry/conversation_shadow.py` (ruff format); no API/HITL/IaC contract changes.
+
+**Routing:** `deploy_mode=app_only`, `validation_mode=quick` (confirmed by `scripts/skills/deployment-mode-router.sh`).
+
+#### Local validation results (sandbox agent, 2026-07-09T00:00:00Z)
+
+| Check | Command Run | Result |
+|-------|-------------|--------|
+| Scope guard | `git diff --name-only HEAD --` | Passed: 0 changed files after format commit |
+| Lint | `ruff check .` | Passed: all checks passed |
+| Format | `ruff format .` | Passed: 1 file reformatted (`foundry/conversation_shadow.py`), committed |
+| Bicep build | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout` | Passed |
+| Frontend build | `npm --prefix frontend run build` | Passed: `dist/assets/index-D5rc9ZAP.js` 172 KB |
+| IaC RBAC review | Reviewed `infra/azure-apphosted/iac/**/*.bicep` | Passed: AcrPull scoped to ACR, Foundry OpenAI User + Foundry User scoped to account/project, no broad roles |
+| Rubric validation | `grep` assertions on rubric + E2E spec | Passed: all 8 rubric/coverage assertions |
+| Backend tests | `make test-backend` | Sandbox blocker: no PostgreSQL; test collection errors for `test_api.py` and `test_foundry_hosted.py`; all other tests skipped with DB guard |
+| Eval harness | `make eval-backend` | Sandbox blocker: no PostgreSQL |
+| Live health | `curl $API_URL/health` | Sandbox blocker: Azure Container Apps endpoints unreachable from sandbox |
+| AZD deploy | `azd deploy` | Sandbox blocker: AZD not installed; `aka.ms` blocked |
+
+#### Commands to execute with Azure access
+
+Run these from a machine with `azd` installed and authenticated (`azd auth login`):
+
+```bash
+# 1. Confirm AZD env
+azd env list
+azd env select maf-ora-central
+
+# 2. App-only deploy (no infra changes)
+azd deploy
+
+# 3. Post-deploy smoke test
+API_URL="https://maf-ora-central-backend-azv4nl.icyglacier-d757678f.centralus.azurecontainerapps.io"
+WEB_URL="https://maf-ora-central-frontend-azv4nl.icyglacier-d757678f.centralus.azurecontainerapps.io"
+EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+
+# 4. Hosted Playwright UI parity
+PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e
+
+# 5. Telemetry validation (App Insights KQL)
+WORKSPACE_ID="e5b16f93-6d8e-4e5c-938e-70499e9dc8f7"
+az monitor log-analytics query \
+  --workspace "$WORKSPACE_ID" \
+  --analytics-query "
+    let lookback=2h;
+    print
+      AppRequestsRows=toscalar(AppRequests | where TimeGenerated > ago(lookback) | count),
+      AppDependenciesRows=toscalar(AppDependencies | where TimeGenerated > ago(lookback) | count),
+      AppTracesRows=toscalar(AppTraces | where TimeGenerated > ago(lookback) | count),
+      AppExceptionsRows=toscalar(AppExceptions | where TimeGenerated > ago(lookback) | count)
+  "
+```
+
+**Expected results:**
+- Smoke test: `azure-apphosted smoke test passed`
+- Playwright: 5/5 tests, no Workflow History JSON errors
+- KQL: `AppRequests > 0`, `AppDependencies > 0`, `AppExceptions = 0`, `NoneTypeWarnings = 0`
+
+**Known recovery:** If Container Apps registry binding fails on deploy:
+```bash
+az containerapp registry set \
+  --name maf-ora-central-backend-azv4nl \
+  --resource-group rg-maf-ora-central \
+  --server maforacentralacrazv4nl.azurecr.io \
+  --identity system
+azd deploy
+```

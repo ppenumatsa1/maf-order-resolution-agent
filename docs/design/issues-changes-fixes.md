@@ -23,7 +23,46 @@ Completed in this pass:
 
 Current blocker:
 
-- Existing orchestrator run remains queued until the registered runner transitions to `online` in GitHub.
+- Runner queue issue is cleared using `copilot-temp-foundry-private` (online self-hosted runner with `foundry-private` label).
+- New hard blocker is Foundry data-plane authorization during deploy:
+  - workflow run: `29031213475`
+  - job: `deploy_only / Deploy Foundry Hosted Agent`
+  - failure: `403 Forbidden` on
+    `GET https://maffndaiktbblpk7mli2a.services.ai.azure.com/api/projects/order-resolution/agents/order-resolution-hosted`
+- Because deploy fails, smoke/E2E/telemetry steps are not reachable in the same run.
+
+## Latest execution update (2026-07-09, cloud-proof attempts after runner recovery)
+
+Completed in this pass:
+
+- Cleared queue blocker by registering a temporary runner:
+  - `copilot-temp-foundry-private` (`online`)
+- Updated and pushed workflow hardening for auth/path resilience:
+  - fallback writable config paths when `/mnt` is unavailable
+  - telemetry query YAML parsing fix
+  - runner preflight made non-blocking for `GITHUB_TOKEN` `actions/runners` 403 in hosted preflight job
+  - OIDC fallback path for workflows when `AZURE_CLIENT_SECRET` is absent
+- Aligned environment variables to active eastus2 Foundry project:
+  - `FOUNDRY_RESOURCE_GROUP=rg-maf-ora-foundry`
+  - `FOUNDRY_PROJECT_ID=/subscriptions/.../resourceGroups/rg-maf-ora-foundry/providers/Microsoft.CognitiveServices/accounts/maffndaiktbblpk7mli2a/projects/order-resolution`
+  - `FOUNDRY_PROJECT_ENDPOINT=https://maffndaiktbblpk7mli2a.services.ai.azure.com/api/projects/order-resolution`
+  - `FOUNDRY_LOCATION=eastus2`, `APPINSIGHTS_APP_ID=e6e3fa8d-1f5e-487a-be6a-dfd1874fb7a3`
+- Configured OIDC federation for UAMI principal:
+  - identity: `uami-maffnd-runner` (`clientId=7fcd23e4-3ca3-457b-9e53-fc63ad58bf75`)
+  - federated subjects:
+    - `repo:ppenumatsa1/maf-order-resolution-agent:environment:foundry-private-env`
+    - `repo:ppenumatsa1/maf-order-resolution-agent:ref:refs/heads/feature/foundry-private-network-vnet`
+- Applied RBAC assignments for the same principal at RG/account/project scopes.
+
+Observed outcomes:
+
+- Provision can now execute and complete in some runs (example: orchestrator run `29029857025`, provision job succeeded).
+- Full provision is still unstable when forced:
+  - `InUseSubnetCannotBeDeleted` (subnet `snet-runner` currently attached to VM NIC)
+  - `InsufficientResourcesAvailable` in `eastus2`
+- Deploy consistently fails with Foundry agent data-plane `403` despite management-plane RBAC:
+  - latest confirmed: run `29031213475`
+  - this is the active blocker for cloud-proof completion.
 
 ## Latest execution update (2026-07-08, azd project-root mismatch root cause)
 

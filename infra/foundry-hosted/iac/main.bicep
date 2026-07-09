@@ -28,6 +28,9 @@ param cosmosLocation string = ''
 @description('Optional override for AI Search service name')
 param aiSearchName string = ''
 
+@description('Optional AI Search region override when East US 2 has capacity constraints')
+param aiSearchLocation string = ''
+
 @description('Optional override for ACR name')
 param containerRegistryName string = ''
 
@@ -194,6 +197,7 @@ var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalized
 var effectiveStorageAccountName = empty(storageAccountName) ? take('${normalizedPrefix}st${suffix}', 24) : storageAccountName
 var effectiveCosmosAccountName = empty(cosmosAccountName) ? take('${normalizedPrefix}cosmos${suffix}', 44) : cosmosAccountName
 var effectiveAiSearchName = empty(aiSearchName) ? take('${normalizedPrefix}srch${suffix}', 60) : aiSearchName
+var effectiveAiSearchLocation = empty(aiSearchLocation) ? location : aiSearchLocation
 var effectiveContainerRegistryName = empty(containerRegistryName) ? take('${normalizedPrefix}acr${suffix}', 50) : containerRegistryName
 var effectiveVirtualNetworkName = empty(virtualNetworkName) ? '${normalizedPrefix}-vnet' : virtualNetworkName
 var effectiveNatGatewayName = empty(natGatewayName) ? take('${namePrefix}-nat-${suffix}', 80) : natGatewayName
@@ -278,7 +282,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 
 resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
   name: effectiveAiSearchName
-  location: location
+  location: effectiveAiSearchLocation
   sku: {
     name: 'basic'
   }

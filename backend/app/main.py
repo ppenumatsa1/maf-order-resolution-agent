@@ -5,9 +5,14 @@ from app.api.v1.routers.foundry import router as foundry_router
 from app.api.v1.routers.health import router as health_router
 from app.api.v1.routers.hitl import router as hitl_router
 from app.api.v1.routers.sessions import router as sessions_router
+from app.api.v1.routers.telemetry import router as telemetry_router
 from app.api.v1.routers.workflows import router as workflows_router
 from app.core.container import config, rag_provider
-from app.core.telemetry import instrument_fastapi_app, setup_observability
+from app.core.telemetry import (
+    instrument_fastapi_app,
+    instrument_http_request,
+    setup_observability,
+)
 from app.infrastructure.rag import PolicyKnowledgeIngestion
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +21,7 @@ setup_observability()
 
 app = FastAPI(title="MAF Multi-Agent Orchestration Demo", version="0.1.0")
 instrument_fastapi_app(app)
+app.middleware("http")(instrument_http_request)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +35,7 @@ app.include_router(foundry_router)
 app.include_router(hitl_router)
 app.include_router(workflows_router)
 app.include_router(sessions_router)
+app.include_router(telemetry_router)
 app.include_router(health_router)
 
 

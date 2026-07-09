@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "virtualNetworkName": {
+      "value": "maffnd-vnet"
+    },
+    "createPrivateRunnerAccess": {
+      "value": true
+    },
+    "runnerSubnetName": {
+      "value": "snet-runner"
+    },
+    "runnerSubnetPrefix": {
+      "value": "10.90.3.0/24"
+    },
+    "bastionSubnetName": {
+      "value": "AzureBastionSubnet"
+    },
+    "bastionSubnetPrefix": {
+      "value": "10.90.4.0/26"
+    },
+    "createBastionHost": {
+      "value": true
+    },
+    "createRunnerVm": {
+      "value": true
+    },
+    "createRunnerUami": {
+      "value": true
+    },
+    "runnerUamiName": {
+      "value": "uami-maffnd-runner"
+    },
+    "keepSystemAssignedIdentity": {
+      "value": false
+    },
+    "runnerVmName": {
+      "value": "vm-maffnd-runner-iac"
+    },
+    "runnerVmSize": {
+      "value": "Standard_D4s_v5"
+    },
+    "runnerVmAdminUsername": {
+      "value": "azureuser"
+    },
+    "runnerVmSshPublicKey": {
+      "value": ""
+    },
+    "runnerSubnetNsgName": {
+      "value": "nsg-maffnd-runner"
+    },
+    "bastionHostName": {
+      "value": "bas-maffnd"
+    },
+    "bastionPublicIpName": {
+      "value": "pip-maffnd-bastion"
+    }
+  }
+}

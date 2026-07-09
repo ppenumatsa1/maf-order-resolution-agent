@@ -41,7 +41,11 @@ except ImportError:
         FoundryMemoryStoreClient,
         get_hosted_memory_config,
     )
-    from state_store import HostedCheckpointState, HostedStateStore, build_hosted_state_store
+    from state_store import (
+        HostedCheckpointState,
+        HostedStateStore,
+        build_hosted_state_store,
+    )
 
 
 SUPPORTED_HOSTED_PROTOCOLS = {"invocations", "dual", "responses"}
@@ -137,10 +141,14 @@ def _setup_memory() -> None:
 def _setup_conversation_shadow() -> None:
     global _CONVERSATION_SHADOW_CLIENT
     config = get_hosted_conversation_shadow_config()
-    if config.provider == CONVERSATION_SHADOW_RESPONSES and _CONVERSATION_SHADOW_CLIENT is None:
+    if (
+        config.provider == CONVERSATION_SHADOW_RESPONSES
+        and _CONVERSATION_SHADOW_CLIENT is None
+    ):
         _CONVERSATION_SHADOW_CLIENT = FoundryResponsesConversationShadowClient(config)
         logger.info(
-            "Foundry hosted conversation shadow configured: responses_url=%s", config.responses_url
+            "Foundry hosted conversation shadow configured: responses_url=%s",
+            config.responses_url,
         )
 
 
@@ -313,7 +321,9 @@ def _base_events(
                     "state": "delayed" if order_id == "ord-1009" else "in_transit",
                     "total_amount": _amount_for_order(order_id),
                 },
-                "policy": "manual_review" if requires_hitl else "auto_resolution_allowed",
+                "policy": (
+                    "manual_review" if requires_hitl else "auto_resolution_allowed"
+                ),
             },
         },
         {
@@ -368,7 +378,10 @@ async def _handle_invocation_payload(
         if not message:
             return JSONResponse(
                 status_code=400,
-                content={"error": "invalid_request", "message": "message or input is required"},
+                content={
+                    "error": "invalid_request",
+                    "message": "message or input is required",
+                },
             )
         state_store.append_conversation_item(
             thread_id=thread_id,
@@ -380,7 +393,9 @@ async def _handle_invocation_payload(
         span.set_attribute("workflow.thread_id", thread_id)
         span.set_attribute("foundry.synthetic", True)
         span.set_attribute("workflow.status", "shadow_recorded")
-        return JSONResponse({"thread_id": thread_id, "status": "shadow_recorded", "events": []})
+        return JSONResponse(
+            {"thread_id": thread_id, "status": "shadow_recorded", "events": []}
+        )
 
     if operation == "resume_hitl":
         checkpoint_id = str(payload.get("checkpoint_id") or "").strip()
@@ -454,7 +469,9 @@ async def _handle_invocation_payload(
                     },
                 }
             )
-            return JSONResponse({"thread_id": thread_id, "status": "completed", "events": events})
+            return JSONResponse(
+                {"thread_id": thread_id, "status": "completed", "events": events}
+            )
 
         span.set_attribute("workflow.status", "escalated")
         events.append(
@@ -467,13 +484,18 @@ async def _handle_invocation_payload(
                 },
             }
         )
-        return JSONResponse({"thread_id": thread_id, "status": "escalated", "events": events})
+        return JSONResponse(
+            {"thread_id": thread_id, "status": "escalated", "events": events}
+        )
 
     message = _extract_text(payload)
     if not message:
         return JSONResponse(
             status_code=400,
-            content={"error": "invalid_request", "message": "message or input is required"},
+            content={
+                "error": "invalid_request",
+                "message": "message or input is required",
+            },
         )
 
     normalized_message = message.lower()
@@ -525,7 +547,10 @@ async def _handle_invocation_payload(
                 {
                     "type": "checkpoint.created",
                     "thread_id": thread_id,
-                    "payload": {"checkpoint_id": checkpoint_id, "reason": "approval_required"},
+                    "payload": {
+                        "checkpoint_id": checkpoint_id,
+                        "reason": "approval_required",
+                    },
                 },
                 {
                     "type": "hitl.request",
@@ -658,7 +683,9 @@ def _create_hosted_app(protocol: str | None = None) -> Any:
 
 
 app = (
-    None if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS") == "true" else _create_hosted_app()
+    None
+    if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS") == "true"
+    else _create_hosted_app()
 )
 
 

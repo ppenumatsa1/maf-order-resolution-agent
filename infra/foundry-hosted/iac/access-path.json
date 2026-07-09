@@ -1,0 +1,578 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "5119642553033525256"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Deployment location"
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "defaultValue": "maffnd-vnet",
+      "metadata": {
+        "description": "Target virtual network name"
+      }
+    },
+    "createPrivateRunnerAccess": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable private runner access resources"
+      }
+    },
+    "runnerSubnetName": {
+      "type": "string",
+      "defaultValue": "snet-runner",
+      "metadata": {
+        "description": "Runner subnet name"
+      }
+    },
+    "runnerSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.90.3.0/24",
+      "metadata": {
+        "description": "Runner subnet prefix"
+      }
+    },
+    "bastionSubnetName": {
+      "type": "string",
+      "defaultValue": "AzureBastionSubnet",
+      "metadata": {
+        "description": "Azure Bastion subnet name. Must be AzureBastionSubnet."
+      }
+    },
+    "bastionSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.90.4.0/26",
+      "metadata": {
+        "description": "Azure Bastion subnet prefix (minimum /26)."
+      }
+    },
+    "createBastionHost": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Create Azure Bastion host"
+      }
+    },
+    "createRunnerVm": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Create private VM runner"
+      }
+    },
+    "createRunnerUami": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Create and attach a user-assigned managed identity to the runner VM."
+      }
+    },
+    "runnerUamiName": {
+      "type": "string",
+      "defaultValue": "uami-maffnd-runner",
+      "metadata": {
+        "description": "Runner user-assigned managed identity name"
+      }
+    },
+    "keepSystemAssignedIdentity": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Keep system-assigned identity on VM in addition to UAMI."
+      }
+    },
+    "runnerVmName": {
+      "type": "string",
+      "defaultValue": "vm-maffnd-runner",
+      "metadata": {
+        "description": "Runner VM name"
+      }
+    },
+    "runnerVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D4s_v5",
+      "metadata": {
+        "description": "Runner VM size"
+      }
+    },
+    "runnerVmAdminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser",
+      "metadata": {
+        "description": "Runner VM admin username"
+      }
+    },
+    "runnerVmSshPublicKey": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SSH public key for runner VM admin user. Required when createRunnerVm is true."
+      }
+    },
+    "runnerSubnetNsgName": {
+      "type": "string",
+      "defaultValue": "nsg-maffnd-runner",
+      "metadata": {
+        "description": "Runner subnet NSG name"
+      }
+    },
+    "bastionHostName": {
+      "type": "string",
+      "defaultValue": "bas-maffnd",
+      "metadata": {
+        "description": "Azure Bastion host name"
+      }
+    },
+    "bastionPublicIpName": {
+      "type": "string",
+      "defaultValue": "pip-maffnd-bastion",
+      "metadata": {
+        "description": "Azure Bastion public IP name"
+      }
+    }
+  },
+  "resources": [
+    {
+      "condition": "[parameters('createPrivateRunnerAccess')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "private-runner-access",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "enabled": {
+            "value": "[parameters('createPrivateRunnerAccess')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vnetName": {
+            "value": "[parameters('virtualNetworkName')]"
+          },
+          "runnerSubnetName": {
+            "value": "[parameters('runnerSubnetName')]"
+          },
+          "runnerSubnetPrefix": {
+            "value": "[parameters('runnerSubnetPrefix')]"
+          },
+          "bastionSubnetName": {
+            "value": "[parameters('bastionSubnetName')]"
+          },
+          "bastionSubnetPrefix": {
+            "value": "[parameters('bastionSubnetPrefix')]"
+          },
+          "runnerNsgName": {
+            "value": "[parameters('runnerSubnetNsgName')]"
+          },
+          "createBastion": {
+            "value": "[parameters('createBastionHost')]"
+          },
+          "createRunnerVm": {
+            "value": "[parameters('createRunnerVm')]"
+          },
+          "createRunnerUami": {
+            "value": "[parameters('createRunnerUami')]"
+          },
+          "runnerUamiName": {
+            "value": "[parameters('runnerUamiName')]"
+          },
+          "keepSystemAssignedIdentity": {
+            "value": "[parameters('keepSystemAssignedIdentity')]"
+          },
+          "runnerVmName": {
+            "value": "[parameters('runnerVmName')]"
+          },
+          "runnerVmSize": {
+            "value": "[parameters('runnerVmSize')]"
+          },
+          "runnerAdminUsername": {
+            "value": "[parameters('runnerVmAdminUsername')]"
+          },
+          "runnerSshPublicKey": {
+            "value": "[parameters('runnerVmSshPublicKey')]"
+          },
+          "bastionName": {
+            "value": "[parameters('bastionHostName')]"
+          },
+          "bastionPublicIpName": {
+            "value": "[parameters('bastionPublicIpName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "10220305752374288480"
+            }
+          },
+          "parameters": {
+            "enabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable private runner access resources"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Deployment location"
+              }
+            },
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual network name where runner/bastion subnets are created"
+              }
+            },
+            "runnerSubnetName": {
+              "type": "string",
+              "defaultValue": "snet-runner",
+              "metadata": {
+                "description": "Runner subnet name"
+              }
+            },
+            "runnerSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.90.3.0/24",
+              "metadata": {
+                "description": "Runner subnet prefix"
+              }
+            },
+            "bastionSubnetName": {
+              "type": "string",
+              "defaultValue": "AzureBastionSubnet",
+              "metadata": {
+                "description": "Azure Bastion subnet name. Must be AzureBastionSubnet."
+              }
+            },
+            "bastionSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.90.4.0/26",
+              "metadata": {
+                "description": "Azure Bastion subnet prefix (minimum /26)."
+              }
+            },
+            "runnerNsgName": {
+              "type": "string",
+              "defaultValue": "nsg-maffnd-runner",
+              "metadata": {
+                "description": "Runner NSG name"
+              }
+            },
+            "createBastion": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Create Azure Bastion host"
+              }
+            },
+            "createRunnerVm": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Create private VM runner"
+              }
+            },
+            "createRunnerUami": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Create and attach a user-assigned managed identity to the runner VM."
+              }
+            },
+            "runnerUamiName": {
+              "type": "string",
+              "defaultValue": "uami-maffnd-runner",
+              "metadata": {
+                "description": "Runner user-assigned managed identity name"
+              }
+            },
+            "keepSystemAssignedIdentity": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Keep system-assigned identity on VM in addition to UAMI."
+              }
+            },
+            "runnerVmName": {
+              "type": "string",
+              "defaultValue": "vm-maffnd-runner",
+              "metadata": {
+                "description": "Runner VM name"
+              }
+            },
+            "runnerVmSize": {
+              "type": "string",
+              "defaultValue": "Standard_D4s_v5",
+              "metadata": {
+                "description": "Runner VM size"
+              }
+            },
+            "runnerAdminUsername": {
+              "type": "string",
+              "defaultValue": "azureuser",
+              "metadata": {
+                "description": "Runner admin username"
+              }
+            },
+            "runnerSshPublicKey": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SSH public key for runner VM admin user. Required when createRunnerVm is true."
+              }
+            },
+            "bastionName": {
+              "type": "string",
+              "defaultValue": "bas-maffnd",
+              "metadata": {
+                "description": "Azure Bastion host name"
+              }
+            },
+            "bastionPublicIpName": {
+              "type": "string",
+              "defaultValue": "pip-maffnd-bastion",
+              "metadata": {
+                "description": "Azure Bastion public IP name"
+              }
+            }
+          },
+          "variables": {
+            "createRunnerVmEffective": "[and(and(parameters('enabled'), parameters('createRunnerVm')), not(empty(parameters('runnerSshPublicKey'))))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('enabled')]",
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('runnerNsgName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": []
+              }
+            },
+            {
+              "condition": "[parameters('enabled')]",
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('runnerSubnetName'))]",
+              "properties": {
+                "addressPrefix": "[parameters('runnerSubnetPrefix')]",
+                "networkSecurityGroup": {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('runnerNsgName'))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('runnerNsgName'))]"
+              ]
+            },
+            {
+              "condition": "[and(parameters('enabled'), parameters('createBastion'))]",
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('bastionSubnetName'))]",
+              "properties": {
+                "addressPrefix": "[parameters('bastionSubnetPrefix')]"
+              }
+            },
+            {
+              "condition": "[and(and(parameters('enabled'), parameters('createRunnerVm')), parameters('createRunnerUami'))]",
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('runnerUamiName')]",
+              "location": "[parameters('location')]"
+            },
+            {
+              "condition": "[variables('createRunnerVmEffective')]",
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-nic', parameters('runnerVmName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Dynamic",
+                      "subnet": {
+                        "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('runnerSubnetName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('runnerSubnetName'))]"
+              ]
+            },
+            {
+              "condition": "[variables('createRunnerVmEffective')]",
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('runnerVmName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "[if(parameters('createRunnerUami'), if(parameters('keepSystemAssignedIdentity'), 'SystemAssigned, UserAssigned', 'UserAssigned'), 'SystemAssigned')]",
+                "userAssignedIdentities": "[if(parameters('createRunnerUami'), createObject(format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerUamiName'))), createObject()), null())]"
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('runnerVmSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "0001-com-ubuntu-server-jammy",
+                    "sku": "22_04-lts-gen2",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                      "storageAccountType": "Premium_LRS"
+                    }
+                  }
+                },
+                "osProfile": {
+                  "computerName": "[parameters('runnerVmName')]",
+                  "adminUsername": "[parameters('runnerAdminUsername')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": true,
+                    "ssh": {
+                      "publicKeys": [
+                        {
+                          "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('runnerAdminUsername'))]",
+                          "keyData": "[parameters('runnerSshPublicKey')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('runnerVmName')))]",
+                      "properties": {
+                        "primary": true
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('runnerVmName')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerUamiName'))]"
+              ]
+            },
+            {
+              "condition": "[and(parameters('enabled'), parameters('createBastion'))]",
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('bastionPublicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static"
+              }
+            },
+            {
+              "condition": "[and(parameters('enabled'), parameters('createBastion'))]",
+              "type": "Microsoft.Network/bastionHosts",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('bastionName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "bastion-ipcfg",
+                    "properties": {
+                      "subnet": {
+                        "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('bastionSubnetName'))]"
+                      },
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('bastionPublicIpName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('bastionPublicIpName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('bastionSubnetName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "runnerSubnetId": {
+              "type": "string",
+              "value": "[if(parameters('enabled'), resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('runnerSubnetName')), '')]"
+            },
+            "bastionSubnetId": {
+              "type": "string",
+              "value": "[if(and(parameters('enabled'), parameters('createBastion')), resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('bastionSubnetName')), '')]"
+            },
+            "runnerVmId": {
+              "type": "string",
+              "value": "[if(variables('createRunnerVmEffective'), resourceId('Microsoft.Compute/virtualMachines', parameters('runnerVmName')), '')]"
+            },
+            "runnerVmPrincipalId": {
+              "type": "string",
+              "value": "[if(and(variables('createRunnerVmEffective'), or(not(parameters('createRunnerUami')), parameters('keepSystemAssignedIdentity'))), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('runnerVmName')), '2023-09-01', 'full').identity.principalId, '')]"
+            },
+            "runnerUamiId": {
+              "type": "string",
+              "value": "[if(and(and(parameters('enabled'), parameters('createRunnerVm')), parameters('createRunnerUami')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerUamiName')), '')]"
+            },
+            "runnerUamiPrincipalId": {
+              "type": "string",
+              "value": "[if(and(and(parameters('enabled'), parameters('createRunnerVm')), parameters('createRunnerUami')), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerUamiName')), '2023-01-31').principalId, '')]"
+            },
+            "runnerUamiClientId": {
+              "type": "string",
+              "value": "[if(and(and(parameters('enabled'), parameters('createRunnerVm')), parameters('createRunnerUami')), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerUamiName')), '2023-01-31').clientId, '')]"
+            },
+            "bastionHostId": {
+              "type": "string",
+              "value": "[if(and(parameters('enabled'), parameters('createBastion')), resourceId('Microsoft.Network/bastionHosts', parameters('bastionName')), '')]"
+            },
+            "bastionPublicIpId": {
+              "type": "string",
+              "value": "[if(and(parameters('enabled'), parameters('createBastion')), resourceId('Microsoft.Network/publicIPAddresses', parameters('bastionPublicIpName')), '')]"
+            },
+            "runnerVmSkippedReason": {
+              "type": "string",
+              "value": "[if(and(and(parameters('enabled'), parameters('createRunnerVm')), empty(parameters('runnerSshPublicKey'))), 'runnerVmSshPublicKey is empty; VM creation skipped', '')]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "privateRunnerAccess": {
+      "type": "object",
+      "value": "[if(parameters('createPrivateRunnerAccess'), createObject('enabled', true(), 'runnerSubnetId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerSubnetId.value, 'bastionSubnetId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.bastionSubnetId.value, 'runnerVmId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerVmId.value, 'runnerVmPrincipalId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerVmPrincipalId.value, 'runnerUamiId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerUamiId.value, 'runnerUamiPrincipalId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerUamiPrincipalId.value, 'runnerUamiClientId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerUamiClientId.value, 'bastionHostId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.bastionHostId.value, 'bastionPublicIpId', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.bastionPublicIpId.value, 'runnerVmSkippedReason', reference(resourceId('Microsoft.Resources/deployments', 'private-runner-access'), '2025-04-01').outputs.runnerVmSkippedReason.value), createObject('enabled', false(), 'runnerSubnetId', '', 'bastionSubnetId', '', 'runnerVmId', '', 'runnerVmPrincipalId', '', 'runnerUamiId', '', 'runnerUamiPrincipalId', '', 'runnerUamiClientId', '', 'bastionHostId', '', 'bastionPublicIpId', '', 'runnerVmSkippedReason', ''))]"
+    }
+  }
+}

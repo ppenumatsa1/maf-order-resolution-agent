@@ -102,15 +102,33 @@ curl -fsS "$API_URL/health"
 
 ## Deploy to Foundry (Hosted Agent)
 
-Deploy hosted agent package:
+Foundry-hosted has a dedicated self-contained azd project at [infra/foundry-hosted/azure.yaml](infra/foundry-hosted/azure.yaml).
+
+It provisions in one path:
+
+- Foundry account + project + model deployments
+- dedicated VNET + subnets
+- private DNS zones + VNET links + private endpoints
+- Storage + Cosmos + AI Search project connections
+- ACR + App Insights + Log Analytics
+
+From repo root:
 
 ```bash
-azd deploy order-resolution-hosted --no-prompt
+make foundry-up
+```
+
+Or run provision/deploy separately:
+
+```bash
+make foundry-provision
+make foundry-deploy
 ```
 
 Verify and invoke:
 
 ```bash
+cd infra/foundry-hosted
 azd ai agent show order-resolution-hosted --output json
 azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
 azd ai agent invoke order-resolution-hosted '{"input":"health check"}' --protocol responses --no-prompt

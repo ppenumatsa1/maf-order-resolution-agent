@@ -1,117 +1,183 @@
-# Foundry-Hosted Private-Only (Sample-15 Aligned)
+# Foundry-Hosted Self-Contained Deployment
 
-This stack is now a direct private-only BYO resource wiring for Foundry-hosted execution.
+This folder is a dedicated azd project for hosted-agent deployment where `azd up` provisions and deploys the full Foundry stack.
 
-- No public-mode toggle.
-- No dual setup paths.
-- Existing Foundry account/project, Search, Storage, Cosmos, and VNet/subnets are required.
-- Capability hosts and project connections follow the sample-15 ordering model.
+## What `azd up` creates
 
-## Layout
+- Azure AI Foundry account and project
+- Chat + embeddings model deployments
+- Dedicated VNET and subnets:
+  - agent subnet for capability host
+  - private endpoint subnet
+  - optional runner subnet for private deployment execution
+  - optional `AzureBastionSubnet` for Bastion access
+- Private DNS zones and VNET links
+- Private endpoints for:
+  - Foundry account
+  - Storage
+  - Cosmos DB
+  - AI Search
+- Storage account, Cosmos DB account, AI Search service
+- Container Registry (ACR)
+- Application Insights + Log Analytics
+- Project connections (Storage/Cosmos/Search/AppInsights)
+- Capability hosts and RBAC wiring (unless toggled off)
+- Optional private execution path:
+  - Bastion host + public IP
+  - private Linux runner VM (no public IP)
 
-- `iac/main.bicep`: private-only orchestration entrypoint.
-- `iac/modules/foundry-project-existing-connections.bicep`: updates existing project connections for Cosmos, Storage, and Search.
-- `iac/modules/add-account-capability-host.bicep`: account-level capability host (`Agents`) with `customerSubnet`.
-- `iac/modules/add-project-capability-host.bicep`: project capability host (`Agents`) with thread/storage/vector connection bindings.
-- `iac/modules/azure-storage-account-role-assignment.bicep`: Storage Blob Data Contributor role before project caphost.
-- `iac/modules/cosmosdb-account-role-assignment.bicep`: Cosmos DB Operator role before project caphost.
-- `iac/modules/ai-search-role-assignments.bicep`: Search role assignments before project caphost.
-- `iac/modules/blob-storage-container-role-assignments.bicep`: Storage Blob Data Owner conditional role after project caphost.
-- `iac/modules/cosmos-container-role-assignments.bicep`: Cosmos SQL role assignment after project caphost.
-- `iac/modules/format-project-workspace-id.bicep`: extracts workspace GUID for role scoping.
-- `iac/modules/private-dns.bicep`: private DNS zones and VNet links.
-- `iac/modules/private-endpoint.bicep`: private endpoints (storage/search/cosmos/foundry account).
-- `iac/parameters.dev.json`: dev template for required BYO inputs.
+## Entry points
 
-## Deployment Inputs
+- AZD config: [azure.yaml](azure.yaml)
+- Infra template: [iac/main.bicep](iac/main.bicep)
+- Access-path-only template: [iac/access-path.bicep](iac/access-path.bicep)
+- Default parameters: [iac/parameters.dev.json](iac/parameters.dev.json)
 
-Mandatory BYO parameters in `iac/parameters.dev.json`:
+## Repo-managed runtime env
 
-- `foundryAccountName`
-- `foundryProjectName`
-- `aiSearchName`
-- `storageAccountName`
-- `cosmosAccountName`
-- `virtualNetworkResourceId`
-- `agentSubnetResourceId`
-- `privateEndpointSubnetResourceId`
-- `foundryHostedInvocationsUrl`
+Source-of-truth runtime variables are in-repo:
 
-Optional overrides:
+- [runtime/.env](runtime/.env) (Foundry deploy source)
+- [runtime/.env.example](runtime/.env.example) (template)
 
-- `cosmosConnectionName`
-- `storageConnectionName`
-- `aiSearchConnectionName`
-- `accountCapabilityHostName`
-- `projectCapabilityHostName`
+Derived files (do not edit directly):
 
-Cross-RG/subscription inputs default to current context and can be overridden with:
+- [agent/runtime/.env](agent/runtime/.env)
+- [../../backend/foundry/runtime/.env](../../backend/foundry/runtime/.env)
 
-- `aiSearchSubscriptionId`, `aiSearchResourceGroupName`
-- `storageSubscriptionId`, `storageResourceGroupName`
-- `cosmosSubscriptionId`, `cosmosResourceGroupName`
+Both derived files are regenerated from `runtime/.env` by `make foundry-sync-env`.
 
-## Private DNS Zones
+Required for App Insights telemetry:
 
-Default private DNS zone list:
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`
 
-- `privatelink.blob.core.windows.net`
-- `privatelink.search.windows.net`
-- `privatelink.documents.azure.com`
-- `privatelink.services.ai.azure.com`
-- `privatelink.cognitiveservices.azure.com`
-- `privatelink.openai.azure.com`
-
-## Ordering Model
-
-1. Private DNS and private endpoints are created for Storage, Search, Cosmos, and Foundry account.
-2. Existing project connections are created/updated.
-3. Pre-caphost RBAC is assigned:
-   - Storage Blob Data Contributor
-   - Cosmos DB Operator
-   - Search roles
-4. Account capability host is created.
-5. Project capability host is created.
-6. Post-caphost RBAC is assigned:
-   - Storage Blob Data Owner (conditioned to workspace-scoped containers)
-   - Cosmos SQL role assignment
-
-## Build And Validate
-
-Compile all templates:
+Sync `runtime/.env` values into the active azd environment before deploy:
 
 ```bash
-az bicep build --file infra/foundry-hosted/iac/main.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/foundry-project-existing-connections.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/add-account-capability-host.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/add-project-capability-host.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/azure-storage-account-role-assignment.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/cosmosdb-account-role-assignment.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/ai-search-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/blob-storage-container-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/cosmos-container-role-assignments.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/format-project-workspace-id.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/private-dns.bicep
-az bicep build --file infra/foundry-hosted/iac/modules/private-endpoint.bicep
+make foundry-sync-env
 ```
 
-Run what-if:
+## Runbook
+
+From repo root:
 
 ```bash
-az deployment group what-if \
-  --resource-group <rg-name> \
-  --template-file infra/foundry-hosted/iac/main.bicep \
-  --parameters @infra/foundry-hosted/iac/parameters.dev.json
+make foundry-up
 ```
 
-## Required Backend Settings
+Or from this folder:
 
-- `WORKFLOW_MODE=foundry_hosted`
-- `FOUNDRY_HOSTED_INVOCATIONS_URL=<hosted-agent-invocations-endpoint>`
-- `FOUNDRY_EVENT_CALLBACK_TOKEN=<shared-callback-token>`
+```bash
+azd up --no-prompt
+```
 
-## Notes
+Provision and deploy separately:
 
-- This path assumes Foundry-only operation for this stack.
-- Approve private endpoint connections and verify DNS resolution before runtime validation.
-- Existing repo validation gates remain unchanged (`make test`, `make eval-backend`, `make test-e2e`, `./scripts/skills/design-review-skill.sh`).
+```bash
+make foundry-sync-env
+azd provision --no-prompt
+azd deploy order-resolution-hosted --no-prompt
+```
+
+Show outputs/environment:
+
+```bash
+azd env get-values
+azd ai agent show order-resolution-hosted --output json
+```
+
+Invoke end-to-end:
+
+```bash
+azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
+azd ai agent invoke order-resolution-hosted '{"input":"health check"}' --protocol responses --no-prompt
+```
+
+## Telemetry checks
+
+- Foundry console:
+  - Agent traces and conversation runs
+  - Protocol invoke history
+- App Insights:
+  - ensure `APPLICATIONINSIGHTS_CONNECTION_STRING` is set in `runtime/.env` and synced via `make foundry-sync-env`
+  - verify trace ingestion from hosted runtime
+
+Quick smoke from repo root:
+
+```bash
+make foundry-smoke
+```
+
+## Important toggles
+
+See [iac/parameters.dev.json](iac/parameters.dev.json):
+
+- `createPrivateDnsVnetLinks`
+- `createPrivateEndpoints`
+- `createAccountCapabilityHost`
+- `createProjectCapabilityHost`
+- `assignPreCaphostRbac`
+- `assignPostCaphostRbac`
+- `createPrivateRunnerAccess`
+- `createBastionHost`
+- `createRunnerVm`
+- `runnerVmSshPublicKey` (must be set to create runner VM)
+
+Example with explicit SSH key override:
+
+```bash
+azd env set RUNNER_VM_SSH_PUBLIC_KEY "$(cat ~/.ssh/id_rsa.pub)"
+azd provision --no-prompt -- --parameters runnerVmSshPublicKey="$RUNNER_VM_SSH_PUBLIC_KEY"
+```
+
+Access-path-only deployment (does not provision the full Foundry stack):
+
+```bash
+az deployment group create \
+  --resource-group rg-maf-ora-ni-eus-07080910 \
+  --template-file iac/access-path.bicep \
+  --parameters @iac/access-path.parameters.json \
+  --parameters runnerVmSshPublicKey="$(cat ~/.ssh/id_rsa.pub)"
+```
+
+## VM UAMI workflow (private deployment path)
+
+The access-path template now creates and attaches a User-Assigned Managed Identity (UAMI) to the runner VM.
+
+After `make foundry-access-path`, note these outputs:
+
+- `runnerUamiClientId`
+- `runnerUamiPrincipalId`
+
+Use the UAMI from inside the VM:
+
+```bash
+az login --identity --client-id <runnerUamiClientId>
+az account set -s <subscriptionId>
+```
+
+Recommended RBAC for the UAMI:
+
+- `Contributor` on `rg-maf-ora-ni-eus-07080910`
+- `Foundry Project Manager` on Foundry account scope
+- `Foundry User` on Foundry account scope
+
+Example role assignment commands:
+
+```bash
+az role assignment create --assignee-object-id <runnerUamiPrincipalId> --assignee-principal-type ServicePrincipal --role Contributor --scope /subscriptions/<sub>/resourceGroups/rg-maf-ora-ni-eus-07080910
+az role assignment create --assignee-object-id <runnerUamiPrincipalId> --assignee-principal-type ServicePrincipal --role eadc314b-1a2d-4efa-be10-5d325db5065e --scope /subscriptions/<sub>/resourceGroups/rg-maf-ora-ni-eus-07080910/providers/Microsoft.CognitiveServices/accounts/<foundryAccount>
+az role assignment create --assignee-object-id <runnerUamiPrincipalId> --assignee-principal-type ServicePrincipal --role 53ca6127-db72-4b80-b1b0-d745d6d5456d --scope /subscriptions/<sub>/resourceGroups/rg-maf-ora-ni-eus-07080910/providers/Microsoft.CognitiveServices/accounts/<foundryAccount>
+```
+
+Validation from VM (UAMI token, private endpoint path):
+
+```bash
+az rest --method get \
+  --uri "https://<foundryAccount>.services.ai.azure.com/api/projects/<project>/agents?api-version=v1" \
+  --resource https://ai.azure.com
+```
+
+If `azd deploy` reports a subscription/user resolution error while using managed identity, use `azd` with delegated Azure CLI auth (`auth.useAzCliAuth=true`) and a principal that resolves subscriptions correctly in your environment, or deploy with a service principal/OIDC in CI.
+
+If your subscription has strict subnet policy or existing account constraints, disable capability host toggles temporarily and re-enable once subnet policy is aligned.

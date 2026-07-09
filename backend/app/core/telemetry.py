@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from agent_framework.observability import create_resource, enable_instrumentation
+from fastapi import Request
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
@@ -15,6 +19,7 @@ from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
 _OBSERVABILITY_CONFIGURED = False
 logger = logging.getLogger(__name__)
+request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 _SENSITIVE_ATTRIBUTE_KEYS = {
     "comments",
     "data",
@@ -41,6 +46,29 @@ class ObservabilityStatus:
     sensitive_content_enabled: bool
     azure_monitor_configured: bool
     otlp_configured: bool
+
+
+class RequestContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get("-")
+        return True
+
+
+def _configure_logging() -> None:
+    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s %(message)s",
+        )
+    root.setLevel(level)
+
+    if not any(isinstance(f, RequestContextFilter) for f in root.filters):
+        root.addFilter(RequestContextFilter())
+    for handler in root.handlers:
+        if not any(isinstance(f, RequestContextFilter) for f in handler.filters):
+            handler.addFilter(RequestContextFilter())
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -107,8 +135,12 @@ def _create_observability_resource(service_name: str) -> Any:
 def setup_observability() -> ObservabilityStatus:
     global _OBSERVABILITY_CONFIGURED
 
+    _configure_logging()
+
     telemetry_enabled = _env_bool("ENABLE_TELEMETRY", True)
-    instrumentation_enabled = telemetry_enabled and _env_bool("ENABLE_INSTRUMENTATION", True)
+    instrumentation_enabled = telemetry_enabled and _env_bool(
+        "ENABLE_INSTRUMENTATION", True
+    )
     sensitive_content_enabled = _record_content_enabled()
     if not telemetry_enabled:
         return ObservabilityStatus(
@@ -138,10 +170,14 @@ def setup_observability() -> ObservabilityStatus:
         provider = trace.get_tracer_provider()
 
     otlp_configured = False
-    if otlp_endpoint and hasattr(provider, "add_span_processor") and not _OBSERVABILITY_CONFIGURED:
+    if (
+        otlp_endpoint
+        and hasattr(provider, "add_span_processor")
+        and not _OBSERVABILITY_CONFIGURED
+    ):
         try:
             exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-            provider.add_span_processor(BatchSpanProcessor(exporter))
+            cast(Any, provider).add_span_processor(BatchSpanProcessor(exporter))
             otlp_configured = True
         except Exception:
             logger.exception("OTLP telemetry configuration failed")
@@ -181,6 +217,53 @@ def instrument_fastapi_app(app: Any) -> bool:
         logger.exception("FastAPI telemetry instrumentation setup failed")
         return False
     return True
+
+
+async def instrument_http_request(request: Request, call_next):
+    request_logger = logging.getLogger("app.http")
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    token = request_id_var.set(request_id)
+    start = time.perf_counter()
+    try:
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            span = trace.get_current_span()
+            if span.is_recording():
+                span.set_attribute("http.method", request.method)
+                span.set_attribute("http.target", request.url.path)
+                span.set_attribute("http.request_id", request_id)
+                span.set_attribute("http.duration_ms", duration_ms)
+                span.set_attribute("http.error", str(type(exc).__name__))
+            request_logger.exception(
+                "http_request_failed method=%s path=%s duration_ms=%s error=%s",
+                request.method,
+                request.url.path,
+                duration_ms,
+                str(exc),
+            )
+            raise
+
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        response.headers["x-request-id"] = request_id
+        span = trace.get_current_span()
+        if span.is_recording():
+            span.set_attribute("http.method", request.method)
+            span.set_attribute("http.target", request.url.path)
+            span.set_attribute("http.request_id", request_id)
+            span.set_attribute("http.status_code", response.status_code)
+            span.set_attribute("http.duration_ms", duration_ms)
+        request_logger.info(
+            "http_request method=%s path=%s status=%s duration_ms=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+    finally:
+        request_id_var.reset(token)
 
 
 def get_tracer(name: str):

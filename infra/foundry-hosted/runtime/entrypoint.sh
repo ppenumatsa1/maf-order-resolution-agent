@@ -2,7 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ENV_FILE="${1:-$ROOT_DIR/infra/foundry-hosted/runtime/.env.example}"
+DEFAULT_ENV_FILE="$ROOT_DIR/infra/foundry-hosted/runtime/.env"
+FALLBACK_ENV_FILE="$ROOT_DIR/infra/foundry-hosted/runtime/.env.example"
+ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
+
+if [[ "$ENV_FILE" == "$DEFAULT_ENV_FILE" && ! -f "$ENV_FILE" && -f "$FALLBACK_ENV_FILE" ]]; then
+  ENV_FILE="$FALLBACK_ENV_FILE"
+fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Environment file not found: $ENV_FILE" >&2

@@ -56,27 +56,27 @@ Rationale:
 
 ## 2. Requirements
 
-| Attribute | Value |
-|-----------|-------|
-| Classification | POC / Development moving toward production-shaped app-hosted path |
-| Scale | Small |
-| Budget | Cost-Optimized / Balanced |
-| **Subscription** | ME-MngEnvMCAP328033-ppenumatsa-1 (`4f18d577-3506-4a11-85e5-a83b14727a84`) |
-| **Planned Location** | `eastus2` |
-| **Deployed Location** | `centralus` |
+| Attribute             | Value                                                                     |
+| --------------------- | ------------------------------------------------------------------------- |
+| Classification        | POC / Development moving toward production-shaped app-hosted path         |
+| Scale                 | Small                                                                     |
+| Budget                | Cost-Optimized / Balanced                                                 |
+| **Subscription**      | ME-MngEnvMCAP328033-ppenumatsa-1 (`4f18d577-3506-4a11-85e5-a83b14727a84`) |
+| **Planned Location**  | `eastus2`                                                                 |
+| **Deployed Location** | `centralus`                                                               |
 
 ---
 
 ## 3. Components Detected
 
-| Component | Type | Technology | Path |
-|-----------|------|------------|------|
-| Backend API/workflow | API container | Python 3.12, FastAPI, MAF SDK, psycopg, OpenTelemetry | `backend/` |
-| Frontend UI | Web container | React 18, Vite, TypeScript | `frontend/` |
-| Workflow state | Database | PostgreSQL schema under `backend/app/sql/schema.sql` | Azure Database for PostgreSQL Flexible Server |
-| RAG persistence | Database-backed local provider today | pgvector-compatible scaffold persisted in Postgres | Azure PostgreSQL first; Azure AI Search later |
-| MCP integration | External HTTP integration | `MCP_SERVER_URL`, auth headers | Container App env/secrets |
-| Manual/eval verification | Test assets | Playwright, pytest, eval JSONL | `scripts/playwright`, `backend/tests`, `backend/evals` |
+| Component                | Type                                 | Technology                                            | Path                                                   |
+| ------------------------ | ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------ |
+| Backend API/workflow     | API container                        | Python 3.12, FastAPI, MAF SDK, psycopg, OpenTelemetry | `backend/`                                             |
+| Frontend UI              | Web container                        | React 18, Vite, TypeScript                            | `frontend/`                                            |
+| Workflow state           | Database                             | PostgreSQL schema under `backend/app/sql/schema.sql`  | Azure Database for PostgreSQL Flexible Server          |
+| RAG persistence          | Database-backed local provider today | pgvector-compatible scaffold persisted in Postgres    | Azure PostgreSQL first; Azure AI Search later          |
+| MCP integration          | External HTTP integration            | `MCP_SERVER_URL`, auth headers                        | Container App env/secrets                              |
+| Manual/eval verification | Test assets                          | Playwright, pytest, eval JSONL                        | `scripts/playwright`, `backend/tests`, `backend/evals` |
 
 ---
 
@@ -99,16 +99,16 @@ Rationale:
 
 ### Service Mapping
 
-| Component | Azure Service | SKU / Shape |
-|-----------|---------------|-------------|
-| Backend API/workflow | Azure Container Apps | External ingress, target port 8000, min replicas 1 for demo stability |
-| Frontend UI | Azure Container Apps | External ingress, target port 5173, production Nginx container serving the Vite build |
-| Container images | Azure Container Registry | Basic |
-| Workflow database | Azure Database for PostgreSQL Flexible Server | Burstable/dev SKU initially, TLS required |
-| Secrets | Azure Key Vault | RBAC authorization, soft delete, purge protection |
-| Logs | Log Analytics Workspace | 30-day retention initially |
-| APM | Application Insights | Workspace-based |
-| Identity | Managed Identity | System-assigned identity per Container App |
+| Component            | Azure Service                                 | SKU / Shape                                                                           |
+| -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Backend API/workflow | Azure Container Apps                          | External ingress, target port 8000, min replicas 1 for demo stability                 |
+| Frontend UI          | Azure Container Apps                          | External ingress, target port 5173, production Nginx container serving the Vite build |
+| Container images     | Azure Container Registry                      | Basic                                                                                 |
+| Workflow database    | Azure Database for PostgreSQL Flexible Server | Burstable/dev SKU initially, TLS required                                             |
+| Secrets              | Azure Key Vault                               | RBAC authorization, soft delete, purge protection                                     |
+| Logs                 | Log Analytics Workspace                       | 30-day retention initially                                                            |
+| APM                  | Application Insights                          | Workspace-based                                                                       |
+| Identity             | Managed Identity                              | System-assigned identity per Container App                                            |
 
 ### Target Runtime Configuration
 
@@ -151,18 +151,18 @@ Frontend:
 
 **Capacity validation method:** `az quota` could not be used because `Microsoft.Quota` is not registered in the subscription. Providers needed by this plan (`Microsoft.App`, `Microsoft.DBforPostgreSQL`, `Microsoft.ContainerRegistry`) are registered. Current resource counts were fetched with Azure Resource Graph; limits below are standard documented service limits / low-risk POC assumptions and must be rechecked with `az quota` after registering `Microsoft.Quota` or by `azure-validate`.
 
-| Resource Type | Number to Deploy | Existing in `eastus2` | Total After Deployment | Limit/Quota | Notes |
-|---------------|------------------|------------------------|------------------------|-------------|-------|
-| `Microsoft.App/managedEnvironments` | 1 | 3 | 4 | Service limit expected above this POC usage | Resource Graph count; quota CLI unavailable due `Microsoft.Quota` registration |
-| `Microsoft.App/containerApps` | 2 | 2 | 4 | Service limit expected above this POC usage | Backend + frontend |
-| `Microsoft.ContainerRegistry/registries` | 1 | 3 | 4 | Standard subscription limits expected above this POC usage | Use Basic SKU |
-| `Microsoft.DBforPostgreSQL/flexibleServers` | 1 | 0 | 1 | Standard subscription limits expected above this POC usage | Dev SKU |
-| `Microsoft.KeyVault/vaults` | 1 | 0 | 1 | Standard subscription limits expected above this POC usage | RBAC + soft delete |
-| `Microsoft.OperationalInsights/workspaces` | 1 | 4 | 5 | Standard subscription limits expected above this POC usage | 30-day retention |
-| `Microsoft.Insights/components` | 1 | 3 | 4 | Standard subscription limits expected above this POC usage | Workspace-based App Insights |
-| `Microsoft.CognitiveServices/accounts` | 1 | TBD | 1 | Requires target-region model availability/quota for selected deployments | `AIServices`/`S0`, local auth disabled |
-| `Microsoft.CognitiveServices/accounts/projects` | 1 | TBD | 1 | Child project under generated Foundry/Azure AI Services account | App-hosted model client metadata |
-| `Microsoft.CognitiveServices/accounts/deployments` | 2 | TBD | 2 | Chat + embeddings deployments; capacity defaults to 1 and is parameterized | Override model/SKU/version per region/quota |
+| Resource Type                                      | Number to Deploy | Existing in `eastus2` | Total After Deployment | Limit/Quota                                                                | Notes                                                                          |
+| -------------------------------------------------- | ---------------- | --------------------- | ---------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Microsoft.App/managedEnvironments`                | 1                | 3                     | 4                      | Service limit expected above this POC usage                                | Resource Graph count; quota CLI unavailable due `Microsoft.Quota` registration |
+| `Microsoft.App/containerApps`                      | 2                | 2                     | 4                      | Service limit expected above this POC usage                                | Backend + frontend                                                             |
+| `Microsoft.ContainerRegistry/registries`           | 1                | 3                     | 4                      | Standard subscription limits expected above this POC usage                 | Use Basic SKU                                                                  |
+| `Microsoft.DBforPostgreSQL/flexibleServers`        | 1                | 0                     | 1                      | Standard subscription limits expected above this POC usage                 | Dev SKU                                                                        |
+| `Microsoft.KeyVault/vaults`                        | 1                | 0                     | 1                      | Standard subscription limits expected above this POC usage                 | RBAC + soft delete                                                             |
+| `Microsoft.OperationalInsights/workspaces`         | 1                | 4                     | 5                      | Standard subscription limits expected above this POC usage                 | 30-day retention                                                               |
+| `Microsoft.Insights/components`                    | 1                | 3                     | 4                      | Standard subscription limits expected above this POC usage                 | Workspace-based App Insights                                                   |
+| `Microsoft.CognitiveServices/accounts`             | 1                | TBD                   | 1                      | Requires target-region model availability/quota for selected deployments   | `AIServices`/`S0`, local auth disabled                                         |
+| `Microsoft.CognitiveServices/accounts/projects`    | 1                | TBD                   | 1                      | Child project under generated Foundry/Azure AI Services account            | App-hosted model client metadata                                               |
+| `Microsoft.CognitiveServices/accounts/deployments` | 2                | TBD                   | 2                      | Chat + embeddings deployments; capacity defaults to 1 and is parameterized | Override model/SKU/version per region/quota                                    |
 
 **Status:** `eastus2` provisioning was blocked by Azure Database for PostgreSQL Flexible Server location offer restriction for this subscription. Deployment completed in `centralus`.
 
@@ -242,28 +242,28 @@ Frontend:
 
 ## 8. Validation Proof
 
-| Check | Command Run | Result | Timestamp |
-|-------|-------------|--------|-----------|
-| AZD installation/auth | `azd version && azd auth login --check-status` | Passed: azd 1.25.2, logged in as `ppenumatsa@microsoft.com` | 2026-06-10T13:27:33-05:00 |
-| AZD schema | Azure MCP `azd validate_azure_yaml` for `azure.yaml` | Passed | 2026-06-10T13:27:33-05:00 |
-| AZD environment | `azd env new maf-order-resolution-validate --subscription 4f18d577-3506-4a11-85e5-a83b14727a84 --location eastus2 --no-prompt` and `azd env get-values` | Passed using validation-only environment and placeholder non-secret password | 2026-06-10T13:27:33-05:00 |
-| Aspire check | `find . -name '*AppHost.csproj' -o -name '*.csproj' ...` | Passed: no Aspire markers found; Aspire checks skipped | 2026-06-10T13:27:33-05:00 |
-| Provision preview | `azd provision --preview --no-prompt` | Passed: preview generated for RG, backend/frontend Container Apps, ACA environment, ACR, PostgreSQL, App Insights, Key Vault, Log Analytics | 2026-06-10T13:27:33-05:00 |
-| Bicep build | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout` | Passed | 2026-06-10T13:27:33-05:00 |
-| Docker/package | `azd package --no-prompt` | Passed: backend and frontend packaged/tagged | 2026-06-10T13:27:33-05:00 |
-| Frontend build | `npm --prefix frontend run build` | Passed | 2026-06-10T13:27:33-05:00 |
-| Diff hygiene | `git --no-pager diff --check` | Passed | 2026-06-10T13:27:33-05:00 |
-| Local deterministic gate | `./scripts/skills/design-review-skill.sh` | Passed: backend lint/tests, evals 10/10, rubric, Playwright E2E 3/3 | 2026-06-10T13:27:33-05:00 |
-| Static RBAC verification | reviewed `infra/azure-apphosted/iac/**/*role*.bicep` and `main.bicep` role modules | Passed: only ACR `AcrPull` role assignments scoped to ACR for backend/frontend managed identities | 2026-06-10T13:27:33-05:00 |
-| Azure Policy assignments | Azure MCP `policy_assignment_list` for subscription `4f18d577-3506-4a11-85e5-a83b14727a84` | Blocked: assignments listed, but management-group deny policy details cannot be inspected with current permissions | 2026-06-10T13:27:33-05:00 |
-| Subscription template validation | `az deployment sub validate --location eastus2 --template-file infra/azure-apphosted/iac/main.bicep --parameters environmentName=maf-order-resolution-validate location=eastus2 namePrefix=maf-order-resolution-validate postgresAdministratorPassword=ValidationOnlyPassword123 mcpServerUrl='' mcpApiKey='' mcpBearerToken=''` | Passed: Azure accepted the subscription-scope template under current context | 2026-06-10T13:49:41-05:00 |
-| Subscription what-if | `az deployment sub what-if --location eastus2 --template-file infra/azure-apphosted/iac/main.bicep --parameters environmentName=maf-order-resolution-validate location=eastus2 namePrefix=maf-order-resolution-validate postgresAdministratorPassword=ValidationOnlyPassword123 mcpServerUrl='' mcpApiKey='' mcpBearerToken=''` | Passed: planned 11 creates; 2 role assignment resources marked unsupported by what-if due runtime principal IDs; no policy deny surfaced | 2026-06-10T13:49:41-05:00 |
-| Update provision preview | `azd provision --preview --no-prompt` in `maf-ora-central` / `centralus` | Passed: preview generated for existing RG, backend/frontend Container Apps, ACA environment, ACR, PostgreSQL, App Insights, Key Vault, Log Analytics | 2026-06-10T15:55:40-05:00 |
-| Update Bicep build | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout` | Passed | 2026-06-10T15:55:40-05:00 |
-| Update package validation | `azd package --no-prompt` | Passed: backend and frontend packaged/tagged for `maf-ora-central` | 2026-06-10T15:55:40-05:00 |
-| Update local deterministic gate | `make manual-matrix && make test && make eval-backend && ./scripts/skills/design-review-skill.sh` | Passed: manual matrix 10/10, backend tests 30/30, evals 10/10, rubric, Playwright E2E 5/5 | 2026-06-10T15:55:40-05:00 |
-| Update Docker E2E | `PLAYWRIGHT_BASE_URL=http://localhost:5173 make test-e2e` after `docker compose up --build -d backend frontend` | Passed: Docker frontend served Manual Test Matrix panel and Playwright E2E 5/5 | 2026-06-10T15:55:40-05:00 |
-| Existing hosted smoke | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"` | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request | 2026-06-10T15:55:40-05:00 |
+| Check                            | Command Run                                                                                                                                                                                                                                                                                                                      | Result                                                                                                                                               | Timestamp                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| AZD installation/auth            | `azd version && azd auth login --check-status`                                                                                                                                                                                                                                                                                   | Passed: azd 1.25.2, logged in as `ppenumatsa@microsoft.com`                                                                                          | 2026-06-10T13:27:33-05:00 |
+| AZD schema                       | Azure MCP `azd validate_azure_yaml` for `azure.yaml`                                                                                                                                                                                                                                                                             | Passed                                                                                                                                               | 2026-06-10T13:27:33-05:00 |
+| AZD environment                  | `azd env new maf-order-resolution-validate --subscription 4f18d577-3506-4a11-85e5-a83b14727a84 --location eastus2 --no-prompt` and `azd env get-values`                                                                                                                                                                          | Passed using validation-only environment and placeholder non-secret password                                                                         | 2026-06-10T13:27:33-05:00 |
+| Aspire check                     | `find . -name '*AppHost.csproj' -o -name '*.csproj' ...`                                                                                                                                                                                                                                                                         | Passed: no Aspire markers found; Aspire checks skipped                                                                                               | 2026-06-10T13:27:33-05:00 |
+| Provision preview                | `azd provision --preview --no-prompt`                                                                                                                                                                                                                                                                                            | Passed: preview generated for RG, backend/frontend Container Apps, ACA environment, ACR, PostgreSQL, App Insights, Key Vault, Log Analytics          | 2026-06-10T13:27:33-05:00 |
+| Bicep build                      | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`                                                                                                                                                                                                                                                            | Passed                                                                                                                                               | 2026-06-10T13:27:33-05:00 |
+| Docker/package                   | `azd package --no-prompt`                                                                                                                                                                                                                                                                                                        | Passed: backend and frontend packaged/tagged                                                                                                         | 2026-06-10T13:27:33-05:00 |
+| Frontend build                   | `npm --prefix frontend run build`                                                                                                                                                                                                                                                                                                | Passed                                                                                                                                               | 2026-06-10T13:27:33-05:00 |
+| Diff hygiene                     | `git --no-pager diff --check`                                                                                                                                                                                                                                                                                                    | Passed                                                                                                                                               | 2026-06-10T13:27:33-05:00 |
+| Local deterministic gate         | `./scripts/skills/design-review-skill.sh`                                                                                                                                                                                                                                                                                        | Passed: backend lint/tests, evals 10/10, rubric, Playwright E2E 3/3                                                                                  | 2026-06-10T13:27:33-05:00 |
+| Static RBAC verification         | reviewed `infra/azure-apphosted/iac/**/*role*.bicep` and `main.bicep` role modules                                                                                                                                                                                                                                               | Passed: only ACR `AcrPull` role assignments scoped to ACR for backend/frontend managed identities                                                    | 2026-06-10T13:27:33-05:00 |
+| Azure Policy assignments         | Azure MCP `policy_assignment_list` for subscription `4f18d577-3506-4a11-85e5-a83b14727a84`                                                                                                                                                                                                                                       | Blocked: assignments listed, but management-group deny policy details cannot be inspected with current permissions                                   | 2026-06-10T13:27:33-05:00 |
+| Subscription template validation | `az deployment sub validate --location eastus2 --template-file infra/azure-apphosted/iac/main.bicep --parameters environmentName=maf-order-resolution-validate location=eastus2 namePrefix=maf-order-resolution-validate postgresAdministratorPassword=ValidationOnlyPassword123 mcpServerUrl='' mcpApiKey='' mcpBearerToken=''` | Passed: Azure accepted the subscription-scope template under current context                                                                         | 2026-06-10T13:49:41-05:00 |
+| Subscription what-if             | `az deployment sub what-if --location eastus2 --template-file infra/azure-apphosted/iac/main.bicep --parameters environmentName=maf-order-resolution-validate location=eastus2 namePrefix=maf-order-resolution-validate postgresAdministratorPassword=ValidationOnlyPassword123 mcpServerUrl='' mcpApiKey='' mcpBearerToken=''`  | Passed: planned 11 creates; 2 role assignment resources marked unsupported by what-if due runtime principal IDs; no policy deny surfaced             | 2026-06-10T13:49:41-05:00 |
+| Update provision preview         | `azd provision --preview --no-prompt` in `maf-ora-central` / `centralus`                                                                                                                                                                                                                                                         | Passed: preview generated for existing RG, backend/frontend Container Apps, ACA environment, ACR, PostgreSQL, App Insights, Key Vault, Log Analytics | 2026-06-10T15:55:40-05:00 |
+| Update Bicep build               | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`                                                                                                                                                                                                                                                            | Passed                                                                                                                                               | 2026-06-10T15:55:40-05:00 |
+| Update package validation        | `azd package --no-prompt`                                                                                                                                                                                                                                                                                                        | Passed: backend and frontend packaged/tagged for `maf-ora-central`                                                                                   | 2026-06-10T15:55:40-05:00 |
+| Update local deterministic gate  | `make manual-matrix && make test && make eval-backend && ./scripts/skills/design-review-skill.sh`                                                                                                                                                                                                                                | Passed: manual matrix 10/10, backend tests 30/30, evals 10/10, rubric, Playwright E2E 5/5                                                            | 2026-06-10T15:55:40-05:00 |
+| Update Docker E2E                | `PLAYWRIGHT_BASE_URL=http://localhost:5173 make test-e2e` after `docker compose up --build -d backend frontend`                                                                                                                                                                                                                  | Passed: Docker frontend served Manual Test Matrix panel and Playwright E2E 5/5                                                                       | 2026-06-10T15:55:40-05:00 |
+| Existing hosted smoke            | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"`                                                                                                                                                                                                                                                              | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request                                                              | 2026-06-10T15:55:40-05:00 |
 
 **Validated by:** azure-validate skill
 **Validation timestamp:** 2026-06-10T15:55:40-05:00
@@ -275,26 +275,26 @@ The current code/IaC update is deployed to the `maf-ora-central` environment.
 Local, Azure validation, hosted parity, and App Insights proof are recorded
 below.
 
-| Check | Command Run | Result | Timestamp |
-|-------|-------------|--------|-----------|
-| Bicep build | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout` | Passed | 2026-06-10T16:58:28-05:00 |
-| Backend lint/tests | `make test` | Passed: ruff clean; pytest 44/44 | 2026-06-10T16:58:28-05:00 |
-| Eval harness | `make eval-backend` | Passed: 10/10 eval cases | 2026-06-10T16:58:28-05:00 |
-| Playwright E2E | `make test-e2e` | Passed: 5/5 tests | 2026-06-10T16:58:28-05:00 |
-| Design review gate | `./scripts/skills/design-review-skill.sh` | Passed: scope warning for pre-existing broad change set; format/lint/tests/evals/rubric/E2E passed | 2026-06-10T16:58:28-05:00 |
-| Diff hygiene | `git --no-pager diff --check` | Passed | 2026-06-10T16:58:28-05:00 |
-| Foundry Azure validation | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout && azd provision --preview --no-prompt && azd package --no-prompt` | Passed after setting embeddings SKU to `GlobalStandard` for `centralus` | 2026-06-10T22:26:00Z |
-| Foundry provision | `azd provision --no-prompt` | Passed: Azure AI Services account, Foundry project, chat deployment, embeddings deployment, Container Apps env/config, and Bicep-owned Foundry RBAC provisioned | 2026-06-10T23:20:00Z |
-| Foundry deploy | `azd deploy --no-prompt` | Passed after explicit ACR registry binding recovery; IaC now declares Container App registry bindings | 2026-06-10T23:25:00Z |
-| Foundry smoke | `EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"` | Passed: backend/frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request, triage mode `foundry_models` | 2026-06-10T23:26:00Z |
-| Hosted manual matrix | `MANUAL_MATRIX_ARGS="--request-timeout 120 --timeout 90 --case-delay 15" API_URL="$API_URL" make manual-matrix` | Passed: ORD-1001 through ORD-1010 all PASS with low-capacity Foundry throttling | 2026-06-10T23:34:00Z |
-| Hosted Playwright parity | `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000 PLAYWRIGHT_TEST_TIMEOUT_MS=120000 PLAYWRIGHT_CASE_DELAY_MS=15000 PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e` | Passed: 5/5 tests with low-capacity Foundry throttling | 2026-06-10T23:39:00Z |
-| App Insights ingestion | `az monitor log-analytics query --workspace <customerId> --analytics-query '<workflow telemetry query>'` | Passed: recent workflow telemetry found in `AppDependencies` (194) and `AppTraces` (981) | 2026-06-10T23:36:00Z |
-| HITL trace-correlation validation | `azd provision --preview --no-prompt && az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout && azd package --no-prompt` | Passed: preview/build/package validated for `maf-ora-central` | 2026-06-11T00:37:00Z |
-| HITL telemetry deployment | `azd provision --no-prompt && azd deploy --no-prompt` | Passed: backend/frontend deployed after frontend Nginx Azure-hostname fix | 2026-06-11T01:00:00Z |
-| Final hosted smoke | `EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"` | Passed: backend/frontend health, ORD-1001 no-HITL, ORD-1009 HITL, Foundry triage mode | 2026-06-11T01:00:00Z |
-| Final Container Apps revisions | `az containerapp revision list ...` | Passed: backend `maf-ora-central-backend-azv4nl--azd-1781139477` and frontend `maf-ora-central-frontend-azv4nl--azd-1781139493` healthy with 100% traffic | 2026-06-11T01:00:00Z |
-| Final App Insights KQL | `az monitor log-analytics query --workspace e5b16f93-6d8e-4e5c-938e-70499e9dc8f7 --analytics-query '<telemetry validation KQL>'` | Passed: `AppRequests=45`, `AppDependencies=247`, `AppTraces=205`, `AppExceptions=0`; HITL confirm thread wait/request/resume/response/resolution spans share OperationId `7cfa69e7c6fd930836651a2e2d8e63f8`; `NoneTypeWarnings=0` after 2026-06-11T01:00:00Z | 2026-06-11T01:10:00Z |
+| Check                             | Command Run                                                                                                                                        | Result                                                                                                                                                                                                                                                       | Timestamp                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| Bicep build                       | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`                                                                              | Passed                                                                                                                                                                                                                                                       | 2026-06-10T16:58:28-05:00 |
+| Backend lint/tests                | `make test`                                                                                                                                        | Passed: ruff clean; pytest 44/44                                                                                                                                                                                                                             | 2026-06-10T16:58:28-05:00 |
+| Eval harness                      | `make eval-backend`                                                                                                                                | Passed: 10/10 eval cases                                                                                                                                                                                                                                     | 2026-06-10T16:58:28-05:00 |
+| Playwright E2E                    | `make test-e2e`                                                                                                                                    | Passed: 5/5 tests                                                                                                                                                                                                                                            | 2026-06-10T16:58:28-05:00 |
+| Design review gate                | `./scripts/skills/design-review-skill.sh`                                                                                                          | Passed: scope warning for pre-existing broad change set; format/lint/tests/evals/rubric/E2E passed                                                                                                                                                           | 2026-06-10T16:58:28-05:00 |
+| Diff hygiene                      | `git --no-pager diff --check`                                                                                                                      | Passed                                                                                                                                                                                                                                                       | 2026-06-10T16:58:28-05:00 |
+| Foundry Azure validation          | `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout && azd provision --preview --no-prompt && azd package --no-prompt`            | Passed after setting embeddings SKU to `GlobalStandard` for `centralus`                                                                                                                                                                                      | 2026-06-10T22:26:00Z      |
+| Foundry provision                 | `azd provision --no-prompt`                                                                                                                        | Passed: Azure AI Services account, Foundry project, chat deployment, embeddings deployment, Container Apps env/config, and Bicep-owned Foundry RBAC provisioned                                                                                              | 2026-06-10T23:20:00Z      |
+| Foundry deploy                    | `azd deploy --no-prompt`                                                                                                                           | Passed after explicit ACR registry binding recovery; IaC now declares Container App registry bindings                                                                                                                                                        | 2026-06-10T23:25:00Z      |
+| Foundry smoke                     | `EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"`                                              | Passed: backend/frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request, triage mode `foundry_models`                                                                                                                                                | 2026-06-10T23:26:00Z      |
+| Hosted manual matrix              | `MANUAL_MATRIX_ARGS="--request-timeout 120 --timeout 90 --case-delay 15" API_URL="$API_URL" make manual-matrix`                                    | Passed: ORD-1001 through ORD-1010 all PASS with low-capacity Foundry throttling                                                                                                                                                                              | 2026-06-10T23:34:00Z      |
+| Hosted Playwright parity          | `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000 PLAYWRIGHT_TEST_TIMEOUT_MS=120000 PLAYWRIGHT_CASE_DELAY_MS=15000 PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e` | Passed: 5/5 tests with low-capacity Foundry throttling                                                                                                                                                                                                       | 2026-06-10T23:39:00Z      |
+| App Insights ingestion            | `az monitor log-analytics query --workspace <customerId> --analytics-query '<workflow telemetry query>'`                                           | Passed: recent workflow telemetry found in `AppDependencies` (194) and `AppTraces` (981)                                                                                                                                                                     | 2026-06-10T23:36:00Z      |
+| HITL trace-correlation validation | `azd provision --preview --no-prompt && az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout && azd package --no-prompt`            | Passed: preview/build/package validated for `maf-ora-central`                                                                                                                                                                                                | 2026-06-11T00:37:00Z      |
+| HITL telemetry deployment         | `azd provision --no-prompt && azd deploy --no-prompt`                                                                                              | Passed: backend/frontend deployed after frontend Nginx Azure-hostname fix                                                                                                                                                                                    | 2026-06-11T01:00:00Z      |
+| Final hosted smoke                | `EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"`                                              | Passed: backend/frontend health, ORD-1001 no-HITL, ORD-1009 HITL, Foundry triage mode                                                                                                                                                                        | 2026-06-11T01:00:00Z      |
+| Final Container Apps revisions    | `az containerapp revision list ...`                                                                                                                | Passed: backend `maf-ora-central-backend-azv4nl--azd-1781139477` and frontend `maf-ora-central-frontend-azv4nl--azd-1781139493` healthy with 100% traffic                                                                                                    | 2026-06-11T01:00:00Z      |
+| Final App Insights KQL            | `az monitor log-analytics query --workspace e5b16f93-6d8e-4e5c-938e-70499e9dc8f7 --analytics-query '<telemetry validation KQL>'`                   | Passed: `AppRequests=45`, `AppDependencies=247`, `AppTraces=205`, `AppExceptions=0`; HITL confirm thread wait/request/resume/response/resolution spans share OperationId `7cfa69e7c6fd930836651a2e2d8e63f8`; `NoneTypeWarnings=0` after 2026-06-11T01:00:00Z | 2026-06-11T01:10:00Z      |
 
 ## Role Assignment Verification
 
@@ -316,50 +316,50 @@ below.
 
 ## Deployment Proof
 
-| Check | Command Run | Result | Timestamp |
-|-------|-------------|--------|-----------|
-| Initial provision attempt | `azd provision --no-prompt` in `maf-order-resolution-validate` / `eastus2` | Failed: Key Vault template rejected explicit `enablePurgeProtection: false`; PostgreSQL Flexible Server returned `LocationIsOfferRestricted` for `eastus2` | 2026-06-10T13:49:41-05:00 |
-| Template fix | Removed explicit Key Vault purge-protection false setting and made Key Vault name suffix-preserving | Passed local Bicep validation | 2026-06-10T13:49:41-05:00 |
-| Central US validation | `az deployment sub validate --location centralus ... environmentName=maf-ora-central` | Passed | 2026-06-10T13:49:41-05:00 |
-| Provision | `azd provision --no-prompt` in `maf-ora-central` / `centralus` | Passed: resource group, ACR, Log Analytics, Key Vault, App Insights, Container Apps Environment, PostgreSQL, backend ACA, frontend ACA | 2026-06-10T13:49:41-05:00 |
-| Pre-deploy RBAC | `az role assignment list --scope <acr-id> --assignee-object-id <principal-id>` | Passed: backend and frontend managed identities both have `AcrPull` on ACR | 2026-06-10T13:49:41-05:00 |
-| First app deploy | `azd deploy --no-prompt` | Failed: Container Apps registry link missing despite `AcrPull` role assignment | 2026-06-10T13:49:41-05:00 |
-| Registry link recovery | `az containerapp registry set --server maforacentralacrazv4nl.azurecr.io --identity system` for backend and frontend | Passed | 2026-06-10T13:49:41-05:00 |
-| App deploy retry | `azd deploy --no-prompt` | Passed | 2026-06-10T13:49:41-05:00 |
-| Endpoint discovery | `azd show` | Passed: backend/frontend endpoints returned | 2026-06-10T13:49:41-05:00 |
-| Hosted smoke | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"` | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request | 2026-06-10T13:49:41-05:00 |
-| Live RBAC | `az role assignment list` for backend/frontend identities scoped to ACR | Passed: both identities have `AcrPull` | 2026-06-10T13:49:41-05:00 |
-| Update provision | `azd provision --no-prompt` in `maf-ora-central` / `centralus` | Passed: no infrastructure changes to provision | 2026-06-10T15:59:20-05:00 |
-| Update live RBAC | `az role assignment list --scope <acr-id> --assignee-object-id <principal-id>` | Passed: backend and frontend managed identities both have `AcrPull` on ACR | 2026-06-10T15:59:20-05:00 |
-| Update app deploy | `azd deploy --no-prompt` | Passed: backend/frontend images published and active revisions updated | 2026-06-10T15:59:20-05:00 |
-| Update hosted smoke | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"` | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request | 2026-06-10T15:59:20-05:00 |
-| Update hosted bundle | `curl "$WEB_URL/assets/index-DF8_ZLmk.js" | grep ...` | Passed: hosted frontend contains `Manual Test Matrix`, `Run all`, and `Load prompt` markers | 2026-06-10T15:59:20-05:00 |
-| Update hosted manual matrix | `API_URL="$API_URL" make manual-matrix` | Passed: ORD-1001 through ORD-1010 all PASS | 2026-06-10T15:59:20-05:00 |
-| Update hosted Playwright parity | `PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e` | Passed: hosted Playwright E2E 5/5, including Manual Test Matrix panel | 2026-06-10T15:59:20-05:00 |
+| Check                           | Command Run                                                                                                          | Result                                                                                                                                                     | Timestamp                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------- |
+| Initial provision attempt       | `azd provision --no-prompt` in `maf-order-resolution-validate` / `eastus2`                                           | Failed: Key Vault template rejected explicit `enablePurgeProtection: false`; PostgreSQL Flexible Server returned `LocationIsOfferRestricted` for `eastus2` | 2026-06-10T13:49:41-05:00                                                                   |
+| Template fix                    | Removed explicit Key Vault purge-protection false setting and made Key Vault name suffix-preserving                  | Passed local Bicep validation                                                                                                                              | 2026-06-10T13:49:41-05:00                                                                   |
+| Central US validation           | `az deployment sub validate --location centralus ... environmentName=maf-ora-central`                                | Passed                                                                                                                                                     | 2026-06-10T13:49:41-05:00                                                                   |
+| Provision                       | `azd provision --no-prompt` in `maf-ora-central` / `centralus`                                                       | Passed: resource group, ACR, Log Analytics, Key Vault, App Insights, Container Apps Environment, PostgreSQL, backend ACA, frontend ACA                     | 2026-06-10T13:49:41-05:00                                                                   |
+| Pre-deploy RBAC                 | `az role assignment list --scope <acr-id> --assignee-object-id <principal-id>`                                       | Passed: backend and frontend managed identities both have `AcrPull` on ACR                                                                                 | 2026-06-10T13:49:41-05:00                                                                   |
+| First app deploy                | `azd deploy --no-prompt`                                                                                             | Failed: Container Apps registry link missing despite `AcrPull` role assignment                                                                             | 2026-06-10T13:49:41-05:00                                                                   |
+| Registry link recovery          | `az containerapp registry set --server maforacentralacrazv4nl.azurecr.io --identity system` for backend and frontend | Passed                                                                                                                                                     | 2026-06-10T13:49:41-05:00                                                                   |
+| App deploy retry                | `azd deploy --no-prompt`                                                                                             | Passed                                                                                                                                                     | 2026-06-10T13:49:41-05:00                                                                   |
+| Endpoint discovery              | `azd show`                                                                                                           | Passed: backend/frontend endpoints returned                                                                                                                | 2026-06-10T13:49:41-05:00                                                                   |
+| Hosted smoke                    | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"`                                                  | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request                                                                    | 2026-06-10T13:49:41-05:00                                                                   |
+| Live RBAC                       | `az role assignment list` for backend/frontend identities scoped to ACR                                              | Passed: both identities have `AcrPull`                                                                                                                     | 2026-06-10T13:49:41-05:00                                                                   |
+| Update provision                | `azd provision --no-prompt` in `maf-ora-central` / `centralus`                                                       | Passed: no infrastructure changes to provision                                                                                                             | 2026-06-10T15:59:20-05:00                                                                   |
+| Update live RBAC                | `az role assignment list --scope <acr-id> --assignee-object-id <principal-id>`                                       | Passed: backend and frontend managed identities both have `AcrPull` on ACR                                                                                 | 2026-06-10T15:59:20-05:00                                                                   |
+| Update app deploy               | `azd deploy --no-prompt`                                                                                             | Passed: backend/frontend images published and active revisions updated                                                                                     | 2026-06-10T15:59:20-05:00                                                                   |
+| Update hosted smoke             | `infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"`                                                  | Passed: backend health, frontend health, ORD-1001 no-HITL output, ORD-1009 HITL request                                                                    | 2026-06-10T15:59:20-05:00                                                                   |
+| Update hosted bundle            | `curl "$WEB_URL/assets/index-DF8_ZLmk.js"                                                                            | grep ...`                                                                                                                                                  | Passed: hosted frontend contains `Manual Test Matrix`, `Run all`, and `Load prompt` markers | 2026-06-10T15:59:20-05:00 |
+| Update hosted manual matrix     | `API_URL="$API_URL" make manual-matrix`                                                                              | Passed: ORD-1001 through ORD-1010 all PASS                                                                                                                 | 2026-06-10T15:59:20-05:00                                                                   |
+| Update hosted Playwright parity | `PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e`                                                                       | Passed: hosted Playwright E2E 5/5, including Manual Test Matrix panel                                                                                      | 2026-06-10T15:59:20-05:00                                                                   |
 
 **Backend URL:** https://maf-ora-central-backend-azv4nl.icyglacier-d757678f.centralus.azurecontainerapps.io/
 
 **Frontend URL:** https://maf-ora-central-frontend-azv4nl.icyglacier-d757678f.centralus.azurecontainerapps.io/
 
-**Resource group:** `rg-maf-ora-central`
+**Resource group:** `rg-maf-ora-ni-eus-07080910`
 
-**Azure portal:** https://portal.azure.com/#@/resource/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-maf-ora-central/overview
+**Azure portal:** https://portal.azure.com/#@/resource/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-maf-ora-ni-eus-07080910/overview
 
 ---
 
 ## 9. Files to Generate / Modify
 
-| File | Purpose | Status |
-|------|---------|--------|
-| `.azure/deployment-plan.md` | This plan | ✅ |
-| `azure.yaml` | AZD configuration | ✅ |
-| `infra/azure-apphosted/iac/main.bicep` | Azure app-hosted infrastructure | ✅ |
-| `infra/azure-apphosted/iac/modules/*.bicep` | Reusable infra modules | ✅ |
-| `infra/azure-apphosted/runtime/*.sh` | Smoke/startup scripts | ✅ |
-| `.github/workflows/*.yml` | CI/CD | ✅ |
-| `backend/Dockerfile` | Backend container hardening | ✅ |
-| `frontend/Dockerfile` | Frontend container hardening | ✅ |
-| docs/README files | Operator guidance | ✅ |
+| File                                        | Purpose                         | Status |
+| ------------------------------------------- | ------------------------------- | ------ |
+| `.azure/deployment-plan.md`                 | This plan                       | ✅     |
+| `azure.yaml`                                | AZD configuration               | ✅     |
+| `infra/azure-apphosted/iac/main.bicep`      | Azure app-hosted infrastructure | ✅     |
+| `infra/azure-apphosted/iac/modules/*.bicep` | Reusable infra modules          | ✅     |
+| `infra/azure-apphosted/runtime/*.sh`        | Smoke/startup scripts           | ✅     |
+| `.github/workflows/*.yml`                   | CI/CD                           | ✅     |
+| `backend/Dockerfile`                        | Backend container hardening     | ✅     |
+| `frontend/Dockerfile`                       | Frontend container hardening    | ✅     |
+| docs/README files                           | Operator guidance               | ✅     |
 
 ---
 

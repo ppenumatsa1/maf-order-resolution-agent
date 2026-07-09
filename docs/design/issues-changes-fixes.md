@@ -53,12 +53,15 @@ Completed in this pass:
 Current blockers after rerun (updated):
 
 1. Provision is now blocked by model support mismatch, not RBAC:
-  - `DeploymentModelNotSupported`
-  - model: `gpt-4.1-mini` version `2024-07-18`
-  - region: `centralus`
+
+- `DeploymentModelNotSupported`
+- model: `gpt-4.1-mini` version `2024-07-18`
+- region: `centralus`
+
 2. Deploy remains blocked by hosted-agent regional support:
-  - `Unsupported region for Foundry Hosted Agents`
-  - request id: `345c50279ccfac14e00bb67a5cd9f12a`
+
+- `Unsupported region for Foundry Hosted Agents`
+- request id: `345c50279ccfac14e00bb67a5cd9f12a`
 
 Result:
 
@@ -235,6 +238,37 @@ Learning:
 - OIDC federated login via `azure/login@v2` requires federated credentials configured on the Entra app/service principal and was not configured for this UAMI.
 
 Change made:
+
+## Latest execution update (2026-07-09, private network path verified; regional capability blocker)
+
+Completed:
+
+- Confirmed private DNS resolution from runner VM for the new Foundry account endpoint:
+  - `maffndaizb4lxy66zp2uk.services.ai.azure.com -> 10.90.2.10`
+- Confirmed private endpoint resources provisioned successfully for the new stack, including Foundry/Search/Storage/Cosmos.
+- Completed a full `azd provision` success run for `ora-private-uami` against new account/project:
+  - account: `maffndaizb4lxy66zp2uk`
+  - project: `order-resolution`
+- Applied additional RBAC for runner identity `d77e1944-7251-41ef-be3b-883d0e503046` on the new account scope:
+  - `Azure AI Developer`
+  - `Foundry Project Manager`
+  - `Foundry Owner`
+  - `Contributor`
+
+Current blocker:
+
+- `azd deploy` still fails when creating/checking hosted agent with platform capability error:
+  - `Unsupported region for Foundry Hosted Agents`
+  - latest request id sample: `13ea0c9c6bae9daed4f63bb2b0e63095`
+
+What this means:
+
+- The previous access failures (`Public access is disabled`) were tied to private-path and/or permission state during earlier runs.
+- At this point the dominant failing gate is regional support for Foundry Hosted Agents in the current deployment location (`AZURE_LOCATION=centralus`).
+
+Next unblock path:
+
+- Move hosted-agent deployment to a Foundry Hosted Agent supported region (recommended: create/update azd environment with supported location and re-provision resources there), then rerun deploy/smoke/e2e/telemetry gates.
 
 - Updated workflows to authenticate with managed identity on-runner instead of `azure/login@v2` OIDC.
 

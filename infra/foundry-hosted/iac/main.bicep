@@ -434,11 +434,13 @@ module virtualNetwork './modules/vnet.bicep' = {
     natGatewayResourceId: createNatGateway ? natGateway.id : ''
     privateEndpointSubnetName: privateEndpointSubnetName
     privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
-    createRunnerSubnet: createPrivateRunnerAccess
+    // Keep runner subnet declared in VNet to avoid destructive subnet pruning on shared reruns.
+    createRunnerSubnet: true
     runnerSubnetName: runnerSubnetName
     runnerSubnetPrefix: runnerSubnetPrefix
     runnerSubnetNsgResourceId: ''
-    createBastionSubnet: createPrivateRunnerAccess && createBastionHost
+    // Keep AzureBastionSubnet declared in VNet to avoid deletion attempts when Bastion already exists.
+    createBastionSubnet: true
     bastionSubnetName: bastionSubnetName
     bastionSubnetPrefix: bastionSubnetPrefix
   }

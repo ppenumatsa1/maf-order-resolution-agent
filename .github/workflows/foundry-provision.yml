@@ -45,6 +45,10 @@ jobs:
               run: |
                   set -euo pipefail
                   auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
+                  use_existing_az_session="false"
+                  if [[ "$auth_mode" == "service-principal" && -z "${AZURE_CLIENT_SECRET:-}" ]]; then
+                    use_existing_az_session="true"
+                  fi
                   cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
                   if mkdir -p /mnt/.azure /mnt/.azd 2>/dev/null; then
                     cfg_root="/mnt"
@@ -52,6 +56,9 @@ jobs:
                   mkdir -p "${cfg_root}/.azure" "${cfg_root}/.azd"
                   export AZURE_CONFIG_DIR="${cfg_root}/.azure"
                   export AZD_CONFIG_DIR="${cfg_root}/.azd"
+                  if [[ "$use_existing_az_session" == "true" && -d "${HOME}/.azure" ]]; then
+                    cp -R "${HOME}/.azure/." "${AZURE_CONFIG_DIR}/" || true
+                  fi
                   if [[ "$auth_mode" == "service-principal" ]]; then
                     if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
                       echo "AZURE_CLIENT_SECRET is not set; reusing existing az session on runner."

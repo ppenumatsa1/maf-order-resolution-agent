@@ -5,6 +5,47 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-09, runner readiness hardening)
 
+## Latest execution update (2026-07-09, EastUS2 provision hardening + remaining platform blocker)
+
+Completed in this pass:
+
+- Stabilized provision behavior for shared private-runner VNet:
+  - `infra/foundry-hosted/iac/main.bicep`
+    - always keeps runner and Bastion subnets declared in VNet module input to avoid subnet-pruning drift on reruns.
+  - `infra/foundry-hosted/iac/modules/vnet.bicep`
+    - added runner subnet NAT gateway attachment support.
+    - added `Microsoft.CognitiveServices` service endpoint on `snet-agent-host` for Foundry account network ACL requirements.
+  - `infra/foundry-hosted/iac/main.bicep`
+    - added Foundry account `networkAcls` (default deny + agent subnet VNet rule) required by current account API behavior.
+- Hardened provision workflow env seeding:
+  - `.github/workflows/foundry-provision.yml`
+  - pinned rerun-safe flags for shared environments (`createPrivateRunnerAccess=true`, `createRunnerVm=false`).
+- Recovered runner connectivity after failed provisions removed subnet outbound:
+  - reattached NAT gateway to `snet-runner` (`nat-maffnd-runner`)
+  - restarted runner service on `vm-maffnd-runner`
+  - confirmed runner returned online (`vm-maforani-runner-foundry-private`).
+
+Validation evidence:
+
+- Full orchestrator attempts:
+  - `29037073536`
+  - `29039975664`
+  - `29040220564`
+- Latest ARM deployment failure narrowed to one remaining resource:
+  - deployment: `foundry-private-env-1783621283`
+  - failed operation:
+    - target: `Microsoft.Search/searchServices/maffndsrchktbblpk7mli2a`
+    - code: `InsufficientResourcesAvailable`
+    - message: EastUS2 currently out of capacity for new Search service provisioning.
+- Previous blockers are no longer the top failure in latest run:
+  - no more `InUseSubnetCannotBeDeleted` on Bastion/runner/private-endpoint subnets.
+  - no more Foundry account `NetworkAcls is required` / missing service endpoint error.
+
+Current hard blocker:
+
+- EastUS2 Search service capacity exhaustion (`InsufficientResourcesAvailable`) is the only remaining provision failure gate in current runs.
+- Because provision fails at this platform gate, downstream `deploy_after_provision` is skipped even though deploy-only flow previously passed.
+
 Completed in this pass:
 
 - Added VM host bootstrap script for GitHub runner prerequisites:

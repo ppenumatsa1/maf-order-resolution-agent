@@ -75,6 +75,11 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
                 }
               }
             ]
+            serviceEndpoints: [
+              {
+                service: 'Microsoft.CognitiveServices'
+              }
+            ]
           }
         }
         {

@@ -30,7 +30,19 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-runners_json="$(gh api "repos/${REPO}/actions/runners")"
+gh_err_file="$(mktemp)"
+if ! runners_json="$(gh api "repos/${REPO}/actions/runners" 2>"$gh_err_file")"; then
+  if grep -q "Resource not accessible by integration" "$gh_err_file"; then
+    echo "Runner readiness check skipped: current token cannot read repository runners (HTTP 403)."
+    echo "Proceeding without preflight enforcement."
+    rm -f "$gh_err_file"
+    exit 0
+  fi
+  cat "$gh_err_file"
+  rm -f "$gh_err_file"
+  exit 1
+fi
+rm -f "$gh_err_file"
 match_count="$(echo "$runners_json" | jq --arg label "$RUNNER_LABEL" '[.runners[] | select([.labels[].name] | index($label))] | length')"
 
 if [[ "$match_count" -eq 0 ]]; then

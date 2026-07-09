@@ -28,8 +28,8 @@ param cosmosLocation string = ''
 @description('Optional override for AI Search service name')
 param aiSearchName string = ''
 
-@description('Optional AI Search region override when East US 2 has capacity constraints')
-param aiSearchLocation string = ''
+@description('AI Search region; defaults to East US to avoid recurring East US 2 capacity exhaustion.')
+param aiSearchLocation string = 'eastus'
 
 @description('Optional override for ACR name')
 param containerRegistryName string = ''
@@ -197,7 +197,7 @@ var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalized
 var effectiveStorageAccountName = empty(storageAccountName) ? take('${normalizedPrefix}st${suffix}', 24) : storageAccountName
 var effectiveCosmosAccountName = empty(cosmosAccountName) ? take('${normalizedPrefix}cosmos${suffix}', 44) : cosmosAccountName
 var effectiveAiSearchName = empty(aiSearchName) ? take('${normalizedPrefix}srch${suffix}', 60) : aiSearchName
-var effectiveAiSearchLocation = empty(aiSearchLocation) ? location : aiSearchLocation
+var effectiveAiSearchLocation = empty(aiSearchLocation) ? 'eastus' : aiSearchLocation
 var effectiveContainerRegistryName = empty(containerRegistryName) ? take('${normalizedPrefix}acr${suffix}', 50) : containerRegistryName
 var effectiveVirtualNetworkName = empty(virtualNetworkName) ? '${normalizedPrefix}-vnet' : virtualNetworkName
 var effectiveNatGatewayName = empty(natGatewayName) ? take('${namePrefix}-nat-${suffix}', 80) : natGatewayName

@@ -63,7 +63,7 @@ assert_has_event "$low_result" "tool.call"
 assert_has_event "$low_result" "workflow.output"
 assert_not_event "$low_result" "hitl.request"
 
-high_result="$(invoke "{\"thread_id\":\"${high_thread}\",\"message\":\"ORD-1009 delayed order\"}")"
+high_result="$(invoke "{\"thread_id\":\"${high_thread}\",\"message\":\"ORD-1009 delayed order telemetry gate ${high_thread}\"}")"
 assert_has_event "$high_result" "workflow.stage"
 assert_has_event "$high_result" "tool.call"
 assert_has_event "$high_result" "checkpoint.created"

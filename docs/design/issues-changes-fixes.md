@@ -31,6 +31,8 @@ Validation evidence:
   - `29037073536`
   - `29039975664`
   - `29040220564`
+- Deploy-only orchestrator passed end-to-end on private runner:
+  - `29040570942` (`deploy_only / Deploy Foundry Hosted Agent` success)
 - Latest ARM deployment failure narrowed to one remaining resource:
   - deployment: `foundry-private-env-1783621283`
   - failed operation:

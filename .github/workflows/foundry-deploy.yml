@@ -69,10 +69,6 @@ jobs:
               run: |
                   set -euo pipefail
                   auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
-                  use_existing_az_session="false"
-                  if [[ "$auth_mode" == "service-principal" && -z "${AZURE_CLIENT_SECRET:-}" ]]; then
-                    use_existing_az_session="true"
-                  fi
                   cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
                   if mkdir -p /mnt/.azure /mnt/.azd 2>/dev/null; then
                     cfg_root="/mnt"
@@ -80,13 +76,27 @@ jobs:
                   mkdir -p "${cfg_root}/.azure" "${cfg_root}/.azd"
                   export AZURE_CONFIG_DIR="${cfg_root}/.azure"
                   export AZD_CONFIG_DIR="${cfg_root}/.azd"
-                  if [[ "$use_existing_az_session" == "true" && -d "${HOME}/.azure" ]]; then
-                    cp -R "${HOME}/.azure/." "${AZURE_CONFIG_DIR}/" || true
-                  fi
                   if [[ "$auth_mode" == "service-principal" ]]; then
                     if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
-                      echo "AZURE_CLIENT_SECRET is not set; reusing existing az session on runner."
-                      az account show >/dev/null
+                      echo "AZURE_CLIENT_SECRET is not set; using GitHub OIDC federated credential flow."
+                      if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+                        echo "GitHub OIDC token env vars are missing; cannot authenticate."
+                        exit 1
+                      fi
+                      federated_token="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
+                      if [[ -z "$federated_token" || "$federated_token" == "null" ]]; then
+                        echo "Failed to acquire GitHub OIDC federated token."
+                        exit 1
+                      fi
+                      az login --service-principal \
+                        --username "${{ vars.AZURE_CLIENT_ID }}" \
+                        --tenant "${{ vars.AZURE_TENANT_ID }}" \
+                        --federated-token "$federated_token"
+                      azd auth login \
+                        --federated-credential-provider github \
+                        --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                        --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                        --no-prompt
                     else
                       az login --service-principal \
                         --username "${{ vars.AZURE_CLIENT_ID }}" \

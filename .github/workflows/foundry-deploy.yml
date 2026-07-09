@@ -78,18 +78,19 @@ jobs:
                   export AZD_CONFIG_DIR="${cfg_root}/.azd"
                   if [[ "$auth_mode" == "service-principal" ]]; then
                     if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
-                      echo "AZURE_CLIENT_SECRET environment secret is required for service-principal auth mode"
-                      exit 1
+                      echo "AZURE_CLIENT_SECRET is not set; reusing existing az session on runner."
+                      az account show >/dev/null
+                    else
+                      az login --service-principal \
+                        --username "${{ vars.AZURE_CLIENT_ID }}" \
+                        --password "$AZURE_CLIENT_SECRET" \
+                        --tenant "${{ vars.AZURE_TENANT_ID }}"
+                      azd auth login \
+                        --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                        --client-secret "$AZURE_CLIENT_SECRET" \
+                        --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                        --no-prompt
                     fi
-                    az login --service-principal \
-                      --username "${{ vars.AZURE_CLIENT_ID }}" \
-                      --password "$AZURE_CLIENT_SECRET" \
-                      --tenant "${{ vars.AZURE_TENANT_ID }}"
-                    azd auth login \
-                      --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-                      --client-secret "$AZURE_CLIENT_SECRET" \
-                      --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
-                      --no-prompt
                   else
                     az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
                     azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt

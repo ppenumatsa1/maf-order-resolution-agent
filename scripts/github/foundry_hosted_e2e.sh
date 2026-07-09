@@ -15,7 +15,11 @@ BASE_THREAD_ID="${1:-foundry-e2e-$(date +%s)}"
 
 invoke() {
   local payload="$1"
-  azd ai agent invoke order-resolution-hosted "$payload" --protocol invocations --no-prompt
+  local raw
+  raw="$(azd ai agent invoke order-resolution-hosted "$payload" --protocol invocations --no-prompt)"
+  # azd emits summary lines before the JSON body in default output mode.
+  # Keep only the JSON payload so jq-based assertions remain deterministic.
+  printf '%s\n' "$raw" | sed -n '/^{/,$p'
 }
 
 assert_has_event() {
@@ -23,7 +27,11 @@ assert_has_event() {
   local event_type="$2"
   echo "$json" | jq -e --arg event_type "$event_type" '
     (.events // []) | map(.type) | index($event_type) != null
-  ' >/dev/null
+  ' >/dev/null || {
+    echo "Expected event '$event_type' was not present"
+    echo "$json"
+    exit 1
+  }
 }
 
 assert_not_event() {
@@ -31,7 +39,11 @@ assert_not_event() {
   local event_type="$2"
   echo "$json" | jq -e --arg event_type "$event_type" '
     (.events // []) | map(.type) | index($event_type) == null
-  ' >/dev/null
+  ' >/dev/null || {
+    echo "Unexpected event '$event_type' was present"
+    echo "$json"
+    exit 1
+  }
 }
 
 low_thread="${BASE_THREAD_ID}-low"

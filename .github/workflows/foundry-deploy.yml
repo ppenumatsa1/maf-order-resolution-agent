@@ -394,6 +394,36 @@ jobs:
                   mkdir -p infra/foundry-hosted/agent/runtime
                   cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/runtime/.env
 
+            - name: Verify staged runtime DATABASE_URL
+              run: |
+                  set -euo pipefail
+                  src_line="$(grep -E '^DATABASE_URL=' infra/foundry-hosted/runtime/.env || true)"
+                  staged_line="$(grep -E '^DATABASE_URL=' infra/foundry-hosted/agent/runtime/.env || true)"
+                  if [[ -z "$src_line" || -z "$staged_line" ]]; then
+                    echo "DATABASE_URL is missing from runtime env files."
+                    exit 1
+                  fi
+                  src_host="$(python - "$src_line" <<'PY'
+import sys, urllib.parse
+line = sys.argv[1]
+value = line.split("=", 1)[1]
+print(urllib.parse.urlparse(value).hostname or "")
+PY
+)"
+                  staged_host="$(python - "$staged_line" <<'PY'
+import sys, urllib.parse
+line = sys.argv[1]
+value = line.split("=", 1)[1]
+print(urllib.parse.urlparse(value).hostname or "")
+PY
+)"
+                  echo "Runtime DATABASE_URL host: ${src_host:-missing}"
+                  echo "Staged DATABASE_URL host: ${staged_host:-missing}"
+                  if [[ "$src_host" != "$staged_host" ]]; then
+                    echo "Staged runtime DATABASE_URL host does not match source runtime env."
+                    exit 1
+                  fi
+
             - name: Deploy Foundry hosted agent
               run: |
                   set -euo pipefail

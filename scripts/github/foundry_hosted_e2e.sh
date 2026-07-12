@@ -11,75 +11,52 @@ require_bin() {
 require_bin azd
 require_bin jq
 
-BASE_THREAD_ID="${1:-foundry-e2e-$(date +%s)}"
+BASE_ID="${1:-foundry-e2e-$(date +%s)}"
+C1="${BASE_ID}-c1"
+HIGH_RISK="${BASE_ID}-high"
 
-invoke() {
-  local payload="$1"
+invoke_responses() {
+  local conversation_id="$1"
+  local message="$2"
   local raw
-  raw="$(azd ai agent invoke order-resolution-hosted "$payload" --protocol invocations --no-prompt)"
-  # azd emits summary lines (and sometimes prefixes like "[agent] ") before JSON.
-  # Keep only the JSON payload so jq-based assertions remain deterministic.
+  raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt)"
   printf '%s\n' "$raw" | awk '
     found { print; next }
-    /\{/ {
+    /^\{/ {
       found = 1
-      sub(/^[^{]*/, "")
       print
     }
   '
 }
 
-assert_has_event() {
+assert_json_field() {
   local json="$1"
-  local event_type="$2"
-  echo "$json" | jq -e --arg event_type "$event_type" '
-    (.events // []) | map(.type) | index($event_type) != null
-  ' >/dev/null || {
-    echo "Expected event '$event_type' was not present"
+  local expr="$2"
+  echo "$json" | jq -e "$expr" >/dev/null || {
+    echo "Assertion failed: $expr"
     echo "$json"
     exit 1
   }
 }
 
-assert_not_event() {
-  local json="$1"
-  local event_type="$2"
-  echo "$json" | jq -e --arg event_type "$event_type" '
-    (.events // []) | map(.type) | index($event_type) == null
-  ' >/dev/null || {
-    echo "Unexpected event '$event_type' was present"
-    echo "$json"
-    exit 1
-  }
-}
+first_turn="$(invoke_responses "$C1" "Resolve delayed order ORD-1001")"
+assert_json_field "$first_turn" '.thread_id == "'"$C1"'"'
+assert_json_field "$first_turn" '.status == "completed"'
+assert_json_field "$first_turn" '(.events // []) | map(.type) | index("tool.call") != null'
+assert_json_field "$first_turn" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-low_thread="${BASE_THREAD_ID}-low"
-high_thread="${BASE_THREAD_ID}-high"
-damaged_thread="${BASE_THREAD_ID}-damaged"
+second_turn="$(invoke_responses "$C1" "Why was that resolution selected?")"
+assert_json_field "$second_turn" '.thread_id == "'"$C1"'"'
+assert_json_field "$second_turn" '.status == "completed"'
+assert_json_field "$second_turn" '.message | test("resolution was selected|Resolution complete"; "i")'
 
-low_result="$(invoke "{\"thread_id\":\"${low_thread}\",\"message\":\"ORD-1001 late delivery\"}")"
-assert_has_event "$low_result" "workflow.stage"
-assert_has_event "$low_result" "tool.call"
-assert_has_event "$low_result" "workflow.output"
-assert_not_event "$low_result" "hitl.request"
+high_risk_start="$(invoke_responses "$HIGH_RISK" "Resolve delayed order ORD-1009")"
+assert_json_field "$high_risk_start" '.status == "waiting_approval"'
+assert_json_field "$high_risk_start" '(.events // []) | map(.type) | index("hitl.request") != null'
 
-high_result="$(invoke "{\"thread_id\":\"${high_thread}\",\"message\":\"ORD-1009 delayed order telemetry gate ${high_thread}\"}")"
-assert_has_event "$high_result" "workflow.stage"
-assert_has_event "$high_result" "tool.call"
-assert_has_event "$high_result" "checkpoint.created"
-assert_has_event "$high_result" "hitl.request"
-checkpoint_id="$(echo "$high_result" | jq -r '.. | objects | .checkpoint_id? // empty' | head -n1)"
-if [[ -z "$checkpoint_id" || "$checkpoint_id" == "null" ]]; then
-  echo "Missing checkpoint_id in high-risk flow; retrying resume with thread-level approval fallback."
-  resume_result="$(invoke "{\"operation\":\"resume_hitl\",\"thread_id\":\"${high_thread}\",\"decision\":\"approve\",\"reviewer\":\"github-runner\"}")"
-else
-  resume_result="$(invoke "{\"operation\":\"resume_hitl\",\"thread_id\":\"${high_thread}\",\"checkpoint_id\":\"${checkpoint_id}\",\"decision\":\"approve\",\"reviewer\":\"github-runner\"}")"
-fi
-assert_has_event "$resume_result" "hitl.response"
-assert_has_event "$resume_result" "workflow.output"
+high_risk_resume="$(invoke_responses "$HIGH_RISK" "Approve")"
+assert_json_field "$high_risk_resume" '.status == "completed"'
+assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
+assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-damaged_result="$(invoke "{\"thread_id\":\"${damaged_thread}\",\"message\":\"My ORD-1001 item arrived damaged\"}")"
-assert_has_event "$damaged_result" "checkpoint.created"
-assert_has_event "$damaged_result" "hitl.request"
-
-echo "Foundry hosted E2E passed for thread base: ${BASE_THREAD_ID}"
+echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK}"

@@ -197,6 +197,47 @@ async def test_broken_item_always_requests_hitl(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_follow_up_why_question_reuses_prior_resolution_context(tmp_path: Path) -> None:
+    event_bus = EventBus()
+    workflow = OrderResolutionWorkflow(
+        event_bus=event_bus,
+        memory_store=SessionMemoryStore(tmp_path / "memory"),
+        checkpoint_store=CheckpointStore(tmp_path / "checkpoints"),
+        mcp_tool=MCPKnowledgeTool(endpoint=None),
+    )
+    thread_id = str(uuid4())
+    first_context = WorkflowContext(
+        run_id=str(uuid4()),
+        thread_id=thread_id,
+        session_id=thread_id,
+        customer_id="cust-test",
+        user_message="Resolve delayed order ORD-1001",
+    )
+    await workflow.start(first_context)
+
+    second_context = WorkflowContext(
+        run_id=str(uuid4()),
+        thread_id=thread_id,
+        session_id=thread_id,
+        customer_id="cust-test",
+        user_message="Why was that resolution selected?",
+    )
+    await workflow.start(second_context)
+
+    history = json.loads(event_bus.history_as_json(thread_id))
+    explanation_events = [
+        event
+        for event in history
+        if event["type"] == "workflow.stage" and event["payload"].get("agent") == "explanation"
+    ]
+    assert explanation_events
+    output_messages = [
+        event["payload"]["message"] for event in history if event["type"] == "workflow.output"
+    ]
+    assert any("Previous result: Resolution complete." in message for message in output_messages)
+
+
+@pytest.mark.asyncio
 async def test_high_risk_rejection_emits_escalated_terminal_output(tmp_path: Path) -> None:
     event_bus = EventBus()
     checkpoint_store = CheckpointStore(tmp_path / "checkpoints")

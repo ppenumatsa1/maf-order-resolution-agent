@@ -34,7 +34,7 @@ help:
 	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
 	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
 	@echo "  foundry-sync-env - Sync infra/foundry-hosted/runtime/.env into current azd env"
-	@echo "  foundry-smoke   - Invoke hosted agent health check via invocations protocol"
+	@echo "  foundry-smoke   - Invoke hosted agent health check via responses protocol"
 	@echo "  foundry-access-path - Deploy private runner/Bastion access path via Bicep"
 	@echo "  clean           - Remove caches and test artifacts"
 
@@ -112,7 +112,7 @@ up:
 		if command -v az >/dev/null 2>&1; then \
 			token="$$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv 2>/dev/null || true)"; \
 			if [[ -n "$$token" ]]; then \
-				echo "Using host Azure CLI token for Foundry hosted invocations."; \
+				echo "Using host Azure CLI token for Foundry hosted responses."; \
 				FOUNDRY_HOSTED_API_KEY="Bearer $$token" docker compose --env-file $(COMPOSE_ENV_FILE) up --build -d backend frontend mock-mcp; \
 			else \
 				echo "WARN: Could not acquire Azure CLI token. Set FOUNDRY_HOSTED_API_KEY in $(COMPOSE_ENV_FILE)."; \
@@ -186,10 +186,9 @@ foundry-sync-env:
 		echo "APPLICATIONINSIGHTS_CONNECTION_STRING must be set in infra/foundry-hosted/runtime/.env"; \
 		exit 1; \
 	fi; \
-	mkdir -p agent/runtime ../../backend/foundry/runtime; \
-	cp runtime/.env agent/runtime/.env; \
-	cp runtime/.env ../../backend/foundry/runtime/.env; \
-	echo "derived agent/runtime/.env and backend/foundry/runtime/.env from runtime/.env"; \
+	mkdir -p ../../backend/runtime; \
+	cp runtime/.env ../../backend/runtime/.env; \
+	echo "derived backend/runtime/.env from runtime/.env"; \
 	while IFS= read -r line; do \
 		[[ -z "$$line" || "$$line" =~ ^[[:space:]]*# ]] && continue; \
 		key="$${line%%=*}"; \
@@ -199,7 +198,7 @@ foundry-sync-env:
 	done < runtime/.env
 
 foundry-smoke:
-	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "{\"thread_id\":\"$${SMOKE_THREAD_ID:-foundry-smoke}\",\"message\":\"$${SMOKE_MESSAGE:-ORD-1009 delayed order}\"}" --protocol invocations --no-prompt
+	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --conversation-id "$${SMOKE_THREAD_ID:-foundry-smoke}" --no-prompt
 
 foundry-access-path:
 	cd infra/foundry-hosted && az deployment group create \

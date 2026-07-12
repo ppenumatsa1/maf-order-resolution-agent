@@ -7,6 +7,8 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Keep one MAF-based business workflow path (no deterministic fallback path).
 - Deterministic triage fallback is allowed only when Foundry Models env vars are
   absent; do not add a separate deterministic fallback orchestration path.
+- Keep Foundry hosting Responses-native through `backend/foundry/main.py` and
+  `backend/agent.yaml`; do not reintroduce legacy invocations adapter paths.
 - Keep HITL behavior deterministic and testable.
 - Keep API response contracts stable for frontend and Playwright tests.
 - Keep the legacy SSE event stream stable; expose richer AG-UI-compatible events only as additive surfaces.
@@ -20,6 +22,8 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
   - `backend/app/core/*` owns config, database, telemetry, and runtime composition.
   - `backend/app/infrastructure/*` is the repository-pattern/adapters namespace.
   - `backend/app/maf/*` owns the MAF runtime namespace.
+- Do not add back removed legacy routes/modules such as `/api/foundry*` or
+  `backend/app/foundry/*`.
 - Any change to HITL decision logic must update:
   - `docs/design/hitl-approval-conditions.md`
   - tests in `backend/tests/test_workflow.py` and/or eval cases in `backend/evals/cases.jsonl`
@@ -68,6 +72,22 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Use `azure-telemetry-validation` after hosted deployment to verify App Insights request, dependency, trace, HITL correlation, and exception data.
 - Use `release-readiness` to orchestrate the focused skills for PR/release handoff.
 - Use `scripts/skills/deployment-mode-router.sh` to decide quick/full validation and app-only/full deployment from changed files.
+
+## Stack Implementation Skills
+
+Load only the relevant implementation skill for the task; these complement rather than replace the
+repository workflow skills above. The baseline has five vendored Microsoft skills and two
+local (repository-owned) skills:
+
+- `agent-framework-foundry-py`: this service's `agent-framework-foundry` integration,
+  `FoundryChatClient`, `SequentialBuilder`, middleware, resumable workflows, and
+  checkpoint-backed HITL request/response flows.
+- `azure-ai-projects-py`: Foundry projects, deployments, and evaluations.
+- `azure-identity-py`: Entra authentication and managed identity.
+- `azure-monitor-opentelemetry-py`: Application Insights and Azure Monitor telemetry.
+- `fastapi-router-py`: FastAPI HTTP routes.
+- `pydantic-models-py`: Pydantic v2 schemas.
+- `postgres-psycopg-py`: PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence.
 
 ## Baseline Test Inputs
 

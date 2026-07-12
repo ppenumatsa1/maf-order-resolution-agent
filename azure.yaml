@@ -19,7 +19,7 @@ services:
             path: Dockerfile
             context: .
     order-resolution-hosted:
-        project: ./backend/foundry
+        project: ./backend
         host: azure.ai.agent
         language: python
         config:

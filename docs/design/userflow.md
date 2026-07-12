@@ -12,9 +12,9 @@ Current status:
 
 | Stage            | Status      | What is actually wired today                                                                                     |
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
-| Local MAF        | Implemented | End-to-end workflow path is active via `WORKFLOW_MODE=maf_sdk`.                                                  |
-| Azure app-hosted | Scaffolded  | Config values exist (`STORE_PROVIDER=azure_postgres|app_db`), but startup still enforces `STORE_PROVIDER=postgres`. |
-| Foundry-hosted   | In progress | `WORKFLOW_MODE=foundry_hosted` routes through the hosted `invocations` adapter and requires `FOUNDRY_HOSTED_INVOCATIONS_URL`; the cutover hosted runtime uses `FOUNDRY_HOSTED_PROTOCOL=dual` to expose both `invocations` and additive `responses` routes. |
+| Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
+| Azure app-hosted | Implemented | Same shared workflow behavior on ACA + Postgres. |
+| Foundry-hosted   | Implemented | Responses-hosted entrypoint (`backend/foundry/main.py`) runs the same shared workflow. |
 
 ## Current Runtime User Flow (Implemented Path)
 
@@ -31,6 +31,8 @@ Current status:
 5. Reviewer approves/rejects via UI.
 6. Backend resumes from checkpoint and emits `workflow.output`.
 7. UI appends final output and keeps thread available for follow-up turns.
+
+For Foundry-hosted conversations, the same behavior is preserved through Responses turns in the same `conversation_id`, including explanation follow-ups such as “Why was that resolution selected?”.
 
 If the same approval/rejection request is accidentally submitted more than once for a checkpoint, backend handling is idempotent and does not emit duplicate terminal events.
 

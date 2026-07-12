@@ -5,6 +5,7 @@ This file describes expected behavior for coding agents working in this reposito
 ## Project Context
 
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
+- Foundry hosted entrypoint: `backend/foundry/main.py` (Responses protocol via `backend/agent.yaml`).
 - Frontend: React + Vite, consumes SSE workflow events.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
@@ -68,7 +69,24 @@ Use focused skills instead of one broad agent pass:
 
 Use `scripts/skills/deployment-mode-router.sh` to route quick-vs-full validation and app-only-vs-full deployment for release work.
 
+## Stack Implementation Skills
+
+Load only the relevant implementation skill for the task; these complement rather than replace the
+repository workflow skills above. The baseline has five vendored Microsoft skills and two
+local (repository-owned) skills:
+
+- `agent-framework-foundry-py`: this service's `agent-framework-foundry` integration,
+  `FoundryChatClient`, `SequentialBuilder`, middleware, resumable workflows, and
+  checkpoint-backed HITL request/response flows.
+- `azure-ai-projects-py`: Foundry projects, deployments, and evaluations.
+- `azure-identity-py`: Entra authentication and managed identity.
+- `azure-monitor-opentelemetry-py`: Application Insights and Azure Monitor telemetry.
+- `fastapi-router-py`: FastAPI HTTP routes.
+- `pydantic-models-py`: Pydantic v2 schemas.
+- `postgres-psycopg-py`: PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence.
+
 Legacy shim paths have been removed. Do not add code that imports or recreates `app/models.py`, `app/config.py`, `app/db.py`, `app/state.py`, `app/workflow_run_repository.py`, `app/rag_repository.py`, `workflows/*`, `tools/*`, or root `app/api/*` router shims.
+Also do not reintroduce removed Foundry adapter/proxy surfaces such as `/api/foundry*` or `backend/app/foundry/*`.
 
 ## HITL Testing Baseline
 

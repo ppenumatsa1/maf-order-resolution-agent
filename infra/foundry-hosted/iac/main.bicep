@@ -10,7 +10,7 @@ param namePrefix string = 'maffnd'
 @description('Foundry project name')
 param foundryProjectName string = 'order-resolution'
 
-@description('Hosted agent name used to compose default invocations URL')
+@description('Hosted agent name used to compose default responses URL')
 param hostedAgentName string = 'order-resolution-hosted'
 
 @description('Optional override for Foundry account name')
@@ -28,7 +28,8 @@ param cosmosLocation string = ''
 @description('Optional override for AI Search service name')
 param aiSearchName string = ''
 
-@description('AI Search region; defaults to East US to avoid recurring East US 2 capacity exhaustion.')
+@description('AI Search region. Default is East US for capacity resilience; set equal to deployment location to keep same-region data path/residency.')
+@minLength(1)
 param aiSearchLocation string = 'eastus'
 
 @description('Optional override for ACR name')
@@ -126,6 +127,7 @@ param privateDnsZoneNames array = [
   'privatelink.services.ai.azure.com'
   'privatelink.cognitiveservices.azure.com'
   'privatelink.openai.azure.com'
+  'privatelink.azurecr.io'
 ]
 
 @description('Create private DNS VNet links.')
@@ -197,7 +199,7 @@ var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalized
 var effectiveStorageAccountName = empty(storageAccountName) ? take('${normalizedPrefix}st${suffix}', 24) : storageAccountName
 var effectiveCosmosAccountName = empty(cosmosAccountName) ? take('${normalizedPrefix}cosmos${suffix}', 44) : cosmosAccountName
 var effectiveAiSearchName = empty(aiSearchName) ? take('${normalizedPrefix}srch${suffix}', 60) : aiSearchName
-var effectiveAiSearchLocation = empty(aiSearchLocation) ? 'eastus' : aiSearchLocation
+var effectiveAiSearchLocation = aiSearchLocation
 var effectiveContainerRegistryName = empty(containerRegistryName) ? take('${normalizedPrefix}acr${suffix}', 50) : containerRegistryName
 var effectiveVirtualNetworkName = empty(virtualNetworkName) ? '${normalizedPrefix}-vnet' : virtualNetworkName
 var effectiveNatGatewayName = empty(natGatewayName) ? take('${namePrefix}-nat-${suffix}', 80) : natGatewayName
@@ -226,6 +228,7 @@ var cosmosZoneIndex = indexOf(privateDnsZoneNames, cosmosZoneName)
 var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryServicesZoneName)
 var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryCognitiveZoneName)
 var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryOpenAiZoneName)
+var acrZoneIndex = indexOf(privateDnsZoneNames, 'privatelink.azurecr.io')
 var resolvedProjectPrincipalId = manageProjectConnections ? projectConnections.outputs.projectPrincipalId : foundryProject.identity.principalId
 var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections.outputs.projectWorkspaceId : ''
 var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections.outputs.cosmosConnection : effectiveCosmosConnectionName
@@ -240,7 +243,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   }
   properties: {
     adminUserEnabled: false
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
   }
 }
 
@@ -580,6 +583,23 @@ module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
   }
 }
 
+module acrPrivateEndpoint './modules/private-endpoint.bicep' = {
+  name: 'private-endpoint-acr'
+  params: {
+    enabled: createPrivateEndpoints
+    location: location
+    name: '${namePrefix}-acr-pe-${suffix}'
+    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    targetResourceId: containerRegistry.id
+    groupIds: [
+      'registry'
+    ]
+    privateDnsZoneIds: [
+      privateDns.outputs.zoneIds[acrZoneIndex]
+    ]
+  }
+}
+
 module projectConnections './modules/foundry-project-existing-connections.bicep' = if (manageProjectConnections) {
   name: 'project-connections-${suffix}'
   params: {
@@ -703,13 +723,14 @@ module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignmen
 }
 
 var foundryProjectEndpoint = 'https://${effectiveFoundryAccountName}.services.ai.azure.com/api/projects/${foundryProjectName}'
-var foundryHostedInvocationsUrl = '${foundryProjectEndpoint}/agents/${hostedAgentName}/endpoint/protocols/invocations?api-version=v1'
+var foundryHostedResponsesUrl = '${foundryProjectEndpoint}/agents/${hostedAgentName}/endpoint/protocols/openai/responses?api-version=v1'
+var isCrossRegionAiSearch = toLower(effectiveAiSearchLocation) != toLower(location)
 
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryProjectEndpoint string = foundryProjectEndpoint
 output natGatewayId string = createNatGateway ? natGateway.id : ''
-output foundryHostedInvocationsUrl string = foundryHostedInvocationsUrl
+output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
 output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
@@ -733,7 +754,9 @@ output privateEndpointIds object = {
   aiSearch: searchPrivateEndpoint.outputs.id
   cosmos: cosmosPrivateEndpoint.outputs.id
   foundry: foundryPrivateEndpoint.outputs.id
+  acr: acrPrivateEndpoint.outputs.id
 }
+output aiSearchTopologyWarning string = isCrossRegionAiSearch ? 'WARNING: AI Search location differs from deployment location; this introduces a cross-region private-link data path and should be reviewed for latency/residency requirements.' : ''
 output privateRunnerAccess object = createPrivateRunnerAccess ? {
   enabled: true
   runnerSubnetId: privateRunnerAccess!.outputs.runnerSubnetId
@@ -758,9 +781,7 @@ output privateRunnerAccess object = createPrivateRunnerAccess ? {
   bastionPublicIpId: ''
 }
 output requiredBackendSettings array = [
-  'WORKFLOW_MODE=foundry_hosted'
-  'FOUNDRY_HOSTED_INVOCATIONS_URL=${foundryHostedInvocationsUrl}'
-  '${foundryEventCallbackTokenSettingName}=<shared-callback-token>'
+  'FOUNDRY_PROJECTS_ENDPOINT=${foundryProjectEndpoint}'
   'APPLICATIONINSIGHTS_CONNECTION_STRING=${applicationInsights.properties.ConnectionString}'
 ]
-output nextStep string = 'Run azd deploy order-resolution-hosted, then azd ai agent invoke for invocations/responses protocols and verify Foundry + App Insights telemetry.'
+output nextStep string = 'Run azd deploy order-resolution-hosted, then azd ai agent invoke with responses protocol and verify Foundry + App Insights telemetry.'

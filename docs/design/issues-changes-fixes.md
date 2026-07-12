@@ -3,6 +3,54 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-12, shared workflow Responses cutover + docs sync)
+
+Completed in this pass:
+
+- Cut over to one shared MAF business workflow path and removed app-side dual runtime switching.
+- Replaced hosted invocations adapter flow with Responses-first hosted entrypoint (`backend/foundry/main.py`) that composes the same shared workflow.
+- Removed legacy Foundry proxy/adapter routes and modules (`/api/foundry*`, `backend/app/foundry/*`) and aligned hosted packaging/manifests to `backend/` roots.
+- Added hosted Responses behavior coverage and follow-up explanation coverage in backend tests.
+- Synchronized architecture/runtime documentation to match the cutover:
+  - `README.md`
+  - `backend/README.md`
+  - `docs/design/userflow.md`
+  - `docs/design/hitl-approval-conditions.md`
+  - `.github/copilot-instructions.md`
+  - `agents.md`
+
+Validation evidence:
+
+- `make test` passed.
+- `make eval-backend` passed.
+- `make test-e2e` passed.
+- `./scripts/skills/design-review-skill.sh` passed.
+
+## Latest execution update (2026-07-12, private deployment + hosted evidence pass)
+
+Completed in this pass:
+
+- Ran Foundry orchestrator on `feature/foundry-private-network-vnet`:
+  - run: `29205980252`
+  - URL: `https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/29205980252`
+- Confirmed all required cloud jobs passed:
+  - `runner_preflight`: success
+  - `provision / Provision Foundry Infra`: success
+  - `deploy_after_provision / Deploy Foundry Hosted Agent`: success
+- Captured hosted execution evidence from the successful run:
+  - smoke thread id: `foundry-smoke-29205980252-1`
+  - hosted E2E: `Foundry hosted E2E passed for thread base: foundry-e2e-29205980252-1`
+  - telemetry gate: `telemetry_count=1` (attempt `1/20`), `Telemetry gate passed`
+
+Issue fixed during run:
+
+- Initial run `29205863827` failed at `actions/checkout@v4` on private runner with
+  workspace cleanup `EACCES` (`None/.cache` root-owned path).
+- Fixed by adding a pre-checkout workspace permission reset and cleanup step in:
+  - `.github/workflows/foundry-provision.yml`
+  - `.github/workflows/foundry-deploy.yml`
+- Re-run from commit `96f9371` completed successfully.
+
 ## Latest execution update (2026-07-09, runner readiness hardening)
 
 ## Latest execution update (2026-07-09, EastUS2 provision hardening + remaining platform blocker)
@@ -83,6 +131,104 @@ Result:
   - hosted agent deployed
   - smoke + E2E checks passed
   - telemetry verified in App Insights
+
+## Latest execution update (2026-07-09, manual-testing matrix local + Foundry)
+
+Manual matrix source:
+
+- `docs/manual-testing.md` ORD-1001..ORD-1010 matrix
+- command runner: `make manual-matrix`
+
+### Local matrix (maf_sdk path) — PASS
+
+Environment used:
+
+- docker compose with `WORKFLOW_MODE=maf_sdk` (local backend orchestration path)
+
+Result:
+
+- all 10 cases passed (`ORD-1001` through `ORD-1010`)
+- representative threads:
+  - `ORD-1001`: `5bbc70bf-677c-43a3-9692-f977b1aaf65c`
+  - `ORD-1009`: `d89f25d3-32e4-4a81-8033-a7ff963124a8`
+
+### Foundry matrix from public localhost adapter — expected FAIL
+
+Environment used:
+
+- local docker backend adapter with `WORKFLOW_MODE=foundry_hosted`
+- hosted endpoint `https://maffndaiktbblpk7mli2a.services.ai.azure.com/.../invocations`
+
+Result:
+
+- all cases failed at `/api/chat/run` with backend 500.
+- backend root cause:
+  - Foundry invoke returned `403`
+  - message: `Public access is disabled. Please configure private endpoint.`
+
+Interpretation:
+
+- this is expected for public localhost execution against private-endpoint-only Foundry account.
+- local public host is not a valid execution surface for private Foundry matrix runs.
+
+### Foundry matrix from private VM (inside VNet) — PASS
+
+Execution surface:
+
+- VM: `vm-maffnd-runner` (private VNet path)
+- repo workspace on VM runner volume
+- docker compose backend adapter in `foundry_hosted` mode with hosted endpoint + token
+
+Result:
+
+- all 10 cases passed (`ORD-1001` through `ORD-1010`)
+- representative threads:
+  - `ORD-1001`: `9ee7c78f-1c85-41b8-b146-5936ed7e2e96`
+  - `ORD-1009`: `05d5846c-6e4c-40a9-9952-5ea7a22d67aa`
+
+Key learnings:
+
+1. Private Foundry parity/manual matrix must run from a private-network execution host (runner VM or equivalent), not from public localhost.
+2. Local parity remains useful in `maf_sdk` mode for deterministic baseline validation.
+3. For Foundry-hosted matrix runs, retain quota-safe timing (`--request-timeout 120 --timeout 120 --case-delay 10` or higher).
+
+### Rubber-duck review summary (2026-07-09)
+
+Review focus:
+
+- recent Foundry private-VNet closure commits + workflow/IaC hardening.
+
+Top findings:
+
+1. **High**: Search fallback to `eastus` while Foundry/VNet stays in `eastus2` introduces cross-region data path and latency/compliance considerations that should be explicitly documented/guarded.
+2. **Medium**: runner preflight currently treats `actions/runners` API `403` as pass; this can produce false-green preflight and delayed queued-job failures when runner is offline.
+3. **Medium**: ACR remains public (`publicNetworkAccess=Enabled`) while rest of stack is private; this is an intentionality gap for private-surface posture.
+4. **Low**: docs-only commits currently match orchestrator push paths and can trigger expensive infra runs unnecessarily.
+
+Follow-up actions captured:
+
+- document cross-region Search tradeoff at parameter/workflow level.
+- tighten preflight behavior for runner API permission failures.
+- decide and document ACR private endpoint/public access posture.
+- remove docs-only trigger from orchestrator push paths unless explicitly desired.
+
+### Rubber-duck follow-up implementation (2026-07-09)
+
+Implemented in this pass:
+
+1. Runner preflight now fails on GitHub runners API `403` instead of passing silently:
+   - `scripts/github/verify_foundry_runner_ready.sh`
+2. Orchestrator trigger scope tightened:
+   - removed docs-only path trigger from `.github/workflows/foundry-orchestrator.yml`.
+3. Orchestrator `deploy_only` runner/default behavior normalized:
+   - `runner_label`, `environment`, and smoke/telemetry/e2e flags now use same defaults as other orchestrator branches.
+4. ACR private-surface hardening:
+   - `infra/foundry-hosted/iac/main.bicep`
+   - set ACR `publicNetworkAccess` to `Disabled`.
+   - added ACR private endpoint (`groupId=registry`) and DNS zone wiring (`privatelink.azurecr.io`).
+5. Search cross-region guard/visibility:
+   - `infra/foundry-hosted/iac/main.bicep` now exposes `aiSearchTopologyWarning` output when Search region differs from deployment location.
+   - `.github/workflows/foundry-provision.yml` now emits an explicit workflow summary warning when `FOUNDRY_AI_SEARCH_LOCATION != FOUNDRY_LOCATION`.
 
 Completed in this pass:
 

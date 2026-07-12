@@ -13,7 +13,7 @@ def test_health_endpoint() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["workflow_mode"] in {"maf_sdk", "foundry_hosted"}
+    assert payload["workflow_mode"] == "maf_sdk"
     assert isinstance(payload["runtime_provider"], str)
     assert isinstance(payload["runtime_mode"], str)
     assert isinstance(payload["environment"], str)

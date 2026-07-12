@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import pytest
 from app.core.config import AppConfig
-from app.foundry.workflow import FoundryHostedWorkflow
 from app.infrastructure.events import EventBus
 from app.infrastructure.rag import NoopRAGProvider
 from app.maf.factory import create_workflow
+from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 
 
 class _MemoryStore:
@@ -42,11 +41,10 @@ class _McpTool:
         return {"source": "test", "query": query}
 
 
-def test_create_workflow_uses_foundry_hosted_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FOUNDRY_HOSTED_INVOCATIONS_URL", "https://example.test/invocations")
+def test_create_workflow_uses_order_resolution_workflow() -> None:
     workflow = create_workflow(
         config=AppConfig(
-            workflow_mode="foundry_hosted",
+            workflow_mode="maf_sdk",
             store_provider="postgres",
             rag_provider="pgvector",
             memory_provider="postgres",
@@ -57,24 +55,4 @@ def test_create_workflow_uses_foundry_hosted_adapter(monkeypatch: pytest.MonkeyP
         mcp_tool=_McpTool(),
         rag_provider=NoopRAGProvider(),
     )
-    assert isinstance(workflow, FoundryHostedWorkflow)
-
-
-def test_create_workflow_foundry_mode_requires_invocations_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("FOUNDRY_HOSTED_INVOCATIONS_URL", raising=False)
-    with pytest.raises(ValueError, match="FOUNDRY_HOSTED_INVOCATIONS_URL"):
-        create_workflow(
-            config=AppConfig(
-                workflow_mode="foundry_hosted",
-                store_provider="postgres",
-                rag_provider="pgvector",
-                memory_provider="postgres",
-            ),
-            event_bus=EventBus(),
-            memory_store=_MemoryStore(),
-            checkpoint_store=_CheckpointStore(),
-            mcp_tool=_McpTool(),
-            rag_provider=NoopRAGProvider(),
-        )
+    assert isinstance(workflow, OrderResolutionWorkflow)

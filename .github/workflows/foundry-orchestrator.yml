@@ -14,12 +14,13 @@ on:
       - scripts/github/verify_foundry_runner_ready.sh
       - scripts/github/foundry_hosted_e2e.sh
       - Makefile
+      - backend/agent.yaml
+      - backend/foundry/main.py
+      - backend/requirements.txt
       - infra/foundry-hosted/azure.yaml
       - infra/foundry-hosted/iac/**
-      - infra/foundry-hosted/agent/**
       - infra/foundry-hosted/runtime/**
       - infra/foundry-hosted/README.md
-      - docs/design/issues-changes-fixes.md
   workflow_dispatch:
     inputs:
       runner_label:
@@ -97,9 +98,9 @@ jobs:
     needs: [runner_preflight]
     uses: ./.github/workflows/foundry-deploy.yml
     with:
-      runner_label: ${{ github.event.inputs.runner_label }}
-      environment: ${{ github.event.inputs.environment }}
-      run_smoke: ${{ github.event.inputs.run_smoke }}
-      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate }}
-      run_e2e: ${{ github.event.inputs.run_e2e }}
+      runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+      environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
+      run_smoke: ${{ github.event.inputs.run_smoke || 'true' }}
+      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'true' }}
+      run_e2e: ${{ github.event.inputs.run_e2e || 'true' }}
     secrets: inherit

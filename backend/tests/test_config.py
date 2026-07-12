@@ -24,20 +24,20 @@ def test_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.memory_provider == "postgres"
 
 
-def test_config_uses_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_config_uses_env_for_store_rag_and_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKFLOW_MODE", "foundry_hosted")
     monkeypatch.setenv("STORE_PROVIDER", "azure_postgres")
     monkeypatch.setenv("RAG_PROVIDER", "foundry_iq")
     monkeypatch.setenv("MEMORY_PROVIDER", "foundry_memory")
 
     cfg = get_config()
-    assert cfg.workflow_mode == "foundry_hosted"
+    assert cfg.workflow_mode == "maf_sdk"
     assert cfg.store_provider == "azure_postgres"
     assert cfg.rag_provider == "foundry_iq"
     assert cfg.memory_provider == "foundry_memory"
 
 
-def test_config_rejects_invalid_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_config_ignores_workflow_mode_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKFLOW_MODE", "invalid-mode")
-    with pytest.raises(ValueError, match="Unsupported WORKFLOW_MODE"):
-        get_config()
+    cfg = get_config()
+    assert cfg.workflow_mode == "maf_sdk"

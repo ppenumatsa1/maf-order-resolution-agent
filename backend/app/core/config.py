@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
 
-WorkflowMode = Literal["maf_sdk", "foundry_hosted"]
+WorkflowMode = Literal["maf_sdk"]
 StoreProvider = Literal["postgres", "azure_postgres", "app_db"]
 RagProvider = Literal["pgvector", "azure_ai_search", "foundry_vector", "foundry_iq"]
 MemoryProvider = Literal["postgres", "foundry_memory"]
@@ -21,13 +21,6 @@ class AppConfig:
 
 def _normalized(name: str, default: str) -> str:
     return (os.getenv(name, default) or default).strip().lower()
-
-
-def _workflow_mode() -> WorkflowMode:
-    value = _normalized("WORKFLOW_MODE", "maf_sdk")
-    if value in {"maf_sdk", "foundry_hosted"}:
-        return value
-    raise ValueError(f"Unsupported WORKFLOW_MODE: {value}")
 
 
 def _store_provider() -> StoreProvider:
@@ -54,7 +47,7 @@ def _memory_provider() -> MemoryProvider:
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     return AppConfig(
-        workflow_mode=_workflow_mode(),
+        workflow_mode="maf_sdk",
         store_provider=_store_provider(),
         rag_provider=_rag_provider(),
         memory_provider=_memory_provider(),

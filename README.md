@@ -14,9 +14,9 @@ Primary scenarios include delayed delivery, damaged item, and policy-driven comp
 
 | Stage                | Status      | Runtime path                                                                                                 |
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| Local MAF            | Implemented | WORKFLOW_MODE=maf_sdk                                                                                        |
+| Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                      |
-| Foundry hosted agent | In progress | Hosted invocations/responses endpoints are deployable and testable; fast three-target parity gate is enabled |
+| Foundry hosted agent | In progress | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
 
 ## Quick Start (Local)
 
@@ -32,7 +32,6 @@ make bootstrap
 - Core local mode:
 
 ```bash
-WORKFLOW_MODE=maf_sdk
 STORE_PROVIDER=postgres
 RAG_PROVIDER=pgvector
 MEMORY_PROVIDER=postgres
@@ -112,11 +111,11 @@ Verify and invoke:
 
 ```bash
 azd ai agent show order-resolution-hosted --output json
-azd ai agent invoke order-resolution-hosted '{"message":"health check"}' --protocol invocations --no-prompt
-azd ai agent invoke order-resolution-hosted '{"input":"health check"}' --protocol responses --no-prompt
+azd ai agent invoke order-resolution-hosted "Resolve delayed order ORD-1001" --protocol responses --conversation-id c1 --no-prompt
+azd ai agent invoke order-resolution-hosted "Why was that resolution selected?" --protocol responses --conversation-id c1 --no-prompt
 ```
 
-Note: when multiple protocols are declared, pass --protocol explicitly.
+For high-risk requests, continue the same conversation with `Approve` or `Reject`.
 
 ## Environment Model Configuration
 
@@ -128,20 +127,18 @@ For app-hosted model client mode (maf_sdk + foundry_models), model/deployment co
 
 Current default examples in checked-in templates use gpt-4.1-mini for chat deployment.
 
-## Foundry-Hosted Wiring (Local Adapter Mode)
+## Foundry-Hosted Wiring
 
-When using WORKFLOW_MODE=foundry_hosted in local backend adapter mode, configure:
+The hosted agent package is rooted at `backend/` and uses:
 
-- FOUNDRY_HOSTED_INVOCATIONS_URL (required)
-- FOUNDRY_HOSTED_PROTOCOL=invocations|dual|responses
-- FOUNDRY_HOSTED_CONVERSATION_SHADOW_PROVIDER=none|responses (optional)
-- FOUNDRY_HOSTED_RESPONSES_URL (optional)
-- FOUNDRY_HOSTED_API_KEY (optional if Entra token flow is available)
+- `backend/agent.yaml` (`protocol: responses`, `version: 2.0.0`)
+- `backend/foundry/main.py` (thin Responses host around the shared workflow)
+- `backend/.foundry/agent-metadata.yaml` and `backend/eval.yaml` for hosted eval metadata
 
 ## Troubleshooting
 
 - If parity fails with 429 session_quota_exceeded from Foundry, reduce test concurrency, add case delays, or clear/raise session quota.
-- If hosted invokes fail in dual protocol mode, verify protocol-specific endpoint and pass --protocol on azd ai agent invoke.
+- If hosted responses fail, verify `backend/agent.yaml` protocol and pass `--protocol responses` on `azd ai agent invoke`.
 
 ## Documentation Map
 

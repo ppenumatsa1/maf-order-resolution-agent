@@ -90,6 +90,20 @@ class OrderResolutionWorkflow:
 
     async def _start_inner(self, context: WorkflowContext) -> None:
         self.memory_store.append_message(context.thread_id, "user", context.user_message)
+        if self._is_explanation_request(context.user_message):
+            explanation = self._build_explanation(context.thread_id)
+            await self._emit(
+                context.thread_id,
+                event_types.WORKFLOW_STAGE,
+                {"agent": "explanation", "status": "completed"},
+            )
+            await self._emit(
+                context.thread_id,
+                event_types.WORKFLOW_OUTPUT,
+                {"message": explanation, "status": "completed"},
+            )
+            self.memory_store.append_message(context.thread_id, "assistant", explanation)
+            return
         await self._emit(
             context.thread_id,
             event_types.WORKFLOW_STAGE,
@@ -507,3 +521,23 @@ class OrderResolutionWorkflow:
             },
         )
         return result
+
+    @staticmethod
+    def _is_explanation_request(message: str) -> bool:
+        lowered = message.lower()
+        return "why" in lowered and "resolution" in lowered
+
+    def _build_explanation(self, thread_id: str) -> str:
+        messages = self.memory_store.get_messages(thread_id)
+        for item in reversed(messages[:-1]):
+            role = str(item.get("role", "")).strip().lower()
+            content = str(item.get("content", "")).strip()
+            if role == "assistant" and content:
+                return (
+                    "The resolution was selected from order status and policy checks. "
+                    f"Previous result: {content}"
+                )
+        return (
+            "The resolution is selected from order status, policy evidence, "
+            "and HITL thresholds for high-risk or damaged-item cases."
+        )

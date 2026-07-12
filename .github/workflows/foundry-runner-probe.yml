@@ -64,7 +64,8 @@ jobs:
                         echo "GitHub OIDC token env vars are missing; cannot authenticate."
                         exit 1
                       fi
-                      federated_token="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
+                      oidc_auth_header="$(printf 'Authorization: bearer %s' "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")"
+                      federated_token="$(curl -fsSL -H "$oidc_auth_header" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
                       if [[ -z "$federated_token" || "$federated_token" == "null" ]]; then
                         echo "Failed to acquire GitHub OIDC federated token."
                         exit 1
@@ -141,7 +142,7 @@ jobs:
                   payload="$(jq -n --arg input "$probe_message" '{input: $input}')"
                   http_code="$(curl -sS \
                     -X POST "$responses_url" \
-                    -H "Authorization: Bearer $token" \
+                    --oauth2-bearer "$token" \
                     -H "Content-Type: application/json" \
                     -H "Accept: application/json" \
                     --data "$payload" \

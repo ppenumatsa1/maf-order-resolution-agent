@@ -403,8 +403,12 @@ jobs:
                     echo "DATABASE_URL is missing from runtime env files."
                     exit 1
                   fi
-                  src_host="$(DB_LINE="$src_line" python -c 'import os, urllib.parse; line = os.environ["DB_LINE"]; value = line.split("=", 1)[1]; print(urllib.parse.urlparse(value).hostname or "")')"
-                  staged_host="$(DB_LINE="$staged_line" python -c 'import os, urllib.parse; line = os.environ["DB_LINE"]; value = line.split("=", 1)[1]; print(urllib.parse.urlparse(value).hostname or "")')"
+                  src_value="${src_line#DATABASE_URL=}"
+                  staged_value="${staged_line#DATABASE_URL=}"
+                  src_hostport="${src_value#*@}"
+                  staged_hostport="${staged_value#*@}"
+                  src_host="${src_hostport%%[:/?]*}"
+                  staged_host="${staged_hostport%%[:/?]*}"
                   echo "Runtime DATABASE_URL host: ${src_host:-missing}"
                   echo "Staged DATABASE_URL host: ${staged_host:-missing}"
                   if [[ "$src_host" != "$staged_host" ]]; then

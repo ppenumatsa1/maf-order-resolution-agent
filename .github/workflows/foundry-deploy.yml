@@ -188,11 +188,24 @@ jobs:
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
               run: |
                   set -euo pipefail
-                  THREAD_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
-                  MESSAGE="ORD-1009 delayed order telemetry gate ${THREAD_ID}"
+                  MESSAGE="ORD-1009 delayed order telemetry gate"
+                  raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt)"
+                  payload="$(printf '%s\n' "$raw" | awk '
+                    found { print; next }
+                    /^\{/ {
+                      found = 1
+                      print
+                    }
+                  ')"
+                  THREAD_ID="$(echo "$payload" | jq -r '.thread_id // empty')"
+                  if [[ -z "$THREAD_ID" ]]; then
+                    echo "Could not determine smoke thread_id from responses output."
+                    echo "$raw"
+                    exit 1
+                  fi
                   echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
                   echo "FOUNDRY_SMOKE_MESSAGE=$MESSAGE" >> "$GITHUB_ENV"
-                  make foundry-smoke SMOKE_THREAD_ID="$THREAD_ID" SMOKE_MESSAGE="$MESSAGE"
+                  echo "Responses smoke thread id: $THREAD_ID"
 
             - name: Foundry hosted E2E regression
               if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'true') == 'true' }}

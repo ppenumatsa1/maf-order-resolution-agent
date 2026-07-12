@@ -12,21 +12,16 @@ require_bin azd
 require_bin jq
 
 BASE_ID="${1:-foundry-e2e-$(date +%s)}"
-new_conversation_id() {
-  python3 - <<'PY'
-import uuid
-print(str(uuid.uuid4()))
-PY
-}
-
-C1="$(new_conversation_id)"
-HIGH_RISK="$(new_conversation_id)"
 
 invoke_responses() {
-  local conversation_id="$1"
-  local message="$2"
+  local conversation_id="${1:-}"
+  local message="${2:-}"
   local raw
-  raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt)"
+  if [[ -n "$conversation_id" ]]; then
+    raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt)"
+  else
+    raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt)"
+  fi
   printf '%s\n' "$raw" | awk '
     found { print; next }
     /^\{/ {
@@ -46,20 +41,32 @@ assert_json_field() {
   }
 }
 
-first_turn="$(invoke_responses "$C1" "Resolve delayed order ORD-1001")"
-assert_json_field "$first_turn" '.thread_id == "'"$C1"'"'
+first_turn="$(invoke_responses "" "Resolve delayed order ORD-1001")"
+assert_json_field "$first_turn" '.thread_id != null and .thread_id != ""'
 assert_json_field "$first_turn" '.status == "completed"'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("tool.call") != null'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("workflow.output") != null'
+C1="$(echo "$first_turn" | jq -r '.thread_id')"
+if [[ -z "$C1" || "$C1" == "null" ]]; then
+  echo "Missing thread_id in first responses turn"
+  echo "$first_turn"
+  exit 1
+fi
 
 second_turn="$(invoke_responses "$C1" "Why was that resolution selected?")"
 assert_json_field "$second_turn" '.thread_id == "'"$C1"'"'
 assert_json_field "$second_turn" '.status == "completed"'
 assert_json_field "$second_turn" '.message | test("resolution was selected|Resolution complete"; "i")'
 
-high_risk_start="$(invoke_responses "$HIGH_RISK" "Resolve delayed order ORD-1009")"
+high_risk_start="$(invoke_responses "" "Resolve delayed order ORD-1009")"
 assert_json_field "$high_risk_start" '.status == "waiting_approval"'
 assert_json_field "$high_risk_start" '(.events // []) | map(.type) | index("hitl.request") != null'
+HIGH_RISK="$(echo "$high_risk_start" | jq -r '.thread_id')"
+if [[ -z "$HIGH_RISK" || "$HIGH_RISK" == "null" ]]; then
+  echo "Missing thread_id in high-risk responses turn"
+  echo "$high_risk_start"
+  exit 1
+fi
 
 high_risk_resume="$(invoke_responses "$HIGH_RISK" "Approve")"
 assert_json_field "$high_risk_resume" '.status == "completed"'

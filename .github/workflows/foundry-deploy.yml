@@ -339,10 +339,33 @@ jobs:
                   fi
 
             - name: Prepare runtime env file for Foundry
+              env:
+                  FOUNDRY_DATABASE_URL: ${{ secrets.FOUNDRY_DATABASE_URL }}
               run: |
                   set -euo pipefail
                   mkdir -p infra/foundry-hosted/runtime
                   printf '%s\n' "${{ secrets.FOUNDRY_RUNTIME_ENV }}" > infra/foundry-hosted/runtime/.env
+                  if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
+                    if grep -q '^DATABASE_URL=' infra/foundry-hosted/runtime/.env; then
+                      awk -v value="$FOUNDRY_DATABASE_URL" '
+                        BEGIN { updated = 0 }
+                        /^DATABASE_URL=/ {
+                          print "DATABASE_URL=" value
+                          updated = 1
+                          next
+                        }
+                        { print }
+                        END {
+                          if (updated == 0) {
+                            print "DATABASE_URL=" value
+                          }
+                        }
+                      ' infra/foundry-hosted/runtime/.env > infra/foundry-hosted/runtime/.env.tmp
+                      mv infra/foundry-hosted/runtime/.env.tmp infra/foundry-hosted/runtime/.env
+                    else
+                      printf 'DATABASE_URL=%s\n' "${FOUNDRY_DATABASE_URL}" >> infra/foundry-hosted/runtime/.env
+                    fi
+                  fi
                   test -s infra/foundry-hosted/runtime/.env
 
             - name: Select or create azd environment

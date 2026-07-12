@@ -474,11 +474,23 @@ jobs:
                     fi
                     echo "Smoke invoke failed (rc=$rc)."
                     echo "$raw"
+                    if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
+                      echo "Collecting hosted agent monitor logs for readiness failure diagnostics..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
+                      set -e
+                    fi
                     exit $rc
                   done
                   if [[ $rc -ne 0 ]]; then
                     echo "Smoke invoke failed after retries."
                     echo "$raw"
+                    if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
+                      echo "Collecting hosted agent monitor logs after retries exhausted..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
+                      set -e
+                    fi
                     exit $rc
                   fi
                   payload="$(printf '%s\n' "$raw" | awk '

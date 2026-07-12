@@ -10,7 +10,7 @@ azure-monitor-opentelemetry>=1.8.8
 opentelemetry-instrumentation-fastapi>=0.47b0
 psycopg[binary]>=3.2.0
 psycopg-pool>=3.2.0
-agent-framework>=1.8.0
+agent-framework-core[all]==1.8.0
 agent-framework-foundry>=1.8.0
 azure-ai-agentserver-responses>=1.0.0b7
 azure-identity>=1.25.0

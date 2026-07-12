@@ -393,6 +393,7 @@ jobs:
                   set -euo pipefail
                   mkdir -p infra/foundry-hosted/agent/runtime
                   cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/runtime/.env
+                  cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/app/runtime.env
 
             - name: Verify staged runtime DATABASE_URL
               run: |

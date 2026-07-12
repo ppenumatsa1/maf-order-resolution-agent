@@ -12,10 +12,12 @@ DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/maf_workfl
 
 
 RUNTIME_ENV_PATH = Path(__file__).resolve().parents[2] / "runtime" / ".env"
+PACKAGED_RUNTIME_ENV_PATH = Path(__file__).resolve().parents[1] / "runtime.env"
 
-# Foundry-hosted packaging includes backend/runtime/.env; load it so DATABASE_URL
-# is available when host-level env injection is not present.
+# Foundry-hosted deploys may not project all azd env values into process env.
+# Load runtime env from either backend/runtime/.env or packaged app/runtime.env.
 load_dotenv(RUNTIME_ENV_PATH, override=False)
+load_dotenv(PACKAGED_RUNTIME_ENV_PATH, override=False)
 
 
 class PostgresDatabase:

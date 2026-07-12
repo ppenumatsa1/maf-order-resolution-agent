@@ -388,6 +388,12 @@ jobs:
             - name: Sync env into azd and runtime mirrors
               run: make foundry-sync-env
 
+            - name: Refresh staged hosted runtime env
+              run: |
+                  set -euo pipefail
+                  mkdir -p infra/foundry-hosted/agent/runtime
+                  cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/runtime/.env
+
             - name: Deploy Foundry hosted agent
               run: |
                   set -euo pipefail

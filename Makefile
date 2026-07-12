@@ -172,7 +172,7 @@ foundry-provision:
 	cd infra/foundry-hosted && azd provision --no-prompt
 
 foundry-deploy:
-	cd infra/foundry-hosted && azd deploy order-resolution-hosted --no-prompt
+	cd infra/foundry-hosted && azd deploy order-resolution-hosted --no-prompt --timeout "$${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}"
 
 foundry-sync-env:
 	@set -euo pipefail; \

@@ -182,7 +182,46 @@ jobs:
               run: make foundry-sync-env
 
             - name: Deploy Foundry hosted agent
-              run: make foundry-deploy
+              run: |
+                  set -euo pipefail
+                  timeout_seconds="${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}"
+                  max_attempts="${FOUNDRY_DEPLOY_MAX_ATTEMPTS:-3}"
+                  for attempt in $(seq 1 "$max_attempts"); do
+                    echo "Deploy attempt $attempt/$max_attempts (timeout=${timeout_seconds}s)"
+                    set +e
+                    deploy_output="$(FOUNDRY_DEPLOY_TIMEOUT_SECONDS="$timeout_seconds" make foundry-deploy 2>&1)"
+                    rc=$?
+                    set -e
+                    printf '%s\n' "$deploy_output"
+                    if [[ $rc -eq 0 ]]; then
+                      exit 0
+                    fi
+                    if echo "$deploy_output" | grep -Eq 'agent deployment timed out \(last status: creating\)'; then
+                      echo "Deploy timed out waiting for agent activation; checking current agent status before retry."
+                      for status_attempt in $(seq 1 20); do
+                        set +e
+                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null)"
+                        status_rc=$?
+                        set -e
+                        status="$(printf '%s\n' "$status_json" | jq -r '.status // empty' | tr '[:upper:]' '[:lower:]')"
+                        echo "agent_status=${status:-unknown} (check $status_attempt/20)"
+                        if [[ $status_rc -eq 0 ]] && [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
+                          echo "Agent reported active after timeout; proceeding."
+                          exit 0
+                        fi
+                        sleep 15
+                      done
+                      if [[ "$attempt" -lt "$max_attempts" ]]; then
+                        echo "Retrying deploy after timeout."
+                        sleep 30
+                        continue
+                      fi
+                    fi
+                    echo "Deploy failed with a non-retriable error."
+                    exit "$rc"
+                  done
+                  echo "Deploy failed after retries."
+                  exit 1
 
             - name: Smoke test Foundry hosted agent invoke
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}

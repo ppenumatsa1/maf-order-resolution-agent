@@ -229,7 +229,11 @@ jobs:
                   set -euo pipefail
                   MESSAGE="ORD-1009 delayed order telemetry gate"
                   raw=""
-                  for attempt in $(seq 1 20); do
+                  rc=1
+                  max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-60}"
+                  retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-15}"
+                  endpoint_refreshed="false"
+                  for attempt in $(seq 1 "$max_attempts"); do
                     set +e
                     raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
                     rc=$?
@@ -238,8 +242,20 @@ jobs:
                       break
                     fi
                     if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
-                      echo "Smoke invoke transient failure (attempt $attempt/20). Retrying..."
-                      sleep 15
+                      echo "Smoke invoke transient failure (attempt $attempt/$max_attempts). Retrying..."
+                      if (( attempt % 5 == 0 )); then
+                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
+                        status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
+                        echo "Agent status snapshot: $status_summary"
+                      fi
+                      if [[ "$endpoint_refreshed" == "false" ]] && [[ "$attempt" -ge 20 ]]; then
+                        echo "Refreshing agent endpoint configuration after sustained transient responses errors."
+                        set +e
+                        (cd infra/foundry-hosted && azd ai agent endpoint update order-resolution-hosted --no-prompt)
+                        set -e
+                        endpoint_refreshed="true"
+                      fi
+                      sleep "$retry_delay_seconds"
                       continue
                     fi
                     echo "Smoke invoke failed (rc=$rc)."

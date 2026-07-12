@@ -189,7 +189,15 @@ jobs:
               run: |
                   set -euo pipefail
                   MESSAGE="ORD-1009 delayed order telemetry gate"
+                  set +e
                   raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
+                  rc=$?
+                  set -e
+                  if [[ $rc -ne 0 ]]; then
+                    echo "Smoke invoke failed (rc=$rc)."
+                    echo "$raw"
+                    exit $rc
+                  fi
                   payload="$(printf '%s\n' "$raw" | awk '
                     found { print; next }
                     /^\{/ {

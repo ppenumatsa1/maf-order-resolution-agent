@@ -17,10 +17,19 @@ invoke_responses() {
   local conversation_id="${1:-}"
   local message="${2:-}"
   local raw
+  local rc
+  set +e
   if [[ -n "$conversation_id" ]]; then
     raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt 2>&1)"
   else
     raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+  fi
+  rc=$?
+  set -e
+  if [[ $rc -ne 0 ]]; then
+    echo "azd invoke failed (rc=$rc, conversation_id=${conversation_id:-<new>}):"
+    echo "$raw"
+    exit $rc
   fi
   printf '%s\n' "$raw" | awk '
     found { print; next }

@@ -61,6 +61,17 @@ jobs:
             run:
                 shell: bash
         steps:
+            - name: Reset self-hosted workspace permissions
+              run: |
+                  set -euo pipefail
+                  workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+                  mkdir -p "$workspace"
+                  if command -v sudo >/dev/null 2>&1; then
+                    sudo chown -R "$(id -u):$(id -g)" "$workspace" || true
+                  fi
+                  chmod -R u+rwX "$workspace" || true
+                  find "$workspace" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+
             - uses: actions/checkout@v4
 
             - name: Azure and AZD login

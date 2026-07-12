@@ -1,0 +1,174 @@
+name: Foundry Runner Probe
+
+on:
+    workflow_dispatch:
+        inputs:
+            runner_label:
+                description: Self-hosted runner label for private Foundry access
+                required: false
+                default: foundry-private
+            environment:
+                description: GitHub environment name
+                required: false
+                default: foundry-private-env
+            probe_message:
+                description: Message sent to hosted responses endpoint
+                required: false
+                default: Resolve delayed order ORD-1001
+            agent_name:
+                description: Hosted agent name
+                required: false
+                default: order-resolution-hosted
+            responses_url_override:
+                description: Optional full responses endpoint URL override
+                required: false
+                default: ""
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+    runner_probe:
+        name: Probe hosted responses from runner
+        runs-on:
+            - self-hosted
+            - ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+        environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Configure writable CLI paths
+              run: |
+                  set -euo pipefail
+                  cfg_root="${GITHUB_WORKSPACE}/.runner-config"
+                  mkdir -p "${cfg_root}/.home" "${cfg_root}/.azure" "${cfg_root}/.azd" "${cfg_root}/.tmp"
+                  echo "HOME=${cfg_root}/.home" >> "$GITHUB_ENV"
+                  echo "AZURE_CONFIG_DIR=${cfg_root}/.azure" >> "$GITHUB_ENV"
+                  echo "AZD_CONFIG_DIR=${cfg_root}/.azd" >> "$GITHUB_ENV"
+                  echo "TMPDIR=${cfg_root}/.tmp" >> "$GITHUB_ENV"
+
+            - name: Azure login (same vars/secrets pattern as deploy)
+              env:
+                  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+              run: |
+                  set -euo pipefail
+                  auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
+                  if [[ "$auth_mode" == "service-principal" ]]; then
+                    if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
+                      echo "AZURE_CLIENT_SECRET is not set; using GitHub OIDC federated credential flow."
+                      if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+                        echo "GitHub OIDC token env vars are missing; cannot authenticate."
+                        exit 1
+                      fi
+                      federated_token="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
+                      if [[ -z "$federated_token" || "$federated_token" == "null" ]]; then
+                        echo "Failed to acquire GitHub OIDC federated token."
+                        exit 1
+                      fi
+                      az login --service-principal \
+                        --username "${{ vars.AZURE_CLIENT_ID }}" \
+                        --tenant "${{ vars.AZURE_TENANT_ID }}" \
+                        --federated-token "$federated_token"
+                      if command -v azd >/dev/null 2>&1; then
+                        azd auth login \
+                          --federated-credential-provider github \
+                          --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                          --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                          --no-prompt
+                      fi
+                    else
+                      az login --service-principal \
+                        --username "${{ vars.AZURE_CLIENT_ID }}" \
+                        --password "$AZURE_CLIENT_SECRET" \
+                        --tenant "${{ vars.AZURE_TENANT_ID }}"
+                      if command -v azd >/dev/null 2>&1; then
+                        azd auth login \
+                          --client-id "${{ vars.AZURE_CLIENT_ID }}" \
+                          --client-secret "$AZURE_CLIENT_SECRET" \
+                          --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
+                          --no-prompt
+                      fi
+                    fi
+                  else
+                    az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
+                    if command -v azd >/dev/null 2>&1; then
+                      azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
+                    fi
+                  fi
+                  az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+            - name: Optional agent status snapshot (azd)
+              continue-on-error: true
+              run: |
+                  set -euo pipefail
+                  if ! command -v azd >/dev/null 2>&1; then
+                    echo "azd not installed on runner; skipping agent show."
+                    exit 0
+                  fi
+                  if [[ ! -d infra/foundry-hosted ]]; then
+                    echo "infra/foundry-hosted not found; skipping agent show."
+                    exit 0
+                  fi
+                  status_json="$(cd infra/foundry-hosted && azd ai agent show "${{ github.event.inputs.agent_name || 'order-resolution-hosted' }}" --output json --no-prompt 2>&1 || true)"
+                  echo "$status_json"
+                  status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"')"
+                  version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // fromjson.resolvedVersion // empty) catch empty' | tr -d '"')"
+                  echo "Agent status snapshot: status=${status:-unknown} version=${version:-unknown}"
+
+            - name: Curl hosted responses endpoint
+              run: |
+                  set -euo pipefail
+                  probe_dir="${GITHUB_WORKSPACE}/.probe"
+                  mkdir -p "$probe_dir"
+                  headers_file="${probe_dir}/headers.txt"
+                  body_file="${probe_dir}/body.txt"
+                  responses_url="${{ github.event.inputs.responses_url_override }}"
+                  if [[ -z "$responses_url" ]]; then
+                    project_endpoint="${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
+                    if [[ -z "$project_endpoint" ]]; then
+                      echo "FOUNDRY_PROJECT_ENDPOINT variable is required."
+                      exit 1
+                    fi
+                    agent_name="${{ github.event.inputs.agent_name || 'order-resolution-hosted' }}"
+                    responses_url="${project_endpoint%/}/agents/${agent_name}/protocols/openai/responses?api-version=v1"
+                  fi
+                  probe_message="${{ github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}"
+                  token="$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)"
+                  payload="$(jq -n --arg input "$probe_message" '{input: $input}')"
+                  http_code="$(curl -sS \
+                    -X POST "$responses_url" \
+                    -H "Authorization: Bearer $token" \
+                    -H "Content-Type: application/json" \
+                    -H "Accept: application/json" \
+                    --data "$payload" \
+                    -D "$headers_file" \
+                    -o "$body_file" \
+                    -w "%{http_code}")"
+                  apim_request_id="$(awk -F': ' 'BEGIN{IGNORECASE=1} /^apim-request-id:/ {sub(/\r$/, "", $2); print $2; exit}' "$headers_file")"
+                  sanitized_body="$(sed -E 's/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/[REDACTED_JWT]/g' "$body_file" | head -c 12000)"
+                  echo "Responses endpoint URL: $responses_url"
+                  echo "HTTP status code: $http_code"
+                  echo "apim-request-id: ${apim_request_id:-<missing>}"
+                  echo "----- response headers -----"
+                  cat "$headers_file"
+                  echo "----- response body (sanitized) -----"
+                  printf '%s\n' "$sanitized_body"
+                  {
+                    echo "## Runner probe result"
+                    echo "- URL: \`$responses_url\`"
+                    echo "- HTTP: \`$http_code\`"
+                    echo "- apim-request-id: \`${apim_request_id:-missing}\`"
+                    echo ""
+                    echo "### Body (sanitized, truncated)"
+                    echo '```json'
+                    printf '%s\n' "$sanitized_body"
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+                    echo "::error::Probe failed with HTTP $http_code"
+                    exit 1
+                  fi

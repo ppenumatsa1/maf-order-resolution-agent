@@ -189,7 +189,7 @@ jobs:
               run: |
                   set -euo pipefail
                   MESSAGE="ORD-1009 delayed order telemetry gate"
-                  raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt)"
+                  raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
                   payload="$(printf '%s\n' "$raw" | awk '
                     found { print; next }
                     /^\{/ {
@@ -197,7 +197,7 @@ jobs:
                       print
                     }
                   ')"
-                  THREAD_ID="$(echo "$payload" | jq -r '.thread_id // empty')"
+                  THREAD_ID="$(echo "$payload" | jq -r '[.. | objects | (.thread_id? // .conversation_id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty')"
                   if [[ -z "$THREAD_ID" ]]; then
                     echo "Could not determine smoke thread_id from responses output."
                     echo "$raw"

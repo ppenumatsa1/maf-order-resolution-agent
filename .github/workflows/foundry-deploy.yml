@@ -252,6 +252,13 @@ jobs:
                   rc=1
                   max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-60}"
                   retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-15}"
+                  endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-5}"
+                  if (( endpoint_refresh_after_attempt >= max_attempts )); then
+                    endpoint_refresh_after_attempt=$((max_attempts - 1))
+                  fi
+                  if (( endpoint_refresh_after_attempt < 1 )); then
+                    endpoint_refresh_after_attempt=1
+                  fi
                   endpoint_refreshed="false"
                   for attempt in $(seq 1 "$max_attempts"); do
                     set +e
@@ -268,7 +275,7 @@ jobs:
                         status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
                         echo "Agent status snapshot: $status_summary"
                       fi
-                      if [[ "$endpoint_refreshed" == "false" ]] && [[ "$attempt" -ge 20 ]]; then
+                      if [[ "$endpoint_refreshed" == "false" ]] && (( attempt >= endpoint_refresh_after_attempt )) && (( attempt < max_attempts )); then
                         echo "Refreshing agent endpoint configuration after sustained transient responses errors."
                         set +e
                         (cd infra/foundry-hosted && azd ai agent endpoint update order-resolution-hosted --no-prompt)

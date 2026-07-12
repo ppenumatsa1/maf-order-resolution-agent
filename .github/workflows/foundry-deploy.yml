@@ -346,6 +346,11 @@ jobs:
                   mkdir -p infra/foundry-hosted/runtime
                   printf '%s\n' "${{ secrets.FOUNDRY_RUNTIME_ENV }}" > infra/foundry-hosted/runtime/.env
                   if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
+                    echo "FOUNDRY_DATABASE_URL secret detected for deploy runtime env."
+                  else
+                    echo "FOUNDRY_DATABASE_URL secret is not set in this environment."
+                  fi
+                  if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
                     if grep -q '^DATABASE_URL=' infra/foundry-hosted/runtime/.env; then
                       awk -v value="$FOUNDRY_DATABASE_URL" '
                         BEGIN { updated = 0 }

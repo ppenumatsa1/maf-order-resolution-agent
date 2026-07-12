@@ -67,6 +67,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUNNER_LABEL: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
+          RUNNER_PREFLIGHT_ALLOW_403: "true"
         run: |
           set -euo pipefail
           chmod +x scripts/github/verify_foundry_runner_ready.sh

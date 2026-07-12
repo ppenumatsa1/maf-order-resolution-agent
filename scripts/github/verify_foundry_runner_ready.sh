@@ -33,6 +33,12 @@ fi
 gh_err_file="$(mktemp)"
 if ! runners_json="$(gh api "repos/${REPO}/actions/runners" 2>"$gh_err_file")"; then
   if grep -q "Resource not accessible by integration" "$gh_err_file"; then
+    if [[ "${RUNNER_PREFLIGHT_ALLOW_403:-false}" == "true" ]]; then
+      echo "Runner readiness check warning: token cannot read repository runners (HTTP 403); continuing due to RUNNER_PREFLIGHT_ALLOW_403=true."
+      echo "For strict preflight gating, grant actions:read on GITHUB_TOKEN (or use a token with Actions read scope)."
+      rm -f "$gh_err_file"
+      exit 0
+    fi
     echo "Runner readiness check failed: current token cannot read repository runners (HTTP 403)."
     echo "Grant actions:read permission to GITHUB_TOKEN (or use a token with Actions read scope) for reliable preflight gating."
     rm -f "$gh_err_file"

@@ -190,7 +190,7 @@ jobs:
                       exit 1
                     fi
                     agent_name="${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}"
-                    responses_url="${project_endpoint%/}/agents/${agent_name}/protocols/openai/responses?api-version=v1"
+                    responses_url="${project_endpoint%/}/agents/${agent_name}/endpoint/protocols/openai/responses?api-version=v1"
                   fi
                   probe_message="${{ inputs.probe_message || github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}"
                   token="$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)"

@@ -74,6 +74,14 @@ jobs:
 
             - uses: actions/checkout@v4
 
+            - name: Stage hosted agent project from backend
+              run: |
+                  set -euo pipefail
+                  rm -rf infra/foundry-hosted/agent
+                  mkdir -p infra/foundry-hosted/agent
+                  cp -a backend/. infra/foundry-hosted/agent/
+                  rm -rf infra/foundry-hosted/agent/.venv infra/foundry-hosted/agent/tests
+
             - name: Azure and AZD login
               env:
                   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}

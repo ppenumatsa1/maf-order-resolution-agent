@@ -188,7 +188,11 @@ jobs:
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
               run: |
                   set -euo pipefail
-                  THREAD_ID="foundry-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+                  THREAD_ID="$(python3 - <<'PY'
+import uuid
+print(str(uuid.uuid4()))
+PY
+)"
                   MESSAGE="ORD-1009 delayed order telemetry gate ${THREAD_ID}"
                   echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
                   echo "FOUNDRY_SMOKE_MESSAGE=$MESSAGE" >> "$GITHUB_ENV"

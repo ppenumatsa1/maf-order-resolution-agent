@@ -198,7 +198,11 @@ foundry-sync-env:
 	done < runtime/.env
 
 foundry-smoke:
-	cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --conversation-id "$${SMOKE_THREAD_ID:-foundry-smoke}" --no-prompt
+	@if [[ -n "$${SMOKE_THREAD_ID:-}" ]]; then \
+		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --conversation-id "$${SMOKE_THREAD_ID}" --no-prompt; \
+	else \
+		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --no-prompt; \
+	fi
 
 foundry-access-path:
 	cd infra/foundry-hosted && az deployment group create \

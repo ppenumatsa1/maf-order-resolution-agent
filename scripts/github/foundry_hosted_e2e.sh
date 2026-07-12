@@ -12,8 +12,15 @@ require_bin azd
 require_bin jq
 
 BASE_ID="${1:-foundry-e2e-$(date +%s)}"
-C1="${BASE_ID}-c1"
-HIGH_RISK="${BASE_ID}-high"
+new_conversation_id() {
+  python3 - <<'PY'
+import uuid
+print(str(uuid.uuid4()))
+PY
+}
+
+C1="$(new_conversation_id)"
+HIGH_RISK="$(new_conversation_id)"
 
 invoke_responses() {
   local conversation_id="$1"
@@ -59,4 +66,4 @@ assert_json_field "$high_risk_resume" '.status == "completed"'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK}"
+echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK} (base=${BASE_ID})"

@@ -723,7 +723,7 @@ module cosmosContainerRoleAssignments './modules/cosmos-container-role-assignmen
 }
 
 var foundryProjectEndpoint = 'https://${effectiveFoundryAccountName}.services.ai.azure.com/api/projects/${foundryProjectName}'
-var foundryHostedResponsesUrl = '${foundryProjectEndpoint}/agents/${hostedAgentName}/endpoint/protocols/openai/responses?api-version=v1'
+var foundryHostedResponsesUrl = '${foundryProjectEndpoint}/agents/${hostedAgentName}/endpoint/protocols/openai/responses?api-version=1.0'
 var isCrossRegionAiSearch = toLower(effectiveAiSearchLocation) != toLower(location)
 
 output foundryAccountName string = foundryAccount.name

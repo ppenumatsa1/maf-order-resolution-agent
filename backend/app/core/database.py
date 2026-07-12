@@ -4,10 +4,18 @@ import os
 from pathlib import Path
 from threading import RLock
 
+from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/maf_workflow"
+
+
+RUNTIME_ENV_PATH = Path(__file__).resolve().parents[2] / "runtime" / ".env"
+
+# Foundry-hosted packaging includes backend/runtime/.env; load it so DATABASE_URL
+# is available when host-level env injection is not present.
+load_dotenv(RUNTIME_ENV_PATH, override=False)
 
 
 class PostgresDatabase:

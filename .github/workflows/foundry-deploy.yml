@@ -203,7 +203,7 @@ jobs:
                         status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null)"
                         status_rc=$?
                         set -e
-                        status="$(printf '%s\n' "$status_json" | jq -r '.status // empty' | tr '[:upper:]' '[:lower:]')"
+                        status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
                         echo "agent_status=${status:-unknown} (check $status_attempt/20)"
                         if [[ $status_rc -eq 0 ]] && [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
                           echo "Agent reported active after timeout; proceeding."

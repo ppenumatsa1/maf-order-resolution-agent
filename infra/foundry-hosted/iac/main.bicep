@@ -239,7 +239,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   name: effectiveContainerRegistryName
   location: location
   sku: {
-    name: 'Standard'
+    name: 'Premium'
   }
   properties: {
     adminUserEnabled: false

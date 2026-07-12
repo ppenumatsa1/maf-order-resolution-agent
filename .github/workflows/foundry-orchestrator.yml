@@ -52,6 +52,10 @@ on:
         required: false
         default: "true"
 
+concurrency:
+  group: foundry-orchestrator-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   id-token: write
   contents: read

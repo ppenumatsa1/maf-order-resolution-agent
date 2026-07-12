@@ -223,6 +223,26 @@ jobs:
                   echo "Deploy failed after retries."
                   exit 1
 
+            - name: Wait for hosted agent status active
+              if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
+              run: |
+                  set -euo pipefail
+                  max_checks="${FOUNDRY_AGENT_ACTIVE_MAX_CHECKS:-40}"
+                  retry_delay_seconds="${FOUNDRY_AGENT_ACTIVE_RETRY_DELAY_SECONDS:-15}"
+                  for check in $(seq 1 "$max_checks"); do
+                    status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
+                    status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+                    version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // empty) catch empty' | tr -d '"')"
+                    echo "Agent readiness check $check/$max_checks status=${status:-unknown} version=${version:-unknown}"
+                    if [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
+                      echo "Hosted agent is active."
+                      exit 0
+                    fi
+                    sleep "$retry_delay_seconds"
+                  done
+                  echo "Hosted agent did not reach active/ready status in time."
+                  exit 1
+
             - name: Smoke test Foundry hosted agent invoke
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
               run: |

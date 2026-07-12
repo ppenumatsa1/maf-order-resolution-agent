@@ -189,12 +189,26 @@ jobs:
               run: |
                   set -euo pipefail
                   MESSAGE="ORD-1009 delayed order telemetry gate"
-                  set +e
-                  raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
-                  rc=$?
-                  set -e
-                  if [[ $rc -ne 0 ]]; then
+                  raw=""
+                  for attempt in $(seq 1 20); do
+                    set +e
+                    raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
+                    rc=$?
+                    set -e
+                    if [[ $rc -eq 0 ]]; then
+                      break
+                    fi
+                    if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
+                      echo "Smoke invoke transient failure (attempt $attempt/20). Retrying..."
+                      sleep 15
+                      continue
+                    fi
                     echo "Smoke invoke failed (rc=$rc)."
+                    echo "$raw"
+                    exit $rc
+                  done
+                  if [[ $rc -ne 0 ]]; then
+                    echo "Smoke invoke failed after retries."
                     echo "$raw"
                     exit $rc
                   fi

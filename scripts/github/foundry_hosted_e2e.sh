@@ -18,14 +18,25 @@ invoke_responses() {
   local message="${2:-}"
   local raw
   local rc
-  set +e
-  if [[ -n "$conversation_id" ]]; then
-    raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt 2>&1)"
-  else
-    raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
-  fi
-  rc=$?
-  set -e
+  for attempt in $(seq 1 20); do
+    set +e
+    if [[ -n "$conversation_id" ]]; then
+      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt 2>&1)"
+    else
+      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+    fi
+    rc=$?
+    set -e
+    if [[ $rc -eq 0 ]]; then
+      break
+    fi
+    if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
+      echo "Transient invoke failure (attempt $attempt/20, conversation_id=${conversation_id:-<new>}). Retrying..."
+      sleep 15
+      continue
+    fi
+    break
+  done
   if [[ $rc -ne 0 ]]; then
     echo "azd invoke failed (rc=$rc, conversation_id=${conversation_id:-<new>}):"
     echo "$raw"

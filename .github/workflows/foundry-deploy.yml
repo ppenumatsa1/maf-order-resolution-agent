@@ -190,7 +190,7 @@ jobs:
                       exit 1
                     fi
                     agent_name="${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}"
-                    responses_url="${project_endpoint%/}/agents/${agent_name}/endpoint/protocols/openai/responses?api-version=1.0"
+                    responses_url="${project_endpoint%/}/agents/${agent_name}/endpoint/protocols/openai/responses?api-version=v1"
                   fi
                   probe_message="${{ inputs.probe_message || github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}"
                   token="$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)"
@@ -379,11 +379,14 @@ jobs:
                       echo "Deploy timed out waiting for agent activation; checking current agent status before retry."
                       for status_attempt in $(seq 1 20); do
                         set +e
-                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null)"
+                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt)"
                         status_rc=$?
                         set -e
                         status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
                         echo "agent_status=${status:-unknown} (check $status_attempt/20)"
+                        if [[ -n "$status_json" ]] && [[ "$status" =~ ^(failed|error)$ ]]; then
+                          echo "agent_status_detail=$status_json"
+                        fi
                         if [[ $status_rc -eq 0 ]] && [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
                           echo "Agent reported active after timeout; proceeding."
                           exit 0
@@ -409,13 +412,18 @@ jobs:
                   max_checks="${FOUNDRY_AGENT_ACTIVE_MAX_CHECKS:-40}"
                   retry_delay_seconds="${FOUNDRY_AGENT_ACTIVE_RETRY_DELAY_SECONDS:-15}"
                   for check in $(seq 1 "$max_checks"); do
-                    status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
+                    status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt || true)"
                     status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
                     version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // empty) catch empty' | tr -d '"')"
                     echo "Agent readiness check $check/$max_checks status=${status:-unknown} version=${version:-unknown}"
                     if [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
                       echo "Hosted agent is active."
                       exit 0
+                    fi
+                    if [[ "$status" =~ ^(failed|error)$ ]]; then
+                      echo "Hosted agent entered terminal failure state."
+                      echo "agent_status_detail=$status_json"
+                      exit 1
                     fi
                     sleep "$retry_delay_seconds"
                   done

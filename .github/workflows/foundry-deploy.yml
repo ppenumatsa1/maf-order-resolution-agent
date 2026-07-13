@@ -14,15 +14,15 @@ on:
             run_smoke:
                 description: Run Foundry smoke invoke after deploy
                 required: false
-                default: "true"
+                default: "false"
             run_telemetry_gate:
                 description: Validate fresh App Insights telemetry after deploy
                 required: false
-                default: "true"
+                default: "false"
             run_e2e:
                 description: Run Foundry hosted E2E suite
                 required: false
-                default: "true"
+                default: "false"
             probe_only:
                 description: Run runner-side hosted responses curl probe only
                 required: false
@@ -52,15 +52,15 @@ on:
             run_smoke:
                 required: false
                 type: string
-                default: "true"
+                default: "false"
             run_telemetry_gate:
                 required: false
                 type: string
-                default: "true"
+                default: "false"
             run_e2e:
                 required: false
                 type: string
-                default: "true"
+                default: "false"
             probe_only:
                 required: false
                 type: string

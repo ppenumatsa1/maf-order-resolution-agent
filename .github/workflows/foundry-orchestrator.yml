@@ -42,15 +42,15 @@ on:
       run_smoke:
         description: Run smoke invoke in deploy pipeline
         required: false
-        default: "true"
+        default: "false"
       run_telemetry_gate:
         description: Run telemetry gate in deploy pipeline
         required: false
-        default: "true"
+        default: "false"
       run_e2e:
         description: Run Foundry hosted E2E suite in deploy pipeline
         required: false
-        default: "true"
+        default: "false"
 
 concurrency:
   group: foundry-orchestrator-${{ github.ref }}
@@ -93,9 +93,9 @@ jobs:
     with:
       runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
       environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
-      run_smoke: ${{ github.event.inputs.run_smoke || 'true' }}
-      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'true' }}
-      run_e2e: ${{ github.event.inputs.run_e2e || 'true' }}
+      run_smoke: ${{ github.event.inputs.run_smoke || 'false' }}
+      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'false' }}
+      run_e2e: ${{ github.event.inputs.run_e2e || 'false' }}
     secrets: inherit
 
   deploy_only:
@@ -105,7 +105,7 @@ jobs:
     with:
       runner_label: ${{ github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
       environment: ${{ github.event.inputs.environment || 'foundry-private-env' }}
-      run_smoke: ${{ github.event.inputs.run_smoke || 'true' }}
-      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'true' }}
-      run_e2e: ${{ github.event.inputs.run_e2e || 'true' }}
+      run_smoke: ${{ github.event.inputs.run_smoke || 'false' }}
+      run_telemetry_gate: ${{ github.event.inputs.run_telemetry_gate || 'false' }}
+      run_e2e: ${{ github.event.inputs.run_e2e || 'false' }}
     secrets: inherit

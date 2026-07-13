@@ -22,6 +22,17 @@ class _ParsedInput:
 
 
 def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any]]:
+    # Compatibility shim for hosted images where agentserver-core is missing
+    # CHAT_ISOLATION_KEY expected by azure-ai-agentserver-responses.
+    try:
+        from azure.ai.agentserver.core import _platform_headers as platform_headers  # type: ignore[import-not-found]
+
+        if not hasattr(platform_headers, "CHAT_ISOLATION_KEY"):
+            setattr(platform_headers, "CHAT_ISOLATION_KEY", "x-agent-chat-isolation-key")
+    except Exception:
+        # Let the canonical import below raise with its own actionable error.
+        pass
+
     from azure.ai.agentserver.responses import (  # type: ignore[import-not-found]
         CreateResponse,
         ResponseContext,

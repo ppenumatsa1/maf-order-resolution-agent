@@ -3,14 +3,22 @@ name: Foundry Deploy
 on:
     workflow_dispatch:
         inputs:
+            deployment_profile:
+                description: Deployment profile (private keeps existing behavior; public targets public surfaces)
+                required: false
+                type: choice
+                options:
+                    - private
+                    - public
+                default: private
             runner_label:
-                description: Self-hosted runner label for private Foundry access
+                description: Optional self-hosted runner label override
                 required: false
-                default: foundry-private
+                default: ""
             environment:
-                description: GitHub environment name
+                description: Optional GitHub environment override
                 required: false
-                default: foundry-private-env
+                default: ""
             run_smoke:
                 description: Run Foundry smoke invoke after deploy
                 required: false
@@ -41,14 +49,18 @@ on:
                 default: ""
     workflow_call:
         inputs:
+            deployment_profile:
+                required: false
+                type: string
+                default: private
             runner_label:
                 required: false
                 type: string
-                default: foundry-private
+                default: ""
             environment:
                 required: false
                 type: string
-                default: foundry-private-env
+                default: ""
             run_smoke:
                 required: false
                 type: string
@@ -88,8 +100,10 @@ jobs:
         if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') == 'true' }}
         runs-on:
             - self-hosted
-            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
-        environment: ${{ inputs.environment || github.event.inputs.environment || 'foundry-private-env' }}
+            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
+        environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
+        env:
+            FOUNDRY_DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}
         defaults:
             run:
                 shell: bash
@@ -234,8 +248,10 @@ jobs:
         if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') != 'true' }}
         runs-on:
             - self-hosted
-            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
-        environment: ${{ inputs.environment || github.event.inputs.environment || 'foundry-private-env' }}
+            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
+        environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
+        env:
+            FOUNDRY_DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}
         defaults:
             run:
                 shell: bash
@@ -338,84 +354,44 @@ jobs:
                     azd extension install azure.ai.agents --no-prompt
                   fi
 
-            - name: Prepare runtime env file for Foundry
-              env:
-                  FOUNDRY_DATABASE_URL: ${{ secrets.FOUNDRY_DATABASE_URL }}
-              run: |
-                  set -euo pipefail
-                  mkdir -p infra/foundry-hosted/runtime
-                  printf '%s\n' "${{ secrets.FOUNDRY_RUNTIME_ENV }}" > infra/foundry-hosted/runtime/.env
-                  if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
-                    echo "FOUNDRY_DATABASE_URL secret detected for deploy runtime env."
-                  else
-                    echo "FOUNDRY_DATABASE_URL secret is not set in this environment."
-                  fi
-                  if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
-                    if grep -q '^DATABASE_URL=' infra/foundry-hosted/runtime/.env; then
-                      awk -v value="$FOUNDRY_DATABASE_URL" '
-                        BEGIN { updated = 0 }
-                        /^DATABASE_URL=/ {
-                          print "DATABASE_URL=" value
-                          updated = 1
-                          next
-                        }
-                        { print }
-                        END {
-                          if (updated == 0) {
-                            print "DATABASE_URL=" value
-                          }
-                        }
-                      ' infra/foundry-hosted/runtime/.env > infra/foundry-hosted/runtime/.env.tmp
-                      mv infra/foundry-hosted/runtime/.env.tmp infra/foundry-hosted/runtime/.env
-                    else
-                      printf 'DATABASE_URL=%s\n' "${FOUNDRY_DATABASE_URL}" >> infra/foundry-hosted/runtime/.env
-                    fi
-                  fi
-                  test -s infra/foundry-hosted/runtime/.env
-
             - name: Select or create azd environment
               run: |
                   set -euo pipefail
                   cd infra/foundry-hosted
-                  azd env select "${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}" || azd env new "${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
+                  profile="${FOUNDRY_DEPLOYMENT_PROFILE:-private}"
+                  if [[ "$profile" == "public" ]]; then
+                    azd_env_name="${{ vars.FOUNDRY_PUBLIC_AZD_ENV_NAME || '' }}"
+                    default_azd_env_name="foundry-public-env"
+                  else
+                    azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || '' }}"
+                    default_azd_env_name="foundry-private-env"
+                  fi
+                  if [[ -z "$azd_env_name" ]]; then
+                    azd_env_name="$default_azd_env_name"
+                  fi
+                  azd env select "$azd_env_name" || azd env new "$azd_env_name"
                   azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
                   azd env set AZURE_RESOURCE_GROUP "${{ vars.FOUNDRY_RESOURCE_GROUP }}"
                   azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
                   azd env set AZURE_AI_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
                   azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
                   azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
-
-            - name: Sync env into azd and runtime mirrors
-              run: make foundry-sync-env
-
-            - name: Refresh staged hosted runtime env
-              run: |
-                  set -euo pipefail
-                  mkdir -p infra/foundry-hosted/agent/runtime
-                  cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/runtime/.env
-                  cp infra/foundry-hosted/runtime/.env infra/foundry-hosted/agent/app/runtime.env
-
-            - name: Verify staged runtime DATABASE_URL
-              run: |
-                  set -euo pipefail
-                  src_line="$(grep -E '^DATABASE_URL=' infra/foundry-hosted/runtime/.env || true)"
-                  staged_line="$(grep -E '^DATABASE_URL=' infra/foundry-hosted/agent/runtime/.env || true)"
-                  if [[ -z "$src_line" || -z "$staged_line" ]]; then
-                    echo "DATABASE_URL is missing from runtime env files."
-                    exit 1
+                  azd env set FOUNDRY_DEPLOYMENT_PROFILE "$profile"
+                  if [[ -n "${{ secrets.FOUNDRY_DATABASE_URL || '' }}" ]]; then
+                    azd env set RUNTIME_DATABASE_URL "${{ secrets.FOUNDRY_DATABASE_URL }}"
                   fi
-                  src_value="${src_line#DATABASE_URL=}"
-                  staged_value="${staged_line#DATABASE_URL=}"
-                  src_hostport="${src_value#*@}"
-                  staged_hostport="${staged_value#*@}"
-                  src_host="${src_hostport%%[:/?]*}"
-                  staged_host="${staged_hostport%%[:/?]*}"
-                  echo "Runtime DATABASE_URL host: ${src_host:-missing}"
-                  echo "Staged DATABASE_URL host: ${staged_host:-missing}"
-                  if [[ "$src_host" != "$staged_host" ]]; then
-                    echo "Staged runtime DATABASE_URL host does not match source runtime env."
-                    exit 1
-                  fi
+                  azd env set APP_ENV "${{ vars.APP_ENV || 'foundry-deploy' }}"
+                  azd env set STORE_PROVIDER "${{ vars.STORE_PROVIDER || 'postgres' }}"
+                  azd env set MEMORY_PROVIDER "${{ vars.MEMORY_PROVIDER || 'postgres' }}"
+                  azd env set RAG_PROVIDER "${{ vars.RAG_PROVIDER || 'pgvector' }}"
+                  azd env set ENABLE_TELEMETRY "${{ vars.ENABLE_TELEMETRY || 'true' }}"
+                  azd env set ENABLE_INSTRUMENTATION "${{ vars.ENABLE_INSTRUMENTATION || 'true' }}"
+                  azd env set OTEL_SERVICE_NAME "${{ vars.OTEL_SERVICE_NAME || 'maf-order-resolution-foundry-hosted' }}"
+                  azd env set OTEL_RECORD_CONTENT "${{ vars.OTEL_RECORD_CONTENT || 'false' }}"
+                  azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "${{ vars.AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING || 'true' }}"
+                  azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "${{ vars.AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED || 'false' }}"
+                  azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
+                  azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
 
             - name: Deploy Foundry hosted agent
               run: |
@@ -491,56 +467,147 @@ jobs:
               if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
               run: |
                   set -euo pipefail
-                  MESSAGE="ORD-1009 delayed order telemetry gate"
-                  raw=""
-                  rc=1
-                  max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-60}"
-                  retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-15}"
-                  endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-5}"
-                  if (( endpoint_refresh_after_attempt >= max_attempts )); then
-                    endpoint_refresh_after_attempt=$((max_attempts - 1))
-                  fi
-                  if (( endpoint_refresh_after_attempt < 1 )); then
-                    endpoint_refresh_after_attempt=1
-                  fi
-                  endpoint_refreshed="false"
-                  for attempt in $(seq 1 "$max_attempts"); do
-                    set +e
-                    raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$MESSAGE" --protocol responses --output raw --no-prompt 2>&1)"
-                    rc=$?
-                    set -e
-                    if [[ $rc -eq 0 ]]; then
-                      break
+                  assert_json_field() {
+                    local json="$1"
+                    local expr="$2"
+                    echo "$json" | jq -e "$expr" >/dev/null || {
+                      echo "Assertion failed: $expr"
+                      echo "$json"
+                      exit 1
+                    }
+                  }
+
+                  extract_payload() {
+                    local raw="$1"
+                    if ! payload="$(printf '%s\n' "$raw" | python - <<'PY'
+import json
+import re
+import sys
+
+raw = sys.stdin.read()
+
+
+def emit_payload(candidate: object) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    if "events" in candidate and ("status" in candidate or "thread_id" in candidate):
+        print(json.dumps(candidate))
+        return True
+    output = candidate.get("output")
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "output_text"
+                    and isinstance(part.get("text"), str)
+                ):
+                    text = part["text"].strip()
+                    if text.startswith("{"):
+                        print(text)
+                        return True
+    return False
+
+
+for line in raw.splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    if line.startswith("data: "):
+        line = line[6:].strip()
+    if not line.startswith("{"):
+        continue
+    try:
+        obj = json.loads(line)
+    except Exception:
+        continue
+    if obj.get("type") == "response.output_text.done":
+        text = obj.get("text")
+        if isinstance(text, str) and text.strip().startswith("{"):
+            print(text.strip())
+            sys.exit(0)
+    if emit_payload(obj):
+        sys.exit(0)
+
+match = re.search(r"\{.*", raw, flags=re.S)
+if match:
+    candidate = match.group(0).strip()
+    try:
+        obj = json.loads(candidate)
+    except Exception:
+        sys.exit(1)
+    if emit_payload(obj):
+        sys.exit(0)
+    print(json.dumps(obj))
+    sys.exit(0)
+
+sys.exit(1)
+PY
+                    )"; then
+                      echo "Failed to extract workflow payload from smoke invoke output."
+                      echo "$raw"
+                      return 1
                     fi
-                    if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
-                      echo "Smoke invoke transient failure (attempt $attempt/$max_attempts). Retrying..."
-                      if (( attempt % 5 == 0 )); then
-                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
-                        status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
-                        echo "Agent status snapshot: $status_summary"
-                      fi
-                      if [[ "$endpoint_refreshed" == "false" ]] && (( attempt >= endpoint_refresh_after_attempt )) && (( attempt < max_attempts )); then
-                        echo "Refreshing agent endpoint configuration after sustained transient responses errors."
-                        set +e
-                        (cd infra/foundry-hosted && azd ai agent endpoint update order-resolution-hosted --no-prompt)
-                        set -e
-                        endpoint_refreshed="true"
-                      fi
-                      sleep "$retry_delay_seconds"
-                      continue
+                    printf '%s\n' "$payload"
+                  }
+
+                  invoke_with_retries() {
+                    local message="$1"
+                    local mode="$2"
+                    local raw=""
+                    local rc=1
+                    local max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-60}"
+                    local retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-15}"
+                    local endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-5}"
+                    if (( endpoint_refresh_after_attempt >= max_attempts )); then
+                      endpoint_refresh_after_attempt=$((max_attempts - 1))
                     fi
-                    echo "Smoke invoke failed (rc=$rc)."
-                    echo "$raw"
-                    if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                      echo "Collecting hosted agent monitor logs for readiness failure diagnostics..."
+                    if (( endpoint_refresh_after_attempt < 1 )); then
+                      endpoint_refresh_after_attempt=1
+                    fi
+                    local endpoint_refreshed="false"
+                    for attempt in $(seq 1 "$max_attempts"); do
                       set +e
-                      (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
+                      raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+                      rc=$?
                       set -e
-                    fi
-                    exit $rc
-                  done
-                  if [[ $rc -ne 0 ]]; then
-                    echo "Smoke invoke failed after retries."
+                      if [[ $rc -eq 0 ]]; then
+                        printf '%s\n' "$raw"
+                        return 0
+                      fi
+                      if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
+                        echo "Smoke invoke transient failure for $mode (attempt $attempt/$max_attempts). Retrying..."
+                        if (( attempt % 5 == 0 )); then
+                          status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
+                          status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
+                          echo "Agent status snapshot: $status_summary"
+                        fi
+                        if [[ "$endpoint_refreshed" == "false" ]] && (( attempt >= endpoint_refresh_after_attempt )) && (( attempt < max_attempts )); then
+                          echo "Refreshing agent endpoint configuration after sustained transient responses errors."
+                          set +e
+                          (cd infra/foundry-hosted && azd ai agent endpoint update order-resolution-hosted --no-prompt)
+                          set -e
+                          endpoint_refreshed="true"
+                        fi
+                        sleep "$retry_delay_seconds"
+                        continue
+                      fi
+                      echo "Smoke invoke failed for $mode (rc=$rc)."
+                      echo "$raw"
+                      if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
+                        echo "Collecting hosted agent monitor logs for readiness failure diagnostics..."
+                        set +e
+                        (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
+                        set -e
+                      fi
+                      return "$rc"
+                    done
+                    echo "Smoke invoke failed for $mode after retries."
                     echo "$raw"
                     if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
                       echo "Collecting hosted agent monitor logs after retries exhausted..."
@@ -548,23 +615,34 @@ jobs:
                       (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
                       set -e
                     fi
-                    exit $rc
-                  fi
-                  payload="$(printf '%s\n' "$raw" | awk '
-                    found { print; next }
-                    /^\{/ {
-                      found = 1
-                      print
-                    }
-                  ')"
-                  THREAD_ID="$(echo "$payload" | jq -r '[.. | objects | (.thread_id? // .conversation_id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty')"
+                    return "$rc"
+                  }
+
+                  low_risk_message="ORD-1001 delayed order telemetry gate"
+                  high_risk_message="ORD-1009 delayed order telemetry gate"
+
+                  low_raw="$(invoke_with_retries "$low_risk_message" "low-risk")"
+                  low_payload="$(extract_payload "$low_raw")"
+                  assert_json_field "$low_payload" '.status == "completed"'
+                  assert_json_field "$low_payload" '(.events // []) | map(.type) | index("workflow.output") != null'
+                  assert_json_field "$low_payload" '(.events // []) | map(.type) | index("hitl.request") == null'
+                  echo "Low-risk smoke path verified."
+
+                  high_raw="$(invoke_with_retries "$high_risk_message" "high-risk")"
+                  high_payload="$(extract_payload "$high_raw")"
+                  assert_json_field "$high_payload" '.status == "waiting_approval"'
+                  assert_json_field "$high_payload" '(.events // []) | map(.type) | index("checkpoint.created") != null'
+                  assert_json_field "$high_payload" '(.events // []) | map(.type) | index("hitl.request") != null'
+                  THREAD_ID="$(echo "$high_payload" | jq -r '[.. | objects | (.thread_id? // .conversation_id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty')"
                   if [[ -z "$THREAD_ID" ]]; then
-                    echo "Could not determine smoke thread_id from responses output."
-                    echo "$raw"
+                    echo "Could not determine smoke thread_id from high-risk responses output."
+                    echo "$high_raw"
                     exit 1
                   fi
+                  echo "High-risk smoke path verified."
+
                   echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
-                  echo "FOUNDRY_SMOKE_MESSAGE=$MESSAGE" >> "$GITHUB_ENV"
+                  echo "FOUNDRY_SMOKE_MESSAGE=$high_risk_message" >> "$GITHUB_ENV"
                   echo "Responses smoke thread id: $THREAD_ID"
 
             - name: Foundry hosted E2E regression

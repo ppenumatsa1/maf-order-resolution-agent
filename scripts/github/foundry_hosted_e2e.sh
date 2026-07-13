@@ -11,22 +11,54 @@ require_bin() {
 require_bin azd
 require_bin jq
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FOUNDRY_DIR="${FOUNDRY_DIR:-$ROOT_DIR/infra/foundry-hosted}"
+
+if [[ ! -f "$FOUNDRY_DIR/azure.yaml" ]]; then
+  echo "Unable to locate Foundry AZD project at $FOUNDRY_DIR"
+  exit 1
+fi
+
+cd "$FOUNDRY_DIR"
+
 BASE_ID="${1:-foundry-e2e-$(date +%s)}"
+
+extract_json_output() {
+  local raw="${1:-}"
+  local json_output=""
+  json_output="$(printf '%s\n' "$raw" | sed -n 's/^\[order-resolution-hosted\][[:space:]]*//p' | tail -n 1)"
+  if [[ -z "$json_output" ]]; then
+    json_output="$(printf '%s\n' "$raw" | awk '
+      found { print; next }
+      /^\{/ {
+        found = 1
+        print
+      }
+    ')"
+  fi
+  printf '%s\n' "$json_output"
+}
 
 invoke_responses() {
   local conversation_id="${1:-}"
   local message="${2:-}"
+  local mode="${3:-reuse}"
   local raw
   local rc
   for attempt in $(seq 1 20); do
     set +e
     if [[ -n "$conversation_id" ]]; then
-      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt 2>&1)"
+      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --no-prompt 2>&1)"
+    elif [[ "$mode" == "new" ]]; then
+      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --new-conversation --new-session --no-prompt 2>&1)"
     else
-      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+      raw="$(azd ai agent invoke order-resolution-hosted "$message" --protocol responses --no-prompt 2>&1)"
     fi
     rc=$?
     set -e
+    if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then
+      rc=1
+    fi
     if [[ $rc -eq 0 ]]; then
       break
     fi
@@ -37,18 +69,58 @@ invoke_responses() {
     fi
     break
   done
-  if [[ $rc -ne 0 ]]; then
-    echo "azd invoke failed (rc=$rc, conversation_id=${conversation_id:-<new>}):"
-    echo "$raw"
+  local json_output=""
+  json_output="$(extract_json_output "$raw")"
+  if [[ $rc -ne 0 && -n "$json_output" ]]; then
+    echo "azd invoke returned rc=$rc with parseable JSON; continuing (conversation_id=${conversation_id:-<new>})." >&2
+  elif [[ $rc -ne 0 ]]; then
+    echo "azd invoke failed (rc=$rc, conversation_id=${conversation_id:-<new>}):" >&2
+    echo "$raw" >&2
     exit $rc
   fi
-  printf '%s\n' "$raw" | awk '
-    found { print; next }
-    /^\{/ {
-      found = 1
-      print
-    }
-  '
+  if [[ -z "$json_output" ]]; then
+    echo "Unable to extract JSON payload from azd invoke output (conversation_id=${conversation_id:-<new>}):" >&2
+    echo "$raw" >&2
+    exit 1
+  fi
+  printf '%s\n' "$json_output"
+}
+
+invoke_responses_payload() {
+  local conversation_id="${1:-}"
+  local payload_json="${2:-}"
+  local payload_file
+  payload_file="$(mktemp)"
+  printf '%s\n' "$payload_json" >"$payload_file"
+
+  local raw
+  local rc
+  set +e
+  if [[ -n "$conversation_id" ]]; then
+    raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --conversation-id "$conversation_id" --input-file "$payload_file" --no-prompt 2>&1)"
+  else
+    raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --input-file "$payload_file" --no-prompt 2>&1)"
+  fi
+  rc=$?
+  set -e
+  local json_output=""
+  json_output="$(extract_json_output "$raw")"
+  if [[ $rc -ne 0 && -n "$json_output" ]]; then
+    echo "azd payload invoke returned rc=$rc with parseable JSON; continuing (conversation_id=${conversation_id:-<new>})." >&2
+  elif [[ $rc -ne 0 ]]; then
+    rm -f "$payload_file"
+    echo "azd payload invoke failed (rc=$rc, conversation_id=${conversation_id:-<new>}):" >&2
+    echo "$raw" >&2
+    exit $rc
+  fi
+  if [[ -z "$json_output" ]]; then
+    rm -f "$payload_file"
+    echo "Unable to extract JSON payload from azd payload invoke output (conversation_id=${conversation_id:-<new>}):" >&2
+    echo "$raw" >&2
+    exit 1
+  fi
+  rm -f "$payload_file"
+  printf '%s\n' "$json_output"
 }
 
 extract_thread_id() {
@@ -66,7 +138,7 @@ assert_json_field() {
   }
 }
 
-first_turn="$(invoke_responses "" "Resolve delayed order ORD-1001")"
+first_turn="$(invoke_responses "" "Resolve delayed order ORD-1001" "new")"
 assert_json_field "$first_turn" '.status == "completed"'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("tool.call") != null'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("workflow.output") != null'
@@ -87,7 +159,7 @@ fi
 assert_json_field "$second_turn" '.status == "completed"'
 assert_json_field "$second_turn" '.message | test("resolution was selected|Resolution complete"; "i")'
 
-high_risk_start="$(invoke_responses "" "Resolve delayed order ORD-1009")"
+high_risk_start="$(invoke_responses "" "Resolve delayed order ORD-1009" "new")"
 assert_json_field "$high_risk_start" '.status == "waiting_approval"'
 assert_json_field "$high_risk_start" '(.events // []) | map(.type) | index("hitl.request") != null'
 HIGH_RISK="$(extract_thread_id "$high_risk_start")"
@@ -97,9 +169,39 @@ if [[ -z "$HIGH_RISK" || "$HIGH_RISK" == "null" ]]; then
   exit 1
 fi
 
-high_risk_resume="$(invoke_responses "$HIGH_RISK" "Approve")"
+HIGH_RISK_CHECKPOINT="$(echo "$high_risk_start" | jq -r '(.pending_approvals // [])[0].checkpoint_id // empty')"
+if [[ -z "$HIGH_RISK_CHECKPOINT" ]]; then
+  echo "Missing checkpoint_id in high-risk responses turn"
+  echo "$high_risk_start"
+  exit 1
+fi
+high_risk_resume_payload="$(jq -cn --arg input "Approve" --arg checkpoint "$HIGH_RISK_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint}')"
+high_risk_resume="$(invoke_responses_payload "$HIGH_RISK" "$high_risk_resume_payload")"
 assert_json_field "$high_risk_resume" '.status == "completed"'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK} (base=${BASE_ID})"
+damaged_start="$(invoke_responses "" "Customer reports a damaged item for order ORD-1001 and requests a replacement" "new")"
+assert_json_field "$damaged_start" '.status == "waiting_approval"'
+assert_json_field "$damaged_start" '(.events // []) | map(.type) | index("checkpoint.created") != null'
+assert_json_field "$damaged_start" '(.events // []) | map(.type) | index("hitl.request") != null'
+DAMAGED_THREAD="$(extract_thread_id "$damaged_start")"
+if [[ -z "$DAMAGED_THREAD" || "$DAMAGED_THREAD" == "null" ]]; then
+  echo "Missing thread_id in damaged-item responses turn"
+  echo "$damaged_start"
+  exit 1
+fi
+
+DAMAGED_CHECKPOINT="$(echo "$damaged_start" | jq -r '(.pending_approvals // [])[0].checkpoint_id // empty')"
+if [[ -z "$DAMAGED_CHECKPOINT" ]]; then
+  echo "Missing checkpoint_id in damaged-item responses turn"
+  echo "$damaged_start"
+  exit 1
+fi
+damaged_resume_payload="$(jq -cn --arg input "Approve damaged-item replacement" --arg checkpoint "$DAMAGED_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint}')"
+damaged_resume="$(invoke_responses_payload "$DAMAGED_THREAD" "$damaged_resume_payload")"
+assert_json_field "$damaged_resume" '.status == "completed"'
+assert_json_field "$damaged_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
+assert_json_field "$damaged_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
+
+echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK}, ${DAMAGED_THREAD} (base=${BASE_ID})"

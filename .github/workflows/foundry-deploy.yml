@@ -538,6 +538,9 @@ jobs:
                       raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
                       rc=$?
                       set -e
+                      if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then
+                        rc=1
+                      fi
                       if [[ $rc -eq 0 ]]; then
                         printf '%s\n' "$raw"
                         return 0

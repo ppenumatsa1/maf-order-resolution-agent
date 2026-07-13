@@ -27,8 +27,13 @@ def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any]]
     try:
         from azure.ai.agentserver.core import _platform_headers as platform_headers  # type: ignore[import-not-found]
 
-        if not hasattr(platform_headers, "CHAT_ISOLATION_KEY"):
-            setattr(platform_headers, "CHAT_ISOLATION_KEY", "x-agent-chat-isolation-key")
+        fallback_headers = {
+            "CHAT_ISOLATION_KEY": "x-agent-chat-isolation-key",
+            "USER_ISOLATION_KEY": "x-agent-user-isolation-key",
+        }
+        for header_name, header_value in fallback_headers.items():
+            if not hasattr(platform_headers, header_name):
+                setattr(platform_headers, header_name, header_value)
     except Exception:
         # Let the canonical import below raise with its own actionable error.
         pass

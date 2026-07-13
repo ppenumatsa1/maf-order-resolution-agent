@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
+from importlib import import_module
 from typing import Any
 from uuid import uuid4
 
@@ -25,7 +26,7 @@ def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any]]
     # Compatibility shim for hosted images where agentserver-core is missing
     # CHAT_ISOLATION_KEY expected by azure-ai-agentserver-responses.
     try:
-        from azure.ai.agentserver.core import _platform_headers as platform_headers  # type: ignore[import-not-found]
+        platform_headers = import_module("azure.ai.agentserver.core._platform_headers")
 
         fallback_headers = {
             "CHAT_ISOLATION_KEY": "x-agent-chat-isolation-key",

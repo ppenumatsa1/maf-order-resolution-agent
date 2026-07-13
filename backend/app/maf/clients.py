@@ -20,15 +20,23 @@ def _env(name: str) -> str | None:
     return value or None
 
 
+def _is_foundry_hosted_env() -> bool:
+    app_env = (_env("APP_ENV") or "").lower()
+    return app_env.startswith("foundry")
+
+
 def get_foundry_models_config() -> FoundryModelsConfig | None:
     provider = (_env("MAF_PROVIDER") or "foundry").lower()
     if provider not in {"foundry", "foundry_models", "azure_foundry"}:
         return None
 
     # FOUNDRY_PROJECTS_ENDPOINT and FOUNDRY_MODEL_DEPLOYMENT_NAME are the
-    # canonical Azure app-hosted contract. The other names are compatibility
-    # aliases for existing local/developer environments only.
-    project_endpoint = _env("FOUNDRY_PROJECTS_ENDPOINT") or _env("FOUNDRY_PROJECT_ENDPOINT")
+    # canonical contract. Keep legacy endpoint alias only for local/developer
+    # compatibility; Foundry-hosted runtime should not auto-enable models from
+    # deployment metadata variables such as FOUNDRY_PROJECT_ENDPOINT.
+    project_endpoint = _env("FOUNDRY_PROJECTS_ENDPOINT")
+    if not project_endpoint and not _is_foundry_hosted_env():
+        project_endpoint = _env("FOUNDRY_PROJECT_ENDPOINT")
     model = _env("FOUNDRY_MODEL_DEPLOYMENT_NAME") or _env("MAF_MODEL") or _env("FOUNDRY_MODEL")
     if not project_endpoint or not model:
         return None

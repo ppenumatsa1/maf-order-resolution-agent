@@ -51,7 +51,36 @@ class _FakeService:
                 "decision": request.decision,  # type: ignore[attr-defined]
             }
         )
-        return SimpleNamespace(accepted=True, checkpoint_id=request.checkpoint_id, thread_id="c1")
+        return SimpleNamespace(accepted=True, checkpoint_id=request.checkpoint_id, thread_id="C1")
+
+
+class _FakeSpan:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.attributes: dict[str, str | bool | int | float] = {}
+        self.recorded_exceptions: list[Exception] = []
+
+    def __enter__(self) -> _FakeSpan:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
+        return False
+
+    def set_attribute(self, key: str, value: str | bool | int | float) -> None:
+        self.attributes[key] = value
+
+    def record_exception(self, exc: Exception) -> None:
+        self.recorded_exceptions.append(exc)
+
+
+class _FakeTracer:
+    def __init__(self) -> None:
+        self.spans: list[_FakeSpan] = []
+
+    def start_as_current_span(self, name: str) -> _FakeSpan:
+        span = _FakeSpan(name)
+        self.spans.append(span)
+        return span
 
 
 def _details(
@@ -132,6 +161,112 @@ def test_parse_input_detects_function_call_output_decision() -> None:
     assert parsed.checkpoint_id == "cp-123"
 
 
+def test_parse_input_extracts_message_from_context_when_payload_is_empty() -> None:
+    parsed = foundry_main._parse_input(
+        {},
+        SimpleNamespace(
+            conversation_id="C2",
+            request_body={
+                "input": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "Resolve delayed order ORD-1001"}
+                        ],
+                    }
+                ]
+            },
+        ),
+    )
+    assert parsed.conversation_id == "C2"
+    assert parsed.message == "Resolve delayed order ORD-1001"
+    assert parsed.decision is None
+
+
+def test_parse_input_prefers_context_session_id_over_payload_response_id() -> None:
+    parsed = foundry_main._parse_input(
+        {"id": "resp-123", "input": "Resolve delayed order ORD-1001"},
+        SimpleNamespace(session_id="sess-abc"),
+    )
+    assert parsed.conversation_id == "sess-abc"
+
+
+def test_parse_input_accepts_previous_response_id_for_resume() -> None:
+    parsed = foundry_main._parse_input(
+        {"previous_response_id": "resp-prev-1", "input": "Approve"},
+        None,
+    )
+    assert parsed.conversation_id == "resp-prev-1"
+    assert parsed.decision == "approve"
+
+
+def test_parse_input_prefers_payload_conversation_string_over_previous_response_id() -> None:
+    parsed = foundry_main._parse_input(
+        {
+            "conversation": "conv-456",
+            "previous_response_id": "resp-prev-2",
+            "input": "Resolve delayed order ORD-1001",
+        },
+        None,
+    )
+    assert parsed.conversation_id == "conv-456"
+
+
+def test_parse_input_extracts_conversation_id_from_context_request_metadata() -> None:
+    parsed = foundry_main._parse_input(
+        {"id": "resp-123", "input": "Resolve delayed order ORD-1009"},
+        SimpleNamespace(request_body={"metadata": {"conversation_id": "conv-meta-1"}}),
+    )
+    assert parsed.conversation_id == "conv-meta-1"
+
+
+def test_parse_input_prefers_context_request_metadata_over_context_id() -> None:
+    parsed = foundry_main._parse_input(
+        {"input": "Resolve delayed order ORD-1001"},
+        SimpleNamespace(id="resp-999", request_body={"metadata": {"conversation_id": "conv-meta-2"}}),
+    )
+    assert parsed.conversation_id == "conv-meta-2"
+
+
+def test_parse_input_uses_payload_conversation_id_when_present() -> None:
+    parsed = foundry_main._parse_input(
+        {
+            "id": "resp-123",
+            "conversation": {"id": "conv-123"},
+            "input": "Resolve delayed order ORD-1001",
+        },
+        None,
+    )
+    assert parsed.conversation_id == "conv-123"
+
+
+def test_parse_input_detects_approval_from_nested_value_shapes() -> None:
+    parsed = foundry_main._parse_input(
+        {
+            "conversation": {"id": "conv-approve-1"},
+            "input": [
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": {"value": "Approve"}}],
+                }
+            ],
+        },
+        None,
+    )
+    assert parsed.message == "Approve"
+    assert parsed.decision == "approve"
+
+
+def test_parse_input_detects_approval_from_serialized_context_input() -> None:
+    context = SimpleNamespace(
+        conversation_id="conv-approve-2",
+        input="{'conversation': {'id': 'conv-approve-2'}, 'input': 'Approve'}",
+    )
+    parsed = foundry_main._parse_input({}, context)
+    assert parsed.conversation_id == "conv-approve-2"
+    assert parsed.decision == "approve"
+
+
 def test_parse_input_resume_hitl_without_decision_does_not_auto_approve() -> None:
     parsed = foundry_main._parse_input(
         {"conversation_id": "C1", "metadata": {"operation": "resume_hitl"}},
@@ -179,6 +314,7 @@ async def test_run_from_responses_resumes_pending_approval(
 ) -> None:
     repo = _FakeRepository()
     service = _FakeService()
+    tracer = _FakeTracer()
     repo.details_by_thread["C1"] = _details(
         thread_id="C1",
         status="waiting_approval",
@@ -186,6 +322,7 @@ async def test_run_from_responses_resumes_pending_approval(
     )
     monkeypatch.setattr(foundry_main, "workflow_run_repository", repo)
     monkeypatch.setattr(foundry_main, "order_resolution_service", service)
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
 
     await foundry_main._run_from_responses(
         {
@@ -197,3 +334,36 @@ async def test_run_from_responses_resumes_pending_approval(
     )
 
     assert service.resumed == [{"checkpoint_id": "cp-123", "decision": "approve"}]
+    span = tracer.spans[0]
+    assert span.name == "foundry.responses.invoke"
+    assert span.attributes["workflow.thread_id"] == "C1"
+    assert span.attributes["workflow.session_id"] == "C1"
+    assert span.attributes["foundry.protocol"] == "responses"
+    assert span.attributes["workflow.checkpoint_id"] == "cp-123"
+    assert span.attributes["workflow.status"] == "waiting_approval"
+    assert span.attributes["workflow.event_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_run_from_responses_records_exception_on_root_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FailingService:
+        async def start_chat_run(self, request: object) -> object:
+            raise RuntimeError("boom")
+
+    tracer = _FakeTracer()
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
+    monkeypatch.setattr(foundry_main, "order_resolution_service", _FailingService())
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await foundry_main._run_from_responses(
+            {"conversation_id": "C1", "input": "Resolve delayed order ORD-1001"},
+            None,
+            _FakeTextResponse,
+        )
+
+    span = tracer.spans[0]
+    assert span.name == "foundry.responses.invoke"
+    assert len(span.recorded_exceptions) == 1
+    assert isinstance(span.recorded_exceptions[0], RuntimeError)

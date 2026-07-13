@@ -9,6 +9,7 @@ from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 @pytest.fixture(autouse=True)
 def clear_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
+        "APP_ENV",
         "MAF_PROVIDER",
         "MAF_MODEL",
         "FOUNDRY_PROJECTS_ENDPOINT",
@@ -86,6 +87,25 @@ def test_foundry_models_config_prefers_canonical_env_over_aliases(
     assert config is not None
     assert config.project_endpoint == "https://canonical.services.ai.azure.com/api/projects/p"
     assert config.model == "canonical-model"
+
+
+def test_foundry_models_config_ignores_legacy_endpoint_alias_in_foundry_hosted_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "foundry-private-env")
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://legacy.services.ai.azure.com/api/projects/p",
+    )
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT_NAME", "legacy-model")
+
+    config = clients.get_foundry_models_config()
+
+    assert config is None
+    assert clients.triage_mode_metadata() == {
+        "provider": "deterministic",
+        "mode": "local_fallback",
+    }
 
 
 def test_foundry_models_config_supports_maf_model_fallback(

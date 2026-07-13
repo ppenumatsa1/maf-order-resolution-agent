@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import import_module
@@ -10,8 +11,13 @@ from uuid import uuid4
 
 from app.api.v1.schemas.chat import ChatRunRequest
 from app.api.v1.schemas.hitl import HitlResponseRequest
-from app.core.container import order_resolution_service, workflow_run_repository
-from app.core.telemetry import setup_observability
+from app.core.telemetry import get_tracer, setup_observability
+
+if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":
+    order_resolution_service = None
+    workflow_run_repository = None
+else:
+    from app.core.container import order_resolution_service, workflow_run_repository
 
 
 @dataclass(frozen=True)
@@ -22,7 +28,45 @@ class _ParsedInput:
     checkpoint_id: str | None
 
 
-def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any]]:
+def _parse_debug_enabled() -> bool:
+    return os.getenv("FOUNDRY_DEBUG_PARSE_INPUT", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _emit_parse_debug(payload: dict[str, Any], context: Any | None, parsed: _ParsedInput) -> None:
+    if not _parse_debug_enabled():
+        return
+
+    payload_input = payload.get("input")
+    payload_summary: dict[str, Any] = {
+        "parsed_conversation_id": parsed.conversation_id,
+        "parsed_decision": parsed.decision,
+        "parsed_checkpoint_id": parsed.checkpoint_id,
+        "parsed_message_preview": (parsed.message or "")[:120],
+        "payload_keys": sorted(payload.keys()),
+        "input_type": type(payload_input).__name__,
+        "has_conversation": isinstance(payload.get("conversation"), dict),
+    }
+    if isinstance(payload_input, list) and payload_input:
+        first_item = payload_input[0]
+        payload_summary["input_first_type"] = type(first_item).__name__
+        if isinstance(first_item, dict):
+            payload_summary["input_first_keys"] = sorted(first_item.keys())
+
+    if context is not None:
+        context_attrs = [
+            name
+            for name in ("id", "session_id", "conversation_id", "request_body")
+            if hasattr(context, name)
+        ]
+        payload_summary["context_attrs"] = context_attrs
+        context_request_body = getattr(context, "request_body", None)
+        if isinstance(context_request_body, dict):
+            payload_summary["context_request_body_keys"] = sorted(context_request_body.keys())
+
+    print(f"FOUNDRY_PARSE_DEBUG {json.dumps(payload_summary, default=str)}", flush=True)
+
+
+def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any], type[Any]]:
     # Compatibility shim for hosted images where agentserver-core is missing
     # CHAT_ISOLATION_KEY expected by azure-ai-agentserver-responses.
     try:
@@ -41,12 +85,19 @@ def _load_responses_types() -> tuple[type[Any], type[Any], type[Any], type[Any]]
 
     from azure.ai.agentserver.responses import (  # type: ignore[import-not-found]
         CreateResponse,
+        InMemoryResponseProvider,
         ResponseContext,
         ResponsesAgentServerHost,
         TextResponse,
     )
 
-    return ResponsesAgentServerHost, CreateResponse, ResponseContext, TextResponse
+    return (
+        ResponsesAgentServerHost,
+        CreateResponse,
+        ResponseContext,
+        TextResponse,
+        InMemoryResponseProvider,
+    )
 
 
 def _coerce_payload(create_response: Any) -> dict[str, Any]:
@@ -65,8 +116,12 @@ def _nested_text(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, dict):
+        if "value" in value:
+            return _nested_text(value["value"])
         if "text" in value:
             return _nested_text(value["text"])
+        if "input_text" in value:
+            return _nested_text(value["input_text"])
         if "content" in value:
             return _nested_text(value["content"])
         if "input" in value:
@@ -83,21 +138,73 @@ def _nested_text(value: Any) -> str:
 
 
 def _coerce_conversation_id(payload: dict[str, Any], context: Any | None) -> str:
+    conversation_keys = ("conversation_id", "thread_id", "session_id")
+
+    def _find_string_value(value: Any) -> str | None:
+        if isinstance(value, dict):
+            metadata = value.get("metadata")
+            if isinstance(metadata, dict):
+                for key in conversation_keys:
+                    nested_value = metadata.get(key)
+                    if isinstance(nested_value, str) and nested_value.strip():
+                        return nested_value.strip()
+            for key in conversation_keys:
+                nested_value = value.get(key)
+                if isinstance(nested_value, str) and nested_value.strip():
+                    return nested_value.strip()
+            for nested_value in value.values():
+                resolved = _find_string_value(nested_value)
+                if resolved:
+                    return resolved
+            return None
+        if isinstance(value, list):
+            for item in value:
+                resolved = _find_string_value(item)
+                if resolved:
+                    return resolved
+        return None
+
     metadata = payload.get("metadata")
     if isinstance(metadata, dict):
-        for key in ("conversation_id", "thread_id", "session_id"):
+        for key in conversation_keys:
             value = metadata.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
-    for key in ("conversation_id", "thread_id", "session_id", "id"):
+    for key in conversation_keys:
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
+    payload_conversation = payload.get("conversation")
+    if isinstance(payload_conversation, str) and payload_conversation.strip():
+        return payload_conversation.strip()
+    if isinstance(payload_conversation, dict):
+        payload_conversation_id = payload_conversation.get("id")
+        if isinstance(payload_conversation_id, str) and payload_conversation_id.strip():
+            return payload_conversation_id.strip()
     if context is not None:
-        for key in ("conversation_id", "thread_id", "session_id", "id", "response_id"):
+        for key in conversation_keys:
             value = getattr(context, key, None)
             if isinstance(value, str) and value.strip():
                 return value.strip()
+        for key in ("request", "request_body", "body", "payload", "raw_request"):
+            nested = getattr(context, key, None)
+            if hasattr(nested, "model_dump"):
+                nested = nested.model_dump()
+            elif hasattr(nested, "dict"):
+                nested = nested.dict()
+            resolved = _find_string_value(nested)
+            if resolved:
+                return resolved
+        for key in ("id", "response_id"):
+            value = getattr(context, key, None)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    previous_response_id = payload.get("previous_response_id")
+    if isinstance(previous_response_id, str) and previous_response_id.strip():
+        return previous_response_id.strip()
+    payload_id = payload.get("id")
+    if isinstance(payload_id, str) and payload_id.strip():
+        return payload_id.strip()
     return str(uuid4())
 
 
@@ -136,13 +243,47 @@ def _parse_function_call_output(items: Iterable[dict[str, Any]]) -> tuple[str | 
     return checkpoint_id, decision
 
 
+def _message_from_context(context: Any | None) -> str | None:
+    if context is None:
+        return None
+    direct_fields = (
+        "input",
+        "message",
+        "user_message",
+        "prompt",
+        "text",
+        "query",
+    )
+    nested_fields = (
+        "request",
+        "request_body",
+        "body",
+        "payload",
+        "raw_request",
+    )
+    for field in direct_fields:
+        text = _nested_text(getattr(context, field, None))
+        if text:
+            return text
+    for field in nested_fields:
+        raw_value = getattr(context, field, None)
+        if hasattr(raw_value, "model_dump"):
+            raw_value = raw_value.model_dump()
+        elif hasattr(raw_value, "dict"):
+            raw_value = raw_value.dict()
+        text = _nested_text(raw_value)
+        if text:
+            return text
+    return None
+
+
 def _decision_from_text(message: str | None) -> str | None:
     if not message:
         return None
     lowered = message.strip().lower()
-    if lowered in {"approve", "approved", "yes"}:
+    if re.search(r"\b(approve|approved|yes)\b", lowered):
         return "approve"
-    if lowered in {"reject", "rejected", "no"}:
+    if re.search(r"\b(reject|rejected|no)\b", lowered):
         return "reject"
     return None
 
@@ -161,6 +302,7 @@ def _parse_input(create_response: Any, context: Any | None) -> _ParsedInput:
     payload = _coerce_payload(create_response)
     metadata = payload.get("metadata")
     message = _nested_text(payload.get("message")) or _nested_text(payload.get("input"))
+    message = message or _message_from_context(context)
     checkpoint_id: str | None = None
     decision: str | None = None
     if isinstance(metadata, dict):
@@ -178,12 +320,14 @@ def _parse_input(create_response: Any, context: Any | None) -> _ParsedInput:
     if input_decision:
         decision = input_decision
     decision = decision or _decision_from_text(message)
-    return _ParsedInput(
+    parsed = _ParsedInput(
         conversation_id=_coerce_conversation_id(payload, context),
         message=message or None,
         decision=decision,
         checkpoint_id=checkpoint_id,
     )
+    _emit_parse_debug(payload, context, parsed)
+    return parsed
 
 
 def _serialize_workflow(thread_id: str) -> dict[str, Any]:
@@ -211,55 +355,82 @@ def _serialize_workflow(thread_id: str) -> dict[str, Any]:
     }
 
 
+def _set_span_attribute(span: Any, key: str, value: Any) -> None:
+    if value is None:
+        return
+    if isinstance(value, str | bool | int | float):
+        span.set_attribute(key, value)
+
+
 async def _run_from_responses(
     create_response: Any, context: Any | None, text_response: type[Any]
 ) -> Any:
     parsed = _parse_input(create_response, context)
-    if parsed.decision:
-        checkpoint_id = parsed.checkpoint_id or _pending_checkpoint_id(parsed.conversation_id)
-        if checkpoint_id is None:
-            payload = {
-                "thread_id": parsed.conversation_id,
-                "status": "failed",
-                "events": [],
-                "pending_approvals": [],
-                "message": "No pending approval found for this conversation.",
-            }
-        else:
-            await order_resolution_service.respond_hitl(
-                HitlResponseRequest(
-                    checkpoint_id=checkpoint_id,
-                    decision=parsed.decision,
-                    reviewer="foundry-conversation",
-                    comments="decision received from responses conversation",
+    tracer = get_tracer("foundry.responses")
+    # Anchor all turn-level telemetry under a single invocation span.
+    with tracer.start_as_current_span("foundry.responses.invoke") as span:
+        _set_span_attribute(span, "workflow.thread_id", parsed.conversation_id)
+        _set_span_attribute(span, "workflow.session_id", parsed.conversation_id)
+        _set_span_attribute(span, "foundry.protocol", "responses")
+        checkpoint_id_for_span: str | None = None
+        try:
+            if parsed.decision:
+                checkpoint_id = parsed.checkpoint_id or _pending_checkpoint_id(
+                    parsed.conversation_id
                 )
-            )
-            payload = _serialize_workflow(parsed.conversation_id)
-    elif parsed.message:
-        await order_resolution_service.start_chat_run(
-            ChatRunRequest(
-                message=parsed.message,
-                thread_id=parsed.conversation_id,
-                session_id=parsed.conversation_id,
-                customer_id="foundry-hosted",
-            )
-        )
-        payload = _serialize_workflow(parsed.conversation_id)
-    else:
-        payload = {
-            "thread_id": parsed.conversation_id,
-            "status": "failed",
-            "events": [],
-            "pending_approvals": [],
-            "message": "message or input is required",
-        }
-    response_text = json.dumps(payload)
-    return text_response(context, create_response, text=response_text)
+                checkpoint_id_for_span = checkpoint_id
+                if checkpoint_id is None:
+                    payload = {
+                        "thread_id": parsed.conversation_id,
+                        "status": "failed",
+                        "events": [],
+                        "pending_approvals": [],
+                        "message": "No pending approval found for this conversation.",
+                    }
+                else:
+                    hitl_result = await order_resolution_service.respond_hitl(
+                        HitlResponseRequest(
+                            checkpoint_id=checkpoint_id,
+                            decision=parsed.decision,
+                            reviewer="foundry-conversation",
+                            comments="decision received from responses conversation",
+                        )
+                    )
+                    resumed_thread_id = getattr(hitl_result, "thread_id", parsed.conversation_id)
+                    payload = _serialize_workflow(resumed_thread_id)
+            elif parsed.message:
+                await order_resolution_service.start_chat_run(
+                    ChatRunRequest(
+                        message=parsed.message,
+                        thread_id=parsed.conversation_id,
+                        session_id=parsed.conversation_id,
+                        customer_id="foundry-hosted",
+                    )
+                )
+                payload = _serialize_workflow(parsed.conversation_id)
+            else:
+                payload = {
+                    "thread_id": parsed.conversation_id,
+                    "status": "failed",
+                    "events": [],
+                    "pending_approvals": [],
+                    "message": "message or input is required",
+                }
+            _set_span_attribute(span, "workflow.checkpoint_id", checkpoint_id_for_span)
+            _set_span_attribute(span, "workflow.status", payload.get("status"))
+            events = payload.get("events")
+            if isinstance(events, list):
+                _set_span_attribute(span, "workflow.event_count", len(events))
+            response_text = json.dumps(payload)
+            return text_response(context, create_response, text=response_text)
+        except Exception as exc:
+            span.record_exception(exc)
+            raise
 
 
 def _build_app() -> Any:
-    ResponsesAgentServerHost, _, _, TextResponse = _load_responses_types()
-    host = ResponsesAgentServerHost()
+    ResponsesAgentServerHost, _, _, TextResponse, InMemoryResponseProvider = _load_responses_types()
+    host = ResponsesAgentServerHost(store=InMemoryResponseProvider())
 
     async def handler(
         create_response: Any,

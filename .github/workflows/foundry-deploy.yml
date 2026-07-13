@@ -240,6 +240,12 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
                   if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
                     echo "::error::Probe failed with HTTP $http_code"
+                    if echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
+                      echo "Collecting hosted agent monitor logs for probe readiness diagnostics..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 120 azd ai agent monitor --follow --no-prompt)
+                      set -e
+                    fi
                     exit 1
                   fi
 

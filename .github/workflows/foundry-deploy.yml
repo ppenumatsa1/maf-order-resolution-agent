@@ -506,7 +506,7 @@ jobs:
                       return 1
                     fi
 
-                    payload="$(printf '%s\n' "$json_block" | jq -r '.. | objects | select(.type? == "output_text" and (.text|type=="string")) | .text' 2>/dev/null | head -1)"
+                    payload="$(printf '%s\n' "$json_block" | jq -r '.. | objects | select(.type? == "output_text" and (.text|type=="string") and (.text|startswith("{"))) | .text' 2>/dev/null | head -1)"
                     if [[ -z "$payload" ]]; then
                       payload="$json_block"
                     fi

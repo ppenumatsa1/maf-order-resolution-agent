@@ -479,76 +479,32 @@ jobs:
 
                   extract_payload() {
                     local raw="$1"
-                    if ! payload="$(printf '%s\n' "$raw" | python - <<'PY'
-import json
-import re
-import sys
+                    local payload=""
+                    payload="$(printf '%s\n' "$raw" | sed -n 's/^data: //p' | jq -r 'select(type=="object" and .type=="response.output_text.done" and (.text|type=="string")) | .text' 2>/dev/null | tail -1)"
+                    if [[ -n "$payload" ]]; then
+                      printf '%s\n' "$payload"
+                      return 0
+                    fi
 
-raw = sys.stdin.read()
+                    local json_block=""
+                    json_block="$(printf '%s\n' "$raw" | awk '
+                      found { print; next }
+                      /^\{/ {
+                        found = 1
+                        print
+                      }
+                    ')"
+                    if [[ -z "$json_block" ]]; then
+                      echo "Failed to extract workflow payload from smoke invoke output."
+                      echo "$raw"
+                      return 1
+                    fi
 
-
-def emit_payload(candidate: object) -> bool:
-    if not isinstance(candidate, dict):
-        return False
-    if "events" in candidate and ("status" in candidate or "thread_id" in candidate):
-        print(json.dumps(candidate))
-        return True
-    output = candidate.get("output")
-    if isinstance(output, list):
-        for item in output:
-            if not isinstance(item, dict) or item.get("type") != "message":
-                continue
-            content = item.get("content")
-            if not isinstance(content, list):
-                continue
-            for part in content:
-                if (
-                    isinstance(part, dict)
-                    and part.get("type") == "output_text"
-                    and isinstance(part.get("text"), str)
-                ):
-                    text = part["text"].strip()
-                    if text.startswith("{"):
-                        print(text)
-                        return True
-    return False
-
-
-for line in raw.splitlines():
-    line = line.strip()
-    if not line:
-        continue
-    if line.startswith("data: "):
-        line = line[6:].strip()
-    if not line.startswith("{"):
-        continue
-    try:
-        obj = json.loads(line)
-    except Exception:
-        continue
-    if obj.get("type") == "response.output_text.done":
-        text = obj.get("text")
-        if isinstance(text, str) and text.strip().startswith("{"):
-            print(text.strip())
-            sys.exit(0)
-    if emit_payload(obj):
-        sys.exit(0)
-
-match = re.search(r"\{.*", raw, flags=re.S)
-if match:
-    candidate = match.group(0).strip()
-    try:
-        obj = json.loads(candidate)
-    except Exception:
-        sys.exit(1)
-    if emit_payload(obj):
-        sys.exit(0)
-    print(json.dumps(obj))
-    sys.exit(0)
-
-sys.exit(1)
-PY
-                    )"; then
+                    payload="$(printf '%s\n' "$json_block" | jq -r '.. | objects | select(.type? == "output_text" and (.text|type=="string")) | .text' 2>/dev/null | head -1)"
+                    if [[ -z "$payload" ]]; then
+                      payload="$json_block"
+                    fi
+                    if ! echo "$payload" | jq -e '.status and .events' >/dev/null 2>&1; then
                       echo "Failed to extract workflow payload from smoke invoke output."
                       echo "$raw"
                       return 1

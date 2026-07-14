@@ -427,10 +427,18 @@ async def _run_from_responses(
 
 
 def _build_app() -> Any:
-    ResponsesAgentServerHost, _, _, TextResponse, _ = _load_responses_types()
-    # Let hosted Foundry auto-activate the platform-backed response store so
-    # Conversations traces are persisted and visible in Foundry Traces.
-    host = ResponsesAgentServerHost()
+    ResponsesAgentServerHost, _, _, TextResponse, InMemoryResponseProvider = _load_responses_types()
+    deployment_profile = os.getenv("FOUNDRY_DEPLOYMENT_PROFILE", "").strip().lower()
+    use_platform_store = deployment_profile == "public"
+    # Public profile: allow hosted Foundry to auto-activate platform-backed storage
+    # so Conversations traces are persisted in Foundry Traces UI.
+    # Private profile: keep in-memory storage because the Foundry storage endpoint
+    # can require public access which is disabled in private-network deployments.
+    host = (
+        ResponsesAgentServerHost()
+        if use_platform_store
+        else ResponsesAgentServerHost(store=InMemoryResponseProvider())
+    )
 
     async def handler(
         create_response: Any,

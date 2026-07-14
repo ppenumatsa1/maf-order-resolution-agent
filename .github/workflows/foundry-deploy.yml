@@ -98,6 +98,7 @@ jobs:
     runner_probe:
         name: Runner-side hosted responses probe
         if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') == 'true' }}
+        timeout-minutes: 15
         runs-on:
             - self-hosted
             - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
@@ -262,6 +263,7 @@ jobs:
     deploy:
         name: Deploy Foundry Hosted Agent
         if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') != 'true' }}
+        timeout-minutes: 25
         runs-on:
             - self-hosted
             - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
@@ -544,9 +546,9 @@ jobs:
                     local mode="$2"
                     local raw=""
                     local rc=1
-                    local max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-60}"
-                    local retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-15}"
-                    local endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-5}"
+                    local max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-16}"
+                    local retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-10}"
+                    local endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-4}"
                     if (( endpoint_refresh_after_attempt >= max_attempts )); then
                       endpoint_refresh_after_attempt=$((max_attempts - 1))
                     fi

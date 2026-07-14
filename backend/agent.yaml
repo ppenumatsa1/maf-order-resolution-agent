@@ -7,3 +7,16 @@ code_configuration:
     runtime: python_3_13
     entry_point: foundry/main.py
     dependency_resolution: remote_build
+environment_variables:
+    - name: DATABASE_URL
+      value: ${DATABASE_URL}
+    - name: RUNTIME_DATABASE_URL
+      value: ${RUNTIME_DATABASE_URL}
+    - name: APP_ENV
+      value: ${APP_ENV}
+    - name: STORE_PROVIDER
+      value: ${STORE_PROVIDER}
+    - name: MEMORY_PROVIDER
+      value: ${MEMORY_PROVIDER}
+    - name: RAG_PROVIDER
+      value: ${RAG_PROVIDER}

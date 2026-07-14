@@ -395,9 +395,28 @@ jobs:
                   azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
                   azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
                   azd env set FOUNDRY_DEPLOYMENT_PROFILE "$profile"
-                  if [[ -n "${{ secrets.FOUNDRY_DATABASE_URL || '' }}" ]]; then
-                    azd env set RUNTIME_DATABASE_URL "${{ secrets.FOUNDRY_DATABASE_URL }}"
+                  runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
+                  if [[ -z "$runtime_db_url" ]]; then
+                    runtime_db_url="$(azd env get-value RUNTIME_DATABASE_URL 2>/dev/null || true)"
                   fi
+                  if [[ -z "$runtime_db_url" ]]; then
+                    runtime_db_url="$(azd env get-value DATABASE_URL 2>/dev/null || true)"
+                  fi
+                  if [[ -z "$runtime_db_url" ]]; then
+                    echo "Missing runtime database URL. Set secret FOUNDRY_DATABASE_URL in the GitHub environment."
+                    exit 1
+                  fi
+                  runtime_db_host="$(printf '%s' "$runtime_db_url" | sed -E 's#^[a-zA-Z0-9+.-]+://([^@/]+@)?([^:/?]+).*$#\2#')"
+                  if [[ "$runtime_db_host" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
+                    echo "Invalid runtime database URL host ($runtime_db_host). Foundry hosted runtime cannot use loopback."
+                    echo "Update GitHub environment secret FOUNDRY_DATABASE_URL with an Azure PostgreSQL host URL."
+                    exit 1
+                  fi
+                  if [[ "$runtime_db_url" != *"sslmode=require"* ]]; then
+                    echo "Runtime database URL must include sslmode=require for Azure PostgreSQL."
+                    exit 1
+                  fi
+                  azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
                   azd env set APP_ENV "${{ vars.APP_ENV || 'foundry-deploy' }}"
                   azd env set STORE_PROVIDER "${{ vars.STORE_PROVIDER || 'postgres' }}"
                   azd env set MEMORY_PROVIDER "${{ vars.MEMORY_PROVIDER || 'postgres' }}"
@@ -415,10 +434,6 @@ jobs:
               if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
               run: |
                   set -euo pipefail
-                  if [[ -z "${{ secrets.FOUNDRY_DATABASE_URL || '' }}" ]]; then
-                    echo "FOUNDRY_DATABASE_URL is not set; skipping private runtime connection refresh."
-                    exit 0
-                  fi
                   echo "Refreshing private infra/runtime connection before deploy."
                   make foundry-provision
 

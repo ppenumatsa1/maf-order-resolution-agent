@@ -566,7 +566,7 @@ jobs:
                         printf '%s\n' "$raw"
                         return 0
                       fi
-                      if echo "$raw" | grep -Eqi 'HTTP (404|409|429|5[0-9]{2})'; then
+                      if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|HTTP (404|409|424|429|5[0-9]{2})'; then
                         echo "Smoke invoke transient failure for $mode (attempt $attempt/$max_attempts). Retrying..."
                         if (( attempt % 5 == 0 )); then
                           status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"

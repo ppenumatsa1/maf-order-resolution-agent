@@ -3,6 +3,87 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-14, Foundry Conversations root cause fixed)
+
+The clean Microsoft Agent Framework hosted sample proved that the public Foundry
+project, Application Insights connection, hosted runtime, and Conversations portal
+index were healthy. The remaining fault was specific to the order-resolution hosted
+package and manifest.
+
+Confirmed root-cause chain:
+
+1. The deploy workflow set `FOUNDRY_DEPLOYMENT_PROFILE=public` in the AZD environment,
+   but `backend/agent.yaml` did not declare that variable for hosted-container
+   substitution.
+2. The public runtime therefore received no profile and selected
+   `InMemoryResponseProvider`. Deploy, smoke, hosted E2E, and custom App Insights
+   telemetry still passed, but no response was persisted for the Foundry Conversations
+   index.
+3. After fixing profile propagation, the pinned
+   `azure-ai-agentserver-responses==1.0.0b7` activated `FoundryStorageProvider` but sent
+   obsolete user/chat isolation headers. The current protocol 2.0 storage service
+   requires the platform `x-agent-foundry-call-id`, so every new conversation history
+   lookup returned HTTP 404.
+4. The working Microsoft sample used `azure-ai-agentserver-responses==1.0.0b8`, which
+   forwards the Foundry call ID. Upgrading to `1.0.0b8` resolved the storage lookup and
+   response persistence failures.
+
+Changes:
+
+- Added `FOUNDRY_DEPLOYMENT_PROFILE` to `backend/agent.yaml`.
+- Upgraded `azure-ai-agentserver-responses` from `1.0.0b7` to `1.0.0b8`.
+- Added hosted store-selection regression tests.
+- Added a deployment gate that verifies the live provider and, for public deployments,
+  requires a successful Foundry response-storage write.
+
+Final validation evidence on commit `3cf3272`:
+
+- **Public run `29373917392`: success**
+  - `storage_provider=FoundryStorageProvider`
+  - `GET .../storage/history/item_ids` -> HTTP 200 with `has_call_id=True`
+  - `POST .../storage/responses` -> HTTP 201 with `has_call_id=True`
+  - smoke conversation: `conv_10f4367e52cce11700N6EfzlnUCTMUAKs7Xk8zcfLWanmJ7lNt`
+  - hosted E2E: passed
+  - App Insights telemetry gate: passed
+- **Private run `29374068390`: success**
+  - `storage_provider=InMemoryResponseProvider`
+  - smoke + hosted E2E + App Insights telemetry gate: passed
+
+Corrected validation learning:
+
+- Successful Responses output and correlated custom App Insights spans do not prove
+  Foundry Conversations persistence.
+- Public validation must assert the selected `FoundryStorageProvider` and a successful
+  `POST .../storage/responses`; otherwise an in-memory response path can produce a
+  false-positive green deployment.
+
+## Latest execution update (2026-07-14, profile-gated response store validated on both lanes)
+
+Completed in this pass:
+
+- Re-ran full deploy validation on latest code commit `bd21077` after the Foundry runtime response-store profile gating:
+  - public profile uses platform-backed response storage,
+  - private profile keeps in-memory response storage to avoid private storage public-access dependency failures.
+- Confirmed full deploy + smoke + hosted E2E + telemetry gate success on both profiles at the same commit.
+
+Validation evidence:
+
+- **Private profile run**: `29364985311` (success)
+  - deploy: success
+  - smoke: low-risk + high-risk verified
+  - hosted E2E: passed
+  - telemetry gate (App Insights): passed
+- **Public profile run**: `29365152738` (success)
+  - deploy: success
+  - smoke: low-risk + high-risk verified
+  - hosted E2E: passed
+  - telemetry gate (App Insights): passed
+
+Learning:
+
+1. The profile-gated response-store strategy removes the private bootstrap/storage contention while preserving public lane conversation persistence intent.
+2. With this gating, no regression was observed in deploy, smoke, hosted E2E, or App Insights telemetry gates across either lane.
+
 ## Latest execution update (2026-07-14, public+private parity restored)
 
 Completed in this pass:

@@ -37,3 +37,6 @@ local.ini
 # Generated Bicep build artifacts (keep parameters.dev.json tracked)
 infra/foundry-hosted/iac/main.json
 infra/foundry-hosted/iac/modules/*.json
+
+# Local Foundry control sample
+backend/tmp-foundry-sample/

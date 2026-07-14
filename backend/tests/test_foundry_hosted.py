@@ -157,8 +157,15 @@ def _fake_responses_types() -> tuple[
 
 def test_hosted_manifest_propagates_deployment_profile() -> None:
     manifest = Path(__file__).parents[1] / "agent.yaml"
+    manifest_text = manifest.read_text()
 
-    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest.read_text()
+    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest_text
+    assert 'name: AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING\n      value: "true"' in manifest_text
+    assert (
+        'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
+        in manifest_text
+    )
+    assert not hasattr(foundry_main, "setup_observability")
 
 
 def test_build_app_uses_platform_store_for_public_profile(

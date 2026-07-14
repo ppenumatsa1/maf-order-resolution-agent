@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.api.v1.schemas.chat import ChatRunRequest
 from app.api.v1.schemas.hitl import HitlResponseRequest
-from app.core.telemetry import get_tracer, setup_observability
+from app.core.telemetry import get_tracer
 
 
 def _database_url_host(value: str) -> str:
@@ -452,7 +452,8 @@ def _build_app() -> Any:
 
 
 def _initialize_app() -> Any:
-    setup_observability()
+    # AgentServerHost must configure the provider first so its Foundry
+    # enrichment processors can emit portal-indexable GenAI transaction spans.
     return _build_app()
 
 

@@ -740,20 +740,33 @@ jobs:
                     exit 1
                   fi
 
-                  # Wait up to 10 minutes for ingestion after deploy+invoke
+                  # Wait up to 10 minutes for both business telemetry and the
+                  # Foundry-indexable GenAI transaction span.
                   for i in $(seq 1 20); do
-                    telemetry_query="union traces,requests,dependencies,exceptions | where timestamp > ago(20m) | extend workflowThreadId = tostring(customDimensions['workflow.thread_id']) | where workflowThreadId == '${THREAD_ID}' | summarize count()"
-                    COUNT=$(az monitor app-insights query --app "$APP_ID" \
-                      --analytics-query "$telemetry_query" \
+                    business_query="union traces,requests,dependencies,exceptions | where timestamp > ago(20m) | extend workflowThreadId = tostring(customDimensions['workflow.thread_id']) | where workflowThreadId == '${THREAD_ID}' | summarize count()"
+                    BUSINESS_COUNT=$(az monitor app-insights query --app "$APP_ID" \
+                      --analytics-query "$business_query" \
                       --query "tables[0].rows[0][0]" -o tsv)
-                    COUNT=${COUNT:-0}
-                    echo "telemetry_count=$COUNT thread_id=$THREAD_ID (attempt $i/20)"
-                    if [[ "$COUNT" =~ ^[0-9]+$ ]] && [[ "$COUNT" -gt 0 ]]; then
-                      echo "Telemetry gate passed"
+                    BUSINESS_COUNT=${BUSINESS_COUNT:-0}
+
+                    trace_query="union requests,dependencies | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' and operationName == 'invoke_agent' and isnotempty(responseId) | summarize count()"
+                    TRACE_COUNT=$(az monitor app-insights query --app "$APP_ID" \
+                      --analytics-query "$trace_query" \
+                      --query "tables[0].rows[0][0]" -o tsv)
+                    TRACE_COUNT=${TRACE_COUNT:-0}
+
+                    echo "business_telemetry_count=$BUSINESS_COUNT foundry_trace_count=$TRACE_COUNT thread_id=$THREAD_ID (attempt $i/20)"
+                    if [[ "$BUSINESS_COUNT" =~ ^[0-9]+$ ]] && [[ "$BUSINESS_COUNT" -gt 0 ]] \
+                      && [[ "$TRACE_COUNT" =~ ^[0-9]+$ ]] && [[ "$TRACE_COUNT" -gt 0 ]]; then
+                      echo "Telemetry and Foundry trace transaction gates passed"
                       exit 0
                     fi
                     sleep 30
                   done
 
-                  echo "Telemetry gate failed: no correlated App Insights data for thread_id=$THREAD_ID"
+                  echo "Telemetry gate failed: missing business telemetry or Foundry GenAI transaction span for thread_id=$THREAD_ID"
+                  diagnostic_query="union withsource=TableName requests,dependencies | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | where conversationId == '${THREAD_ID}' | project timestamp, TableName, name, operation_Id, agentName, operationName, responseId | order by timestamp desc | take 50"
+                  az monitor app-insights query --app "$APP_ID" \
+                    --analytics-query "$diagnostic_query" \
+                    -o table || true
                   exit 1

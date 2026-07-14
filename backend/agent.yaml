@@ -8,6 +8,8 @@ code_configuration:
     entry_point: foundry/main.py
     dependency_resolution: remote_build
 environment_variables:
+    - name: FOUNDRY_DEPLOYMENT_PROFILE
+      value: ${FOUNDRY_DEPLOYMENT_PROFILE}
     - name: DATABASE_URL
       value: ${DATABASE_URL}
     - name: FOUNDRY_RUNTIME_DATABASE_URL

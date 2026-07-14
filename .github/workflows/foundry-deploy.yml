@@ -676,11 +676,47 @@ jobs:
                     echo "$high_raw"
                     exit 1
                   fi
+                  SESSION_ID="$(printf '%s\n' "$high_raw" | awk -F': ' 'BEGIN{IGNORECASE=1} /^X-Agent-Session-Id:/ {sub(/\r$/, "", $2); print $2; exit}')"
+                  if [[ -z "$SESSION_ID" ]]; then
+                    echo "Could not determine hosted session id from high-risk responses headers."
+                    echo "$high_raw"
+                    exit 1
+                  fi
                   echo "High-risk smoke path verified."
 
                   echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
+                  echo "FOUNDRY_SMOKE_SESSION_ID=$SESSION_ID" >> "$GITHUB_ENV"
                   echo "FOUNDRY_SMOKE_MESSAGE=$high_risk_message" >> "$GITHUB_ENV"
                   echo "Responses smoke thread id: $THREAD_ID"
+                  echo "Responses smoke session id: $SESSION_ID"
+
+            - name: Verify hosted response storage provider
+              if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
+              run: |
+                  set -euo pipefail
+                  profile="${FOUNDRY_DEPLOYMENT_PROFILE:-private}"
+                  session_id="${FOUNDRY_SMOKE_SESSION_ID:?FOUNDRY_SMOKE_SESSION_ID is required}"
+                  if [[ "$profile" == "public" ]]; then
+                    expected_provider="FoundryStorageProvider"
+                  else
+                    expected_provider="InMemoryResponseProvider"
+                  fi
+
+                  for attempt in $(seq 1 3); do
+                    logs="$(cd infra/foundry-hosted && timeout 20 azd ai agent monitor order-resolution-hosted --session-id "$session_id" --tail 200 --no-prompt 2>&1 || true)"
+                    printf '%s\n' "$logs"
+                    if echo "$logs" | grep -Fq "storage_provider=${expected_provider}"; then
+                      if [[ "$profile" != "public" ]] || echo "$logs" | grep -Fq "Foundry storage POST"; then
+                        echo "Hosted response storage provider verified: $expected_provider"
+                        exit 0
+                      fi
+                    fi
+                    sleep 5
+                  done
+
+                  echo "Expected hosted response storage evidence was not found."
+                  echo "profile=$profile expected_provider=$expected_provider session_id=$session_id"
+                  exit 1
 
             - name: Foundry hosted E2E regression
               if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'true') == 'true' }}

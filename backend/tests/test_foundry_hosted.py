@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -84,6 +85,23 @@ class _FakeTracer:
         return span
 
 
+class _FakeResponsesHost:
+    instances: list[_FakeResponsesHost] = []
+
+    def __init__(self, **kwargs: object) -> None:
+        self.store_supplied = "store" in kwargs
+        self.store = kwargs.get("store")
+        self.handler: object | None = None
+        self.instances.append(self)
+
+    def response_handler(self, handler: object) -> None:
+        self.handler = handler
+
+
+class _FakeInMemoryResponseProvider:
+    pass
+
+
 def _details(
     *,
     thread_id: str,
@@ -125,11 +143,63 @@ def _details(
     )
 
 
+def _fake_responses_types() -> tuple[
+    type[object], type[object], type[object], type[object], type[object]
+]:
+    return (
+        _FakeResponsesHost,
+        object,
+        object,
+        _FakeTextResponse,
+        _FakeInMemoryResponseProvider,
+    )
+
+
+def test_hosted_manifest_propagates_deployment_profile() -> None:
+    manifest = Path(__file__).parents[1] / "agent.yaml"
+
+    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest.read_text()
+
+
+def test_build_app_uses_platform_store_for_public_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _FakeResponsesHost.instances.clear()
+    monkeypatch.setenv("FOUNDRY_DEPLOYMENT_PROFILE", "public")
+    monkeypatch.setattr(foundry_main, "_load_responses_types", _fake_responses_types)
+
+    app = foundry_main._build_app()
+
+    assert app is _FakeResponsesHost.instances[-1]
+    assert app.store_supplied is False
+
+
+@pytest.mark.parametrize("profile", ["private", ""])
+def test_build_app_uses_in_memory_store_for_private_safe_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+    profile: str,
+) -> None:
+    _FakeResponsesHost.instances.clear()
+    if profile:
+        monkeypatch.setenv("FOUNDRY_DEPLOYMENT_PROFILE", profile)
+    else:
+        monkeypatch.delenv("FOUNDRY_DEPLOYMENT_PROFILE", raising=False)
+    monkeypatch.setattr(foundry_main, "_load_responses_types", _fake_responses_types)
+
+    app = foundry_main._build_app()
+
+    assert app is _FakeResponsesHost.instances[-1]
+    assert app.store_supplied is True
+    assert isinstance(app.store, _FakeInMemoryResponseProvider)
+
+
 def test_runtime_database_url_override_sets_database_url_when_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    runtime_url = (
+        "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    )
     monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
 
     foundry_main._apply_runtime_database_url_override()
@@ -160,7 +230,9 @@ def test_runtime_database_url_override_prefers_foundry_runtime_key(
 def test_runtime_database_url_override_replaces_loopback_database_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    runtime_url = (
+        "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    )
     monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
     monkeypatch.setenv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/maf_workflow")
 
@@ -172,8 +244,12 @@ def test_runtime_database_url_override_replaces_loopback_database_url(
 def test_runtime_database_url_override_keeps_existing_remote_database_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    existing_url = "postgresql://user:pass@existing.postgres.database.azure.com:5432/maf?sslmode=require"
-    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    existing_url = (
+        "postgresql://user:pass@existing.postgres.database.azure.com:5432/maf?sslmode=require"
+    )
+    runtime_url = (
+        "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    )
     monkeypatch.setenv("DATABASE_URL", existing_url)
     monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
 
@@ -281,7 +357,9 @@ def test_parse_input_extracts_conversation_id_from_context_request_metadata() ->
 def test_parse_input_prefers_context_request_metadata_over_context_id() -> None:
     parsed = foundry_main._parse_input(
         {"input": "Resolve delayed order ORD-1001"},
-        SimpleNamespace(id="resp-999", request_body={"metadata": {"conversation_id": "conv-meta-2"}}),
+        SimpleNamespace(
+            id="resp-999", request_body={"metadata": {"conversation_id": "conv-meta-2"}}
+        ),
     )
     # Strict responses-native mode no longer uses metadata/context.id fallback.
     UUID(parsed.conversation_id)

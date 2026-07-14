@@ -160,42 +160,6 @@ def _nested_text(value: Any) -> str:
 
 
 def _coerce_conversation_id(payload: dict[str, Any], context: Any | None) -> str:
-    conversation_keys = ("conversation_id", "thread_id", "session_id")
-
-    def _find_string_value(value: Any) -> str | None:
-        if isinstance(value, dict):
-            metadata = value.get("metadata")
-            if isinstance(metadata, dict):
-                for key in conversation_keys:
-                    nested_value = metadata.get(key)
-                    if isinstance(nested_value, str) and nested_value.strip():
-                        return nested_value.strip()
-            for key in conversation_keys:
-                nested_value = value.get(key)
-                if isinstance(nested_value, str) and nested_value.strip():
-                    return nested_value.strip()
-            for nested_value in value.values():
-                resolved = _find_string_value(nested_value)
-                if resolved:
-                    return resolved
-            return None
-        if isinstance(value, list):
-            for item in value:
-                resolved = _find_string_value(item)
-                if resolved:
-                    return resolved
-        return None
-
-    metadata = payload.get("metadata")
-    if isinstance(metadata, dict):
-        for key in conversation_keys:
-            value = metadata.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    for key in conversation_keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
     payload_conversation = payload.get("conversation")
     if isinstance(payload_conversation, str) and payload_conversation.strip():
         return payload_conversation.strip()
@@ -203,27 +167,39 @@ def _coerce_conversation_id(payload: dict[str, Any], context: Any | None) -> str
         payload_conversation_id = payload_conversation.get("id")
         if isinstance(payload_conversation_id, str) and payload_conversation_id.strip():
             return payload_conversation_id.strip()
+
+    previous_response_id = payload.get("previous_response_id")
+    if isinstance(previous_response_id, str) and previous_response_id.strip():
+        return previous_response_id.strip()
+
     if context is not None:
-        for key in conversation_keys:
+        for key in ("conversation_id", "conversation", "previous_response_id"):
             value = getattr(context, key, None)
             if isinstance(value, str) and value.strip():
                 return value.strip()
+            if isinstance(value, dict):
+                conversation_id = value.get("id")
+                if isinstance(conversation_id, str) and conversation_id.strip():
+                    return conversation_id.strip()
+
         for key in ("request", "request_body", "body", "payload", "raw_request"):
             nested = getattr(context, key, None)
             if hasattr(nested, "model_dump"):
                 nested = nested.model_dump()
             elif hasattr(nested, "dict"):
                 nested = nested.dict()
-            resolved = _find_string_value(nested)
-            if resolved:
-                return resolved
-        for key in ("id", "response_id"):
-            value = getattr(context, key, None)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    previous_response_id = payload.get("previous_response_id")
-    if isinstance(previous_response_id, str) and previous_response_id.strip():
-        return previous_response_id.strip()
+            if isinstance(nested, dict):
+                nested_conversation = nested.get("conversation")
+                if isinstance(nested_conversation, str) and nested_conversation.strip():
+                    return nested_conversation.strip()
+                if isinstance(nested_conversation, dict):
+                    nested_conversation_id = nested_conversation.get("id")
+                    if isinstance(nested_conversation_id, str) and nested_conversation_id.strip():
+                        return nested_conversation_id.strip()
+                nested_previous_response_id = nested.get("previous_response_id")
+                if isinstance(nested_previous_response_id, str) and nested_previous_response_id.strip():
+                    return nested_previous_response_id.strip()
+
     payload_id = payload.get("id")
     if isinstance(payload_id, str) and payload_id.strip():
         return payload_id.strip()

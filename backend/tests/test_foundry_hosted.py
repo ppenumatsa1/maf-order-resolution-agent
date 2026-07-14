@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from types import SimpleNamespace
+from uuid import UUID
 
 import pytest
 
@@ -190,7 +191,7 @@ def test_parse_input_extracts_conversation_and_message() -> None:
                     "content": [{"type": "input_text", "text": "Resolve delayed order ORD-1001"}],
                 }
             ],
-            "conversation_id": "C1",
+            "conversation": {"id": "C1"},
         },
         None,
     )
@@ -240,12 +241,12 @@ def test_parse_input_extracts_message_from_context_when_payload_is_empty() -> No
     assert parsed.decision is None
 
 
-def test_parse_input_prefers_context_session_id_over_payload_response_id() -> None:
+def test_parse_input_prefers_payload_response_id_over_context_session_id() -> None:
     parsed = foundry_main._parse_input(
         {"id": "resp-123", "input": "Resolve delayed order ORD-1001"},
         SimpleNamespace(session_id="sess-abc"),
     )
-    assert parsed.conversation_id == "sess-abc"
+    assert parsed.conversation_id == "resp-123"
 
 
 def test_parse_input_accepts_previous_response_id_for_resume() -> None:
@@ -274,7 +275,7 @@ def test_parse_input_extracts_conversation_id_from_context_request_metadata() ->
         {"id": "resp-123", "input": "Resolve delayed order ORD-1009"},
         SimpleNamespace(request_body={"metadata": {"conversation_id": "conv-meta-1"}}),
     )
-    assert parsed.conversation_id == "conv-meta-1"
+    assert parsed.conversation_id == "resp-123"
 
 
 def test_parse_input_prefers_context_request_metadata_over_context_id() -> None:
@@ -282,7 +283,8 @@ def test_parse_input_prefers_context_request_metadata_over_context_id() -> None:
         {"input": "Resolve delayed order ORD-1001"},
         SimpleNamespace(id="resp-999", request_body={"metadata": {"conversation_id": "conv-meta-2"}}),
     )
-    assert parsed.conversation_id == "conv-meta-2"
+    # Strict responses-native mode no longer uses metadata/context.id fallback.
+    UUID(parsed.conversation_id)
 
 
 def test_parse_input_uses_payload_conversation_id_when_present() -> None:
@@ -347,7 +349,7 @@ async def test_run_from_responses_starts_workflow_and_returns_serialized_events(
     monkeypatch.setattr(foundry_main, "order_resolution_service", service)
 
     response = await foundry_main._run_from_responses(
-        {"conversation_id": "C1", "input": "Resolve delayed order ORD-1001"},
+        {"conversation": {"id": "C1"}, "input": "Resolve delayed order ORD-1001"},
         None,
         _FakeTextResponse,
     )
@@ -383,7 +385,7 @@ async def test_run_from_responses_resumes_pending_approval(
 
     await foundry_main._run_from_responses(
         {
-            "conversation_id": "C1",
+            "conversation": {"id": "C1"},
             "input": [{"type": "function_call_output", "call_id": "cp-123", "output": "approve"}],
         },
         None,

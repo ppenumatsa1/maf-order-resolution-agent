@@ -171,6 +171,16 @@ jobs:
                   fi
                   az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
+            - name: Install required azd extension
+              run: |
+                  set -euo pipefail
+                  installed_version="$(azd extension show azure.ai.agents | awk -F': ' '/Installed Version/{print $2}' | tr -d '\r')"
+                  if [[ -n "$installed_version" && "$installed_version" != "N/A" ]]; then
+                    azd extension upgrade azure.ai.agents --no-prompt || true
+                  else
+                    azd extension install azure.ai.agents --no-prompt
+                  fi
+
             - name: Optional agent status snapshot (azd)
               continue-on-error: true
               run: |
@@ -398,6 +408,17 @@ jobs:
                   azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "${{ vars.AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED || 'false' }}"
                   azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
                   azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
+
+            - name: Refresh private runtime connection
+              if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
+              run: |
+                  set -euo pipefail
+                  if [[ -z "${{ secrets.FOUNDRY_DATABASE_URL || '' }}" ]]; then
+                    echo "FOUNDRY_DATABASE_URL is not set; skipping private runtime connection refresh."
+                    exit 0
+                  fi
+                  echo "Refreshing private infra/runtime connection before deploy."
+                  make foundry-provision
 
             - name: Deploy Foundry hosted agent
               run: |

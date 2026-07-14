@@ -13,6 +13,26 @@ from app.api.v1.schemas.chat import ChatRunRequest
 from app.api.v1.schemas.hitl import HitlResponseRequest
 from app.core.telemetry import get_tracer, setup_observability
 
+
+def _database_url_host(value: str) -> str:
+    if not value:
+        return ""
+    match = re.match(r"^[a-zA-Z0-9+.-]+://(?:[^@/]+@)?([^:/?]+)", value)
+    return match.group(1).strip().lower() if match else ""
+
+
+def _apply_runtime_database_url_override() -> None:
+    runtime_database_url = os.getenv("RUNTIME_DATABASE_URL", "").strip()
+    if not runtime_database_url:
+        return
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    database_host = _database_url_host(database_url)
+    if not database_url or database_host in {"localhost", "127.0.0.1"}:
+        os.environ["DATABASE_URL"] = runtime_database_url
+
+
+_apply_runtime_database_url_override()
+
 if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":
     order_resolution_service = None
     workflow_run_repository = None

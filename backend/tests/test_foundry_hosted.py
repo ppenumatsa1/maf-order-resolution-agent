@@ -124,6 +124,43 @@ def _details(
     )
 
 
+def test_runtime_database_url_override_sets_database_url_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
+
+    foundry_main._apply_runtime_database_url_override()
+
+    assert os.getenv("DATABASE_URL") == runtime_url
+
+
+def test_runtime_database_url_override_replaces_loopback_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/maf_workflow")
+
+    foundry_main._apply_runtime_database_url_override()
+
+    assert os.getenv("DATABASE_URL") == runtime_url
+
+
+def test_runtime_database_url_override_keeps_existing_remote_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing_url = "postgresql://user:pass@existing.postgres.database.azure.com:5432/maf?sslmode=require"
+    runtime_url = "postgresql://user:pass@server.postgres.database.azure.com:5432/maf?sslmode=require"
+    monkeypatch.setenv("DATABASE_URL", existing_url)
+    monkeypatch.setenv("RUNTIME_DATABASE_URL", runtime_url)
+
+    foundry_main._apply_runtime_database_url_override()
+
+    assert os.getenv("DATABASE_URL") == existing_url
+
+
 def test_parse_input_extracts_conversation_and_message() -> None:
     parsed = foundry_main._parse_input(
         {

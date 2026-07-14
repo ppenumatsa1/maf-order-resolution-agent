@@ -22,7 +22,9 @@ def _database_url_host(value: str) -> str:
 
 
 def _apply_runtime_database_url_override() -> None:
-    runtime_database_url = os.getenv("RUNTIME_DATABASE_URL", "").strip()
+    runtime_database_url = os.getenv("FOUNDRY_RUNTIME_DATABASE_URL", "").strip()
+    if not runtime_database_url:
+        runtime_database_url = os.getenv("RUNTIME_DATABASE_URL", "").strip()
     if not runtime_database_url:
         return
     database_url = os.getenv("DATABASE_URL", "").strip()

@@ -136,6 +136,26 @@ def test_runtime_database_url_override_sets_database_url_when_missing(
     assert os.getenv("DATABASE_URL") == runtime_url
 
 
+def test_runtime_database_url_override_prefers_foundry_runtime_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv(
+        "FOUNDRY_RUNTIME_DATABASE_URL",
+        "postgresql://user:pass@preferred.postgres.database.azure.com:5432/maf?sslmode=require",
+    )
+    monkeypatch.setenv(
+        "RUNTIME_DATABASE_URL",
+        "postgresql://user:pass@fallback.postgres.database.azure.com:5432/maf?sslmode=require",
+    )
+
+    foundry_main._apply_runtime_database_url_override()
+
+    assert os.getenv("DATABASE_URL", "").startswith(
+        "postgresql://user:pass@preferred.postgres.database.azure.com"
+    )
+
+
 def test_runtime_database_url_override_replaces_loopback_database_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

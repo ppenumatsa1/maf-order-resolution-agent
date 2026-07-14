@@ -191,6 +191,7 @@ jobs:
                     echo "Runtime database URL must include sslmode=require for Azure PostgreSQL."
                     exit 1
                   fi
+                  azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
                   azd env set DATABASE_URL "$runtime_db_url"
                   azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
                   azd env set APP_ENV "${{ vars.APP_ENV || 'foundry-private-env' }}"

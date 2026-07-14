@@ -559,7 +559,11 @@ jobs:
                     local latest_session_id=""
                     for attempt in $(seq 1 "$max_attempts"); do
                       set +e
-                      raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+                      if (( attempt == 1 )); then
+                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --new-conversation --new-session --output raw --no-prompt 2>&1)"
+                      else
+                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+                      fi
                       rc=$?
                       set -e
                       latest_session_id="$(printf '%s\n' "$raw" | grep -oE "Session '[^']+'" | head -n1 | sed -E "s/^Session '([^']+)'$/\\1/" || true)"

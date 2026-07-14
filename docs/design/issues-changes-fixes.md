@@ -3,6 +3,114 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-14, public+private parity restored)
+
+Completed in this pass:
+
+- Fixed the public Foundry lane and re-validated both deployment profiles on latest code.
+- Rotated shared Azure PostgreSQL admin password on `maffndpg7930` and synchronized GitHub environment secrets:
+  - `FOUNDRY_DATABASE_URL` in `foundry-private-env`
+  - `FOUNDRY_DATABASE_URL` in `foundry-public-env`
+  - `POSTGRES_ADMIN_PASSWORD` in both environments
+- Added missing telemetry query RBAC for runner identity (`uami-maffnd-runner`) on public resources:
+  - `Reader` + `Monitoring Reader` on `rg-maf-ora-foundry-public-dev2`
+  - `Monitoring Reader` + `Application Insights Component Contributor` on public App Insights component
+  - `Log Analytics Reader` on public Log Analytics workspace
+
+Validation evidence:
+
+- **Private profile run**: `29351349372` (success)
+  - smoke: low-risk + high-risk verified
+  - E2E: passed
+  - telemetry: `telemetry_count=4` (attempt 1/20), gate passed
+- **Public profile run**: `29351940898` (success)
+  - smoke: low-risk + high-risk verified
+  - E2E: passed
+  - telemetry: `telemetry_count=19` (attempt 1/20), gate passed
+
+Root-cause closure:
+
+1. Public smoke `session_not_ready` was caused by PostgreSQL credential drift (`password authentication failed for user "pgadmin"`).
+2. After DB credential fix, public telemetry gate still failed due runner identity query permissions (`InsufficientAccessError`) on App Insights/Log Analytics.
+3. With DB secret alignment + telemetry RBAC grants, both public and private deploy+smoke+E2E+telemetry paths are now green.
+
+## Latest execution update (2026-07-14, strict Responses-native conversation mode)
+
+Completed in this pass:
+
+- Implemented a Foundry-only runtime change in `backend/foundry/main.py` to enforce strict Responses-native continuity:
+  - use `conversation` / `conversation.id` and `previous_response_id` for conversation identity,
+  - removed metadata/session/thread fallback from hosted conversation resolution.
+- Updated hosted-entrypoint tests in `backend/tests/test_foundry_hosted.py` for strict mode behavior.
+- Validation on strict commit `7af8b1a`:
+  - private profile run `29360090478`: success (deploy + smoke + hosted E2E + telemetry gate)
+  - public profile run `29361070244`: success (deploy + smoke + hosted E2E + telemetry gate)
+
+Evidence highlights:
+
+- Private telemetry gate: `telemetry_count=19` for thread `conv_2240b1de1ca027cb00fpdCwnUhFM1ldKh7uurWqUlBVxyVdYSW`.
+- Public telemetry gate: `telemetry_count=19` for thread `conv_a6498cad6b64d427002oBZ5B4GbvaQ2p2shmNrTxYUZGdcz02z`.
+
+## Latest execution update (2026-07-14, private VNet lane fully green)
+
+Completed in this pass:
+
+- Verified the private orchestrator run triggered after DB credential rotation:
+  - run: `29348257181`
+  - URL: `https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/29348257181`
+- Confirmed full private lane success in one run:
+  - `runner_preflight`: success
+  - `provision / Provision Foundry Infra`: success
+  - `deploy_after_provision / Deploy Foundry Hosted Agent`: success
+  - smoke step: success (`Low-risk smoke path verified`, `High-risk smoke path verified`)
+  - hosted E2E regression: success
+  - telemetry gate (App Insights): success
+- Captured smoke/telemetry correlation evidence:
+  - smoke thread id: `conv_ad53788b0ff694bb00FQWSM6LAP7veWs3FNkqDaofZvh1kG1Kb`
+  - telemetry gate: `telemetry_count=6` on attempt `1/20`, `Telemetry gate passed`
+
+Root-cause learning (private `session_not_ready`):
+
+1. `session_not_ready` was a downstream symptom, not the primary failure.
+2. Primary startup failures progressed through two concrete causes:
+   - incorrect loopback DB target (`127.0.0.1:5432`) from env propagation mismatch,
+   - then PostgreSQL auth mismatch (`password authentication failed for user "pgadmin"`).
+3. Durable fix was the combination of:
+   - stricter deploy/provision DB env validation + propagation,
+   - hosted startup DB URL override safeguards in `backend/foundry/main.py`,
+   - aligned hosted env mapping in `backend/agent.yaml`,
+   - rotated PostgreSQL credentials + matching GitHub environment secret refresh.
+
+## Latest execution update (2026-07-13, public Foundry dev lane validated)
+
+Completed in this pass:
+
+- Implemented and exercised the dedicated public development lane in `rg-maf-ora-foundry-public-dev2` with AZD env `foundry-public-dev2`.
+- Kept the Responses-native hosted runtime path and fixed cloud HITL resume parsing so approval messages in hosted Responses sessions now resolve pending checkpoints and emit `hitl.response`.
+- Hardened local/public deploy and validation scripts:
+  - stage runtime env before packaging,
+  - mirror runtime env into staged `agent/runtime/.env` and `agent/app/runtime.env`,
+  - make hosted E2E resilient to transient transport resets after successful payload emission,
+  - force smoke runs to use new conversation/session for deterministic results.
+
+Cloud validation evidence:
+
+- Hosted agent deployed successfully through version `15`.
+- Public smoke (`make foundry-smoke`) now deterministically returns HITL events with fresh session/conversation.
+- Hosted E2E passed end-to-end:
+  - `Foundry Responses hosted E2E passed for conversations: conv_1de57237154b1e6300295UscQz11cAGxsCLW3LZZY5mKiquNJG, conv_e2fe883a6e54341800Byg2FaGS7NGf5AahmusMrZVS4xR8vfkN, conv_78f9083a7b23dfc600LVkxbJS87OACKIvV0ToKysHFYlV1RGQX`
+- Application Insights telemetry verified in the public-dev App Insights component:
+  - appId: `b29359cf-47cd-4bc1-b962-246f7f4da5c0`
+  - correlated thread query for `conv_e2fe883a6e54341800Byg2FaGS7NGf5AahmusMrZVS4xR8vfkN` returned non-zero telemetry (`total=26`, `dependencies=16`, `traces=10`, `exceptions=0`).
+
+Local validation note:
+
+- Repository-local gates pass when run against the local Docker PostgreSQL endpoint:
+  - `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test`
+  - `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make eval-backend`
+  - `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test-e2e`
+  - `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable ./scripts/skills/design-review-skill.sh`
+
 ## Latest execution update (2026-07-12, shared workflow Responses cutover + docs sync)
 
 Completed in this pass:

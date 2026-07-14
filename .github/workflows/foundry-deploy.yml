@@ -629,14 +629,30 @@ jobs:
                   low_risk_conversation="smoke-low-${smoke_suffix}"
                   high_risk_conversation="smoke-high-${smoke_suffix}"
 
+                  set +e
                   low_raw="$(invoke_with_retries "$low_risk_message" "low-risk" "$low_risk_conversation")"
+                  low_rc=$?
+                  set -e
+                  if [[ $low_rc -ne 0 ]]; then
+                    echo "Low-risk smoke invocation failed after retries."
+                    echo "$low_raw"
+                    exit "$low_rc"
+                  fi
                   low_payload="$(extract_payload "$low_raw")"
                   assert_json_field "$low_payload" '.status == "completed"'
                   assert_json_field "$low_payload" '(.events // []) | map(.type) | index("workflow.output") != null'
                   assert_json_field "$low_payload" '(.events // []) | map(.type) | index("hitl.request") == null'
                   echo "Low-risk smoke path verified."
 
+                  set +e
                   high_raw="$(invoke_with_retries "$high_risk_message" "high-risk" "$high_risk_conversation")"
+                  high_rc=$?
+                  set -e
+                  if [[ $high_rc -ne 0 ]]; then
+                    echo "High-risk smoke invocation failed after retries."
+                    echo "$high_raw"
+                    exit "$high_rc"
+                  fi
                   high_payload="$(extract_payload "$high_raw")"
                   assert_json_field "$high_payload" '.status == "waiting_approval"'
                   assert_json_field "$high_payload" '(.events // []) | map(.type) | index("checkpoint.created") != null'

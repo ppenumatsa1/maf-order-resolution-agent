@@ -427,8 +427,10 @@ async def _run_from_responses(
 
 
 def _build_app() -> Any:
-    ResponsesAgentServerHost, _, _, TextResponse, InMemoryResponseProvider = _load_responses_types()
-    host = ResponsesAgentServerHost(store=InMemoryResponseProvider())
+    ResponsesAgentServerHost, _, _, TextResponse, _ = _load_responses_types()
+    # Let hosted Foundry auto-activate the platform-backed response store so
+    # Conversations traces are persisted and visible in Foundry Traces.
+    host = ResponsesAgentServerHost()
 
     async def handler(
         create_response: Any,

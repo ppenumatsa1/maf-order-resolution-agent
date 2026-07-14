@@ -429,8 +429,20 @@ jobs:
                   azd env set OTEL_RECORD_CONTENT "${{ vars.OTEL_RECORD_CONTENT || 'false' }}"
                   azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "${{ vars.AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING || 'true' }}"
                   azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "${{ vars.AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED || 'false' }}"
-                  azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
-                  azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
+                  foundry_models_endpoint="${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT }}"
+                  if [[ -z "$foundry_models_endpoint" ]]; then
+                    echo "FOUNDRY_PROJECTS_ENDPOINT or FOUNDRY_PROJECT_ENDPOINT is required."
+                    exit 1
+                  fi
+                  foundry_model_deployment="${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
+                  if [[ -z "$foundry_model_deployment" ]]; then
+                    foundry_model_deployment="$(azd env get-value AZURE_AI_MODEL_DEPLOYMENT_NAME 2>/dev/null || true)"
+                  fi
+                  if [[ -z "$foundry_model_deployment" ]]; then
+                    foundry_model_deployment="gpt-4o-mini"
+                  fi
+                  azd env set FOUNDRY_PROJECTS_ENDPOINT "$foundry_models_endpoint"
+                  azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "$foundry_model_deployment"
 
             - name: Refresh private runtime connection
               if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}

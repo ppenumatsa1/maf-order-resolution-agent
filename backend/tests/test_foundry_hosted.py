@@ -165,12 +165,12 @@ def test_hosted_manifest_propagates_deployment_profile() -> None:
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
         in manifest_text
     )
-    assert "name: FOUNDRY_PROJECTS_ENDPOINT\n      value: ${FOUNDRY_PROJECT_ENDPOINT}" in (
+    assert "name: FOUNDRY_PROJECTS_ENDPOINT\n      value: ${FOUNDRY_PROJECTS_ENDPOINT}" in (
         manifest_text
     )
     assert (
         "name: FOUNDRY_MODEL_DEPLOYMENT_NAME\n"
-        "      value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+        "      value: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}"
     ) in manifest_text
     assert not hasattr(foundry_main, "setup_observability")
 

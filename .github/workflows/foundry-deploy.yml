@@ -544,7 +544,6 @@ jobs:
                   invoke_with_retries() {
                     local message="$1"
                     local mode="$2"
-                    local conversation_id="${3:-}"
                     local raw=""
                     local rc=1
                     local max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-16}"
@@ -560,11 +559,7 @@ jobs:
                     local latest_session_id=""
                     for attempt in $(seq 1 "$max_attempts"); do
                       set +e
-                      if [[ -n "$conversation_id" ]]; then
-                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --conversation-id "$conversation_id" --output raw --no-prompt 2>&1)"
-                      else
-                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
-                      fi
+                      raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
                       rc=$?
                       set -e
                       latest_session_id="$(printf '%s\n' "$raw" | grep -oE "Session '[^']+'" | head -n1 | sed -E "s/^Session '([^']+)'$/\\1/" || true)"
@@ -625,12 +620,9 @@ jobs:
 
                   low_risk_message="ORD-1001 delayed order telemetry gate"
                   high_risk_message="ORD-1009 delayed order telemetry gate"
-                  smoke_suffix="${GITHUB_RUN_ID:-local}-$(date +%s)"
-                  low_risk_conversation="smoke-low-${smoke_suffix}"
-                  high_risk_conversation="smoke-high-${smoke_suffix}"
 
                   set +e
-                  low_raw="$(invoke_with_retries "$low_risk_message" "low-risk" "$low_risk_conversation")"
+                  low_raw="$(invoke_with_retries "$low_risk_message" "low-risk")"
                   low_rc=$?
                   set -e
                   if [[ $low_rc -ne 0 ]]; then
@@ -645,7 +637,7 @@ jobs:
                   echo "Low-risk smoke path verified."
 
                   set +e
-                  high_raw="$(invoke_with_retries "$high_risk_message" "high-risk" "$high_risk_conversation")"
+                  high_raw="$(invoke_with_retries "$high_risk_message" "high-risk")"
                   high_rc=$?
                   set -e
                   if [[ $high_rc -ne 0 ]]; then

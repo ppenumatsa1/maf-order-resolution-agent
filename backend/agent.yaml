@@ -12,6 +12,10 @@ environment_variables:
       value: "true"
     - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
       value: "false"
+    - name: FOUNDRY_PROJECTS_ENDPOINT
+      value: ${FOUNDRY_PROJECT_ENDPOINT}
+    - name: FOUNDRY_MODEL_DEPLOYMENT_NAME
+      value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
     - name: FOUNDRY_DEPLOYMENT_PROFILE
       value: ${FOUNDRY_DEPLOYMENT_PROFILE}
     - name: DATABASE_URL

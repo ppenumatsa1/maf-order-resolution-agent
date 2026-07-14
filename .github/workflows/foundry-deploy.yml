@@ -749,7 +749,7 @@ jobs:
                       --query "tables[0].rows[0][0]" -o tsv)
                     BUSINESS_COUNT=${BUSINESS_COUNT:-0}
 
-                    trace_query="union requests,dependencies | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' and operationName == 'invoke_agent' and isnotempty(responseId) | summarize count()"
+                    trace_query="let rootOperations = requests | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' | project operation_Id; union requests,dependencies | where timestamp > ago(20m) and operation_Id in (rootOperations) | extend responseId=tostring(customDimensions['gen_ai.response.id']) | where isnotempty(responseId) | summarize count()"
                     TRACE_COUNT=$(az monitor app-insights query --app "$APP_ID" \
                       --analytics-query "$trace_query" \
                       --query "tables[0].rows[0][0]" -o tsv)
@@ -765,7 +765,7 @@ jobs:
                   done
 
                   echo "Telemetry gate failed: missing business telemetry or Foundry GenAI transaction span for thread_id=$THREAD_ID"
-                  diagnostic_query="union withsource=TableName requests,dependencies | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | where conversationId == '${THREAD_ID}' | project timestamp, TableName, name, operation_Id, agentName, operationName, responseId | order by timestamp desc | take 50"
+                  diagnostic_query="let rootOperations = requests | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' | project operation_Id; union withsource=TableName requests,dependencies | where timestamp > ago(20m) and operation_Id in (rootOperations) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | project timestamp, TableName, name, operation_Id, agentName, operationName, responseId | order by timestamp desc | take 50"
                   az monitor app-insights query --app "$APP_ID" \
                     --analytics-query "$diagnostic_query" \
                     -o table || true

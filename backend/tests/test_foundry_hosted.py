@@ -165,7 +165,42 @@ def test_hosted_manifest_propagates_deployment_profile() -> None:
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
         in manifest_text
     )
+    assert "name: FOUNDRY_PROJECTS_ENDPOINT\n      value: ${FOUNDRY_PROJECT_ENDPOINT}" in (
+        manifest_text
+    )
+    assert (
+        "name: FOUNDRY_MODEL_DEPLOYMENT_NAME\n"
+        "      value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+    ) in manifest_text
     assert not hasattr(foundry_main, "setup_observability")
+
+
+def test_foundry_model_env_aliases_set_canonical_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FOUNDRY_PROJECTS_ENDPOINT", raising=False)
+    monkeypatch.delenv("FOUNDRY_MODEL_DEPLOYMENT_NAME", raising=False)
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://example.test/api/projects/order")
+    monkeypatch.setenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-4o-mini")
+
+    foundry_main._apply_foundry_model_env_aliases()
+
+    assert os.getenv("FOUNDRY_PROJECTS_ENDPOINT") == "https://example.test/api/projects/order"
+    assert os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME") == "gpt-4o-mini"
+
+
+def test_foundry_model_env_aliases_preserve_canonical_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FOUNDRY_PROJECTS_ENDPOINT", "https://canonical.test/api/projects/order")
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT_NAME", "canonical-model")
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "https://hosted.test/api/projects/order")
+    monkeypatch.setenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "hosted-model")
+
+    foundry_main._apply_foundry_model_env_aliases()
+
+    assert os.getenv("FOUNDRY_PROJECTS_ENDPOINT") == "https://canonical.test/api/projects/order"
+    assert os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME") == "canonical-model"
 
 
 def test_build_app_uses_platform_store_for_public_profile(

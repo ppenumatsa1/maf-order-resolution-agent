@@ -14,6 +14,19 @@ from app.api.v1.schemas.hitl import HitlResponseRequest
 from app.core.telemetry import get_tracer
 
 
+def _apply_foundry_model_env_aliases() -> None:
+    aliases = {
+        "FOUNDRY_PROJECTS_ENDPOINT": "FOUNDRY_PROJECT_ENDPOINT",
+        "FOUNDRY_MODEL_DEPLOYMENT_NAME": "AZURE_AI_MODEL_DEPLOYMENT_NAME",
+    }
+    for canonical_name, hosted_name in aliases.items():
+        if os.getenv(canonical_name, "").strip():
+            continue
+        hosted_value = os.getenv(hosted_name, "").strip()
+        if hosted_value:
+            os.environ[canonical_name] = hosted_value
+
+
 def _database_url_host(value: str) -> str:
     if not value:
         return ""
@@ -33,6 +46,7 @@ def _apply_runtime_database_url_override() -> None:
         os.environ["DATABASE_URL"] = runtime_database_url
 
 
+_apply_foundry_model_env_aliases()
 _apply_runtime_database_url_override()
 
 if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":

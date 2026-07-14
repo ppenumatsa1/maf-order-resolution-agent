@@ -254,7 +254,7 @@ jobs:
                     if echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
                       echo "Collecting hosted agent monitor logs for probe readiness diagnostics..."
                       set +e
-                      (cd infra/foundry-hosted && timeout 120 azd ai agent monitor --follow --no-prompt)
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
                       set -e
                     fi
                     exit 1
@@ -556,11 +556,13 @@ jobs:
                       endpoint_refresh_after_attempt=1
                     fi
                     local endpoint_refreshed="false"
+                    local latest_session_id=""
                     for attempt in $(seq 1 "$max_attempts"); do
                       set +e
                       raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --new-conversation --new-session --output raw --no-prompt 2>&1)"
                       rc=$?
                       set -e
+                      latest_session_id="$(printf '%s\n' "$raw" | grep -oE "Session '[^']+'" | head -n1 | sed -E "s/^Session '([^']+)'$/\\1/" || true)"
                       if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then
                         rc=1
                       fi
@@ -570,6 +572,12 @@ jobs:
                       fi
                       if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|HTTP (404|409|424|429|5[0-9]{2})'; then
                         echo "Smoke invoke transient failure for $mode (attempt $attempt/$max_attempts). Retrying..."
+                        if [[ -n "$latest_session_id" ]] && (( attempt % 4 == 0 )); then
+                          echo "Collecting targeted session logs for session_not_ready diagnostics (session=$latest_session_id)..."
+                          set +e
+                          (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                          set -e
+                        fi
                         if (( attempt % 5 == 0 )); then
                           status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
                           status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
@@ -588,20 +596,24 @@ jobs:
                       echo "Smoke invoke failed for $mode (rc=$rc)."
                       echo "$raw"
                       if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                        echo "Collecting hosted agent monitor logs for readiness failure diagnostics..."
-                        set +e
-                        (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
-                        set -e
+                        if [[ -n "$latest_session_id" ]]; then
+                          echo "Collecting targeted session logs for readiness failure diagnostics (session=$latest_session_id)..."
+                          set +e
+                          (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                          set -e
+                        fi
                       fi
                       return "$rc"
                     done
                     echo "Smoke invoke failed for $mode after retries."
                     echo "$raw"
                     if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                      echo "Collecting hosted agent monitor logs after retries exhausted..."
-                      set +e
-                      (cd infra/foundry-hosted && timeout 90 azd ai agent monitor --follow --no-prompt)
-                      set -e
+                      if [[ -n "$latest_session_id" ]]; then
+                        echo "Collecting targeted session logs after retries exhausted (session=$latest_session_id)..."
+                        set +e
+                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                        set -e
+                      fi
                     fi
                     return "$rc"
                   }

@@ -556,7 +556,7 @@ jobs:
                     local endpoint_refreshed="false"
                     for attempt in $(seq 1 "$max_attempts"); do
                       set +e
-                      raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
+                      raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --new-conversation --new-session --output raw --no-prompt 2>&1)"
                       rc=$?
                       set -e
                       if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then

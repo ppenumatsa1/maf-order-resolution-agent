@@ -8,8 +8,6 @@ code_configuration:
     entry_point: foundry/main.py
     dependency_resolution: remote_build
 environment_variables:
-    - name: AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING
-      value: "true"
     - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
       value: "false"
     - name: FOUNDRY_PROJECTS_ENDPOINT

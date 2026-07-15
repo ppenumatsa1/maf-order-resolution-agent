@@ -160,7 +160,7 @@ def test_hosted_manifest_propagates_deployment_profile() -> None:
     manifest_text = manifest.read_text()
 
     assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest_text
-    assert 'name: AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING\n      value: "true"' in manifest_text
+    assert "AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING" not in manifest_text
     assert (
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
         in manifest_text

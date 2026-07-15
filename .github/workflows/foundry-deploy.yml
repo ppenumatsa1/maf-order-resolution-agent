@@ -202,7 +202,7 @@ jobs:
                       probe_azd_env="foundry-private-env"
                     fi
                   fi
-                  (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
+                  (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || azd env new "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
                   status_json="$(cd infra/foundry-hosted && azd ai agent show --output json --no-prompt 2>&1 || true)"
                   echo "$status_json"
                   status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"')"
@@ -263,11 +263,11 @@ jobs:
                     echo "::error::Probe failed with HTTP $http_code"
                     probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
                     if [[ -n "$probe_azd_env" ]]; then
-                      (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
+                      (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || azd env new "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
                     elif [[ "${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}" == "public" ]]; then
-                      (cd infra/foundry-hosted && azd env select foundry-public-dev2 --no-prompt >/dev/null 2>&1 || true)
+                      (cd infra/foundry-hosted && azd env select foundry-public-dev2 --no-prompt >/dev/null 2>&1 || azd env new foundry-public-dev2 --no-prompt >/dev/null 2>&1 || true)
                     else
-                      (cd infra/foundry-hosted && azd env select foundry-private-env --no-prompt >/dev/null 2>&1 || true)
+                      (cd infra/foundry-hosted && azd env select foundry-private-env --no-prompt >/dev/null 2>&1 || azd env new foundry-private-env --no-prompt >/dev/null 2>&1 || true)
                     fi
                     if [[ -n "$probe_session_id" ]]; then
                       echo "Collecting hosted agent monitor logs for probe failure diagnostics (session=$probe_session_id)..."

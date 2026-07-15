@@ -673,6 +673,11 @@ jobs:
                         set +e
                         (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
                         set -e
+                      else
+                        echo "Collecting hosted agent monitor logs for smoke failure diagnostics (no session id parsed)..."
+                        set +e
+                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
+                        set -e
                       fi
                       return "$rc"
                     done
@@ -682,6 +687,11 @@ jobs:
                       echo "Collecting targeted session logs after retries exhausted (session=$latest_session_id)..."
                       set +e
                       (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                      set -e
+                    else
+                      echo "Collecting hosted agent monitor logs after retries exhausted (no session id parsed)..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
                       set -e
                     fi
                     return "$rc"

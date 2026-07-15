@@ -230,6 +230,7 @@ jobs:
                     -o "$body_file" \
                     -w "%{http_code}")"
                   apim_request_id="$(awk -F': ' 'BEGIN{IGNORECASE=1} /^apim-request-id:/ {sub(/\r$/, "", $2); print $2; exit}' "$headers_file")"
+                  probe_session_id="$(awk -F': ' 'BEGIN{IGNORECASE=1} /^x-agent-session-id:/ {sub(/\r$/, "", $2); print $2; exit}' "$headers_file")"
                   sanitized_body="$(sed -E 's/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/[REDACTED_JWT]/g' "$body_file" | head -c 12000)"
                   echo "Responses endpoint URL: $responses_url"
                   echo "HTTP status code: $http_code"
@@ -251,7 +252,12 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
                   if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
                     echo "::error::Probe failed with HTTP $http_code"
-                    if echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
+                    if [[ -n "$probe_session_id" ]]; then
+                      echo "Collecting hosted agent monitor logs for probe failure diagnostics (session=$probe_session_id)..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$probe_session_id" --tail 120 --no-prompt)
+                      set -e
+                    elif echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
                       echo "Collecting hosted agent monitor logs for probe readiness diagnostics..."
                       set +e
                       (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
@@ -602,7 +608,17 @@ jobs:
                       fi
                       rc=$?
                       set -e
-                      latest_session_id="$(printf '%s\n' "$raw" | grep -oE "Session '[^']+'" | head -n1 | sed -E "s/^Session '([^']+)'$/\\1/" || true)"
+                      latest_session_id="$(printf '%s\n' "$raw" | awk '
+                        BEGIN { IGNORECASE=1 }
+                        match($0, /Session '\''([^'\'']+)'\''/, m) { print m[1]; exit }
+                        /^X-Agent-Session-Id:/ {
+                          value=$0
+                          sub(/^X-Agent-Session-Id:[[:space:]]*/, "", value)
+                          sub(/\r$/, "", value)
+                          print value
+                          exit
+                        }
+                      ' || true)"
                       if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then
                         rc=1
                       fi
@@ -635,25 +651,21 @@ jobs:
                       fi
                       echo "Smoke invoke failed for $mode (rc=$rc)."
                       echo "$raw"
-                      if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                        if [[ -n "$latest_session_id" ]]; then
-                          echo "Collecting targeted session logs for readiness failure diagnostics (session=$latest_session_id)..."
-                          set +e
-                          (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
-                          set -e
-                        fi
+                      if [[ -n "$latest_session_id" ]]; then
+                        echo "Collecting targeted session logs for smoke failure diagnostics (session=$latest_session_id)..."
+                        set +e
+                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                        set -e
                       fi
                       return "$rc"
                     done
                     echo "Smoke invoke failed for $mode after retries."
                     echo "$raw"
-                    if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                      if [[ -n "$latest_session_id" ]]; then
-                        echo "Collecting targeted session logs after retries exhausted (session=$latest_session_id)..."
-                        set +e
-                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
-                        set -e
-                      fi
+                    if [[ -n "$latest_session_id" ]]; then
+                      echo "Collecting targeted session logs after retries exhausted (session=$latest_session_id)..."
+                      set +e
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
+                      set -e
                     fi
                     return "$rc"
                   }

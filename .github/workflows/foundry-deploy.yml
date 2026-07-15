@@ -194,6 +194,15 @@ jobs:
                     echo "infra/foundry-hosted not found; skipping agent show."
                     exit 0
                   fi
+                  probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
+                  if [[ -z "$probe_azd_env" ]]; then
+                    if [[ "${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}" == "public" ]]; then
+                      probe_azd_env="foundry-public-dev2"
+                    else
+                      probe_azd_env="foundry-private-env"
+                    fi
+                  fi
+                  (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
                   status_json="$(cd infra/foundry-hosted && azd ai agent show "${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}" --output json --no-prompt 2>&1 || true)"
                   echo "$status_json"
                   status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"')"
@@ -256,6 +265,10 @@ jobs:
                     probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
                     if [[ -n "$probe_azd_env" ]]; then
                       (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
+                    elif [[ "${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}" == "public" ]]; then
+                      (cd infra/foundry-hosted && azd env select foundry-public-dev2 --no-prompt >/dev/null 2>&1 || true)
+                    else
+                      (cd infra/foundry-hosted && azd env select foundry-private-env --no-prompt >/dev/null 2>&1 || true)
                     fi
                     if [[ -n "$probe_session_id" ]]; then
                       echo "Collecting hosted agent monitor logs for probe failure diagnostics (session=$probe_session_id)..."

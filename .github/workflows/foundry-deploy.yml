@@ -436,13 +436,20 @@ jobs:
                   fi
                   foundry_model_deployment="${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
                   if [[ -z "$foundry_model_deployment" ]]; then
-                    foundry_model_deployment="$(azd env get-value AZURE_AI_MODEL_DEPLOYMENT_NAME 2>/dev/null || true)"
+                    if azd_model_deployment="$(azd env get-value AZURE_AI_MODEL_DEPLOYMENT_NAME 2>/dev/null)"; then
+                      foundry_model_deployment="$azd_model_deployment"
+                    fi
                   fi
                   if [[ -z "$foundry_model_deployment" ]]; then
                     foundry_model_deployment="gpt-4o-mini"
                   fi
+                  if [[ ! "$foundry_model_deployment" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                    echo "Invalid Foundry model deployment name."
+                    exit 1
+                  fi
                   azd env set FOUNDRY_PROJECTS_ENDPOINT "$foundry_models_endpoint"
                   azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "$foundry_model_deployment"
+                  echo "Foundry model configuration prepared: deployment=$foundry_model_deployment"
 
             - name: Refresh private runtime connection
               if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}

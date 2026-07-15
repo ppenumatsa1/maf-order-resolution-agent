@@ -203,7 +203,7 @@ jobs:
                     fi
                   fi
                   (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
-                  status_json="$(cd infra/foundry-hosted && azd ai agent show "${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}" --output json --no-prompt 2>&1 || true)"
+                  status_json="$(cd infra/foundry-hosted && azd ai agent show --output json --no-prompt 2>&1 || true)"
                   echo "$status_json"
                   status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"')"
                   version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // fromjson.resolvedVersion // empty) catch empty' | tr -d '"')"
@@ -261,7 +261,6 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
                   if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
                     echo "::error::Probe failed with HTTP $http_code"
-                    probe_agent_name="${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}"
                     probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
                     if [[ -n "$probe_azd_env" ]]; then
                       (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
@@ -273,12 +272,12 @@ jobs:
                     if [[ -n "$probe_session_id" ]]; then
                       echo "Collecting hosted agent monitor logs for probe failure diagnostics (session=$probe_session_id)..."
                       set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor "$probe_agent_name" --session-id "$probe_session_id" --tail 120 --no-prompt)
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$probe_session_id" --tail 120 --no-prompt)
                       set -e
                     elif echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
                       echo "Collecting hosted agent monitor logs for probe readiness diagnostics..."
                       set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor "$probe_agent_name" --tail 120 --no-prompt)
+                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
                       set -e
                     fi
                     exit 1

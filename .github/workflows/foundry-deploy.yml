@@ -104,6 +104,9 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
+      - name: Configure azd to use Azure CLI auth
+        run: azd config set auth.useAzCliAuth true
+
       - name: Install Foundry azd extension
         run: azd ext install azure.ai.agents --no-prompt
 
@@ -151,6 +154,9 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - uses: Azure/setup-azd@v2
+
+      - name: Configure azd to use Azure CLI auth
+        run: azd config set auth.useAzCliAuth true
 
       - name: Install Foundry azd extension
         run: azd ext install azure.ai.agents --no-prompt

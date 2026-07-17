@@ -247,12 +247,7 @@ jobs:
             else
               postgres_db_name="maf_workflow"
             fi
-            encoded_password="$(python - <<'PY' "$postgres_password"
-import sys
-from urllib.parse import quote
-print(quote(sys.argv[1], safe=''))
-PY
-)"
+            encoded_password="$(python -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$postgres_password")"
             runtime_db_url="postgresql://pgadmin:${encoded_password}@${postgres_fqdn}:5432/${postgres_db_name}?sslmode=require"
           fi
 

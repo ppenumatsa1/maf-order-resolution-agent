@@ -183,6 +183,28 @@ jobs:
           azd env set NETWORK_MODE "$network_mode"
           azd env set FOUNDRY_DEPLOYMENT_PROFILE "$profile"
 
+          project_id="${{ vars.FOUNDRY_PROJECT_ID || '' }}"
+          project_endpoint="${{ vars.FOUNDRY_PROJECT_ENDPOINT || vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
+          project_name="${{ vars.FOUNDRY_PROJECT_NAME || 'order-resolution' }}"
+          account_name=""
+          if [[ -z "$project_id" || -z "$project_endpoint" ]]; then
+            account_name="$(az cognitiveservices account list --resource-group "$resource_group" --query "[0].name" -o tsv)"
+            if [[ -z "$account_name" ]]; then
+              echo "Unable to resolve Foundry account name in resource group $resource_group"
+              exit 1
+            fi
+          fi
+          if [[ -z "$project_id" ]]; then
+            project_id="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$resource_group/providers/Microsoft.CognitiveServices/accounts/$account_name/projects/$project_name"
+          fi
+          if [[ -z "$project_endpoint" ]]; then
+            project_endpoint="https://$account_name.services.ai.azure.com/api/projects/$project_name"
+          fi
+          azd env set AZURE_AI_PROJECT_ID "$project_id"
+          azd env set FOUNDRY_PROJECT_ID "$project_id"
+          azd env set AZURE_AI_PROJECT_ENDPOINT "$project_endpoint"
+          azd env set FOUNDRY_PROJECT_ENDPOINT "$project_endpoint"
+
           runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
           if [[ -n "$runtime_db_url" ]]; then
             azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"

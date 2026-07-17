@@ -51,6 +51,8 @@ jobs:
     needs: routing
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Enforce operating model guardrails
         run: scripts/skills/operating-model-enforcement.sh "${{ needs.routing.outputs.base_ref }}"
 

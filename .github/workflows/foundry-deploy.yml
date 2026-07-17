@@ -229,15 +229,47 @@ jobs:
 
           runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
           if [[ -n "$runtime_db_url" ]]; then
-            azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
-            azd env set DATABASE_URL "$runtime_db_url"
-            azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
+            runtime_db_url="$(echo "$runtime_db_url" | tr -d '[:space:]')"
           fi
+          if [[ "$runtime_db_url" == *"******"* || "$runtime_db_url" == *"localhost"* || "$runtime_db_url" == *"127.0.0.1"* ]]; then
+            runtime_db_url=""
+          fi
+
+          postgres_password="${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}"
+          if [[ -z "$runtime_db_url" && -n "$postgres_password" ]]; then
+            postgres_fqdn="$(az postgres flexible-server list --resource-group "$resource_group" --query "[0].fullyQualifiedDomainName" -o tsv)"
+            if [[ -z "$postgres_fqdn" ]]; then
+              echo "Unable to resolve PostgreSQL server in resource group $resource_group"
+              exit 1
+            fi
+            if [[ "$profile" == "public" ]]; then
+              postgres_db_name="maf_workflow_public_dev"
+            else
+              postgres_db_name="maf_workflow"
+            fi
+            encoded_password="$(python - <<'PY' "$postgres_password"
+import sys
+from urllib.parse import quote
+print(quote(sys.argv[1], safe=''))
+PY
+)"
+            runtime_db_url="postgresql://pgadmin:${encoded_password}@${postgres_fqdn}:5432/${postgres_db_name}?sslmode=require"
+          fi
+
+          if [[ -z "$runtime_db_url" ]]; then
+            echo "Runtime database URL is not set. Configure FOUNDRY_DATABASE_URL or POSTGRES_ADMIN_PASSWORD in this GitHub environment."
+            exit 1
+          fi
+
+          azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
+          azd env set DATABASE_URL "$runtime_db_url"
+          azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
 
       - name: Deploy hosted agent
         run: make foundry-deploy
 
       - name: Smoke validation
+        id: smoke_validation
         if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
         run: |
           set -euo pipefail
@@ -276,6 +308,15 @@ jobs:
 
           run_smoke_with_retry "Resolve delayed order ORD-1001"
           run_smoke_with_retry "Resolve delayed order ORD-1009"
+
+      - name: Collect hosted agent diagnostics on smoke failure
+        if: ${{ always() && steps.smoke_validation.outcome == 'failure' }}
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          azd ai agent show order-resolution-hosted --output json --no-prompt || true
+          azd ai agent monitor order-resolution-hosted --type system --tail 200 --utc --no-prompt || true
+          azd ai agent monitor order-resolution-hosted --tail 200 --utc --no-prompt || true
 
       - name: Hosted E2E validation
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}

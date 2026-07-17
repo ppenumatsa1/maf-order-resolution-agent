@@ -219,8 +219,41 @@ jobs:
         if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
         run: |
           set -euo pipefail
-          make foundry-smoke SMOKE_MESSAGE="Resolve delayed order ORD-1001"
-          make foundry-smoke SMOKE_MESSAGE="Resolve delayed order ORD-1009"
+          smoke_retry_count="${FOUNDRY_SMOKE_RETRY_COUNT:-4}"
+          smoke_retry_delay="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-20}"
+
+          run_smoke_with_retry() {
+            local smoke_message="$1"
+            local attempt=1
+            local output_file
+            output_file="$(mktemp)"
+            while true; do
+              echo "Running smoke attempt ${attempt}/${smoke_retry_count}: ${smoke_message}"
+              if make foundry-smoke SMOKE_MESSAGE="$smoke_message" 2>&1 | tee "$output_file"; then
+                rm -f "$output_file"
+                return 0
+              fi
+
+              if ! grep -q "session_not_ready" "$output_file"; then
+                echo "Smoke failed with non-retryable error."
+                rm -f "$output_file"
+                return 1
+              fi
+
+              if [[ "$attempt" -ge "$smoke_retry_count" ]]; then
+                echo "Smoke failed after ${smoke_retry_count} attempts due to session_not_ready."
+                rm -f "$output_file"
+                return 1
+              fi
+
+              echo "Smoke returned session_not_ready; retrying in ${smoke_retry_delay}s."
+              attempt=$((attempt + 1))
+              sleep "$smoke_retry_delay"
+            done
+          }
+
+          run_smoke_with_retry "Resolve delayed order ORD-1001"
+          run_smoke_with_retry "Resolve delayed order ORD-1009"
 
       - name: Hosted E2E validation
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}

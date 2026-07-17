@@ -113,6 +113,11 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: scripts/playwright/package-lock.json
+      - name: Prepare backend env file
+        run: |
+          if [[ ! -f backend/.env && -f backend/.env.example ]]; then
+            cp backend/.env.example backend/.env
+          fi
       - name: Run Docker E2E profile
         run: make docker-test
 

@@ -10,10 +10,10 @@ from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore
 from app.infrastructure.persistence.session_memory import SessionMemoryStore
 from app.maf.clients import FoundryModelsConfig
+from app.maf.executors import TriageExecutor
 from app.maf.executors import hitl as hitl_executor_module
 from app.maf.executors import resolution as resolution_executor_module
 from app.maf.executors import triage as triage_executor_module
-from app.maf.executors import TriageExecutor
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 from app.modules.order_resolution.models import WorkflowContext
 

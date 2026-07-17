@@ -3,6 +3,43 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-17, private smoke/e2e restored from GH runner)
+
+### What failed
+
+Private Foundry deploys kept failing smoke with `HTTP 424 session_not_ready`, even after
+deploy succeeded.
+
+### Root cause
+
+Container startup was failing in readiness due to PostgreSQL auth mismatch:
+
+- repeated `password authentication failed for user "pgadmin"`
+- startup traceback at `app/core/container.py -> postgres_db.ensure_schema()`
+- terminal error `psycopg_pool.PoolTimeout: couldn't get a connection after 30.00 sec`
+
+This confirms `session_not_ready` was a downstream readiness symptom, not a model/runtime protocol issue.
+
+### Fixes applied
+
+1. Added hosted diagnostics capture in `.github/workflows/foundry-deploy.yml`:
+   - on smoke failure, collect `azd ai agent show` and `azd ai agent monitor` logs.
+2. Hardened deploy/provision DB env setup in workflows:
+   - reject masked/localhost DB URLs
+   - derive runtime DB URL from current Azure PostgreSQL server + admin secret when needed.
+3. Rotated PostgreSQL admin password on `maffndpg7930` and updated GitHub environment secrets:
+   - `foundry-private-env`: `POSTGRES_ADMIN_PASSWORD`, `FOUNDRY_DATABASE_URL`
+   - `foundry-public-env`: `POSTGRES_ADMIN_PASSWORD`, `FOUNDRY_DATABASE_URL`
+4. Re-ran private deploy-only orchestrator from branch `feature/foundry-private-network-vnet`.
+
+### Validation evidence
+
+- Failed diagnostic run (captured root cause): `29616784230`
+- Successful private recovery run: `29617103198`
+  - `deploy_only / Deploy Foundry hosted agent`: success
+  - smoke validation: success
+  - hosted E2E validation: success
+
 ## Latest execution update (2026-07-17, single-source hosted deploy path adopted)
 
 ### What changed

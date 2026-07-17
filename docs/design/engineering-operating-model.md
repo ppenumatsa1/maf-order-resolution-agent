@@ -70,6 +70,15 @@ A change is done only when all applicable items are true:
 | IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
 | Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
 
+## Operationalization (automated)
+
+The CI workflow (`.github/workflows/ci.yml`) enforces this model in two lightweight stages:
+
+1. **Routing** via `scripts/skills/deployment-mode-router.sh` to select `validation_mode` (`quick` or `full`) from changed surfaces.
+2. **Guardrail enforcement** via `scripts/skills/operating-model-enforcement.sh`:
+   - HITL decision-surface changes require `docs/design/hitl-approval-conditions.md` updates plus workflow-test or hosted-eval updates.
+   - Hosted runtime/deploy surface changes require an update to `docs/design/issues-changes-fixes.md`.
+
 ## Evidence handoff template
 
 For each release-impacting change, capture:

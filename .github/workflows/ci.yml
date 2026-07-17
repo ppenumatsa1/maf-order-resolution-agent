@@ -8,9 +8,57 @@ on:
   workflow_dispatch:
 
 jobs:
+  routing:
+    name: Operating model routing
+    runs-on: ubuntu-latest
+    outputs:
+      validation_mode: ${{ steps.route.outputs.validation_mode }}
+      deploy_mode: ${{ steps.route.outputs.deploy_mode }}
+      router_reason: ${{ steps.route.outputs.router_reason }}
+      base_ref: ${{ steps.base.outputs.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve diff base
+        id: base
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+          elif [[ -n "${{ github.event.before || '' }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            base_ref="${{ github.event.before }}"
+          else
+            base_ref="HEAD~1"
+          fi
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+      - name: Route validation/deploy mode
+        id: route
+        run: |
+          set -euo pipefail
+          routing_output="$(scripts/skills/deployment-mode-router.sh "${{ steps.base.outputs.base_ref }}")"
+          echo "$routing_output"
+          validation_mode="$(grep '^validation_mode=' <<<"$routing_output" | head -n1 | cut -d= -f2)"
+          deploy_mode="$(grep '^deploy_mode=' <<<"$routing_output" | head -n1 | cut -d= -f2)"
+          router_reason="$(grep '^reason=' <<<"$routing_output" | head -n1 | cut -d= -f2)"
+          echo "validation_mode=$validation_mode" >> "$GITHUB_OUTPUT"
+          echo "deploy_mode=$deploy_mode" >> "$GITHUB_OUTPUT"
+          echo "router_reason=$router_reason" >> "$GITHUB_OUTPUT"
+
+  operating-model-enforcement:
+    name: Operating model enforcement
+    runs-on: ubuntu-latest
+    needs: routing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce operating model guardrails
+        run: scripts/skills/operating-model-enforcement.sh "${{ needs.routing.outputs.base_ref }}"
+
   backend:
     name: Backend lint, tests, and evals
     runs-on: ubuntu-latest
+    needs:
+      - routing
+      - operating-model-enforcement
+    if: ${{ needs.routing.outputs.validation_mode == 'full' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +78,9 @@ jobs:
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
+    needs:
+      - routing
+      - operating-model-enforcement
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +98,10 @@ jobs:
   e2e:
     name: Docker E2E
     runs-on: ubuntu-latest
+    needs:
+      - routing
+      - operating-model-enforcement
+    if: ${{ needs.routing.outputs.validation_mode == 'full' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,6 +115,10 @@ jobs:
   design-review:
     name: Deterministic design-review gate
     runs-on: ubuntu-latest
+    needs:
+      - routing
+      - operating-model-enforcement
+    if: ${{ needs.routing.outputs.validation_mode == 'full' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,3 +129,18 @@ jobs:
           node-version: "20"
       - name: Run design-review gate
         run: ./scripts/skills/design-review-skill.sh
+
+  quick-validation:
+    name: Quick validation gate
+    runs-on: ubuntu-latest
+    needs:
+      - routing
+      - operating-model-enforcement
+    if: ${{ needs.routing.outputs.validation_mode == 'quick' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run quick validation
+        run: make validate-quick

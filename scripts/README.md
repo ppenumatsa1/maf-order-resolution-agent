@@ -13,6 +13,7 @@ Current hosted-validation note (2026-07-15):
 - `parity/`: multi-target parity runner for local/Azure/Foundry endpoint checks.
 - `skills/design-review-skill.sh`: deterministic design-review validation entry point used by `/fleet` skill.
 - `skills/deployment-mode-router.sh`: routes quick/full validation and app-only/full deployment based on changed files.
+- `skills/operating-model-enforcement.sh`: enforces minimum operating-model guardrails for HITL and hosted runtime/deploy surface changes.
 
 ## Run Playwright locally
 

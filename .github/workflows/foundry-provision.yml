@@ -53,6 +53,17 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Repair runner workspace permissions
+        run: |
+          set -euo pipefail
+          if ! command -v sudo >/dev/null 2>&1; then
+            exit 0
+          fi
+          if [[ -d "${GITHUB_WORKSPACE}" ]]; then
+            sudo chown -R "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}" || true
+            sudo rm -rf "${GITHUB_WORKSPACE}/infra/foundry-hosted/None" || true
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Validate hosted source path

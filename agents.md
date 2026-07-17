@@ -16,6 +16,8 @@ This file describes expected behavior for coding agents working in this reposito
   - `backend/app/core/*` owns config, database, telemetry, and composition.
   - `backend/app/infrastructure/*` is the repository-pattern/adapters namespace.
   - `backend/app/maf/*` owns the MAF runtime namespace.
+  - Keep MAF internals modular: `prompts/`, `agents/`, `tools/`, `executors/`,
+    `runner.py`, and `workflows/` should remain separate concerns.
 
 ## Agent Change Policy
 
@@ -106,3 +108,4 @@ When architecture or execution policies change, update these instruction files i
 
 - `.github/copilot-instructions.md`
 - `agents.md`
+- `docs/design/engineering-operating-model.md`

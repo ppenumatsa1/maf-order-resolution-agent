@@ -1,5 +1,6 @@
 name: order-resolution-parity
-dataset_file: evals/cases.jsonl
+dataset:
+  local_uri: .foundry/datasets/order-resolution-hosted-cases.jsonl
 agent:
   name: order-resolution-hosted
 evaluators:

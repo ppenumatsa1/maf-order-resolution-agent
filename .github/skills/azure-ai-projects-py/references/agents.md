@@ -1,5 +1,14 @@
 # Agent Operations Reference
 
+## Repository delivery formalization
+
+- **You provide** architecture intent, business rules, and acceptance criteria.
+- **Skills provide** current Microsoft platform and SDK guidance.
+- **Copilot provides** implementation, tests, and infra/doc updates.
+- **Gates provide** release evidence for correctness, recovery, telemetry, and Foundry parity.
+
+Canonical contract: `docs/design/engineering-operating-model.md`.
+
 ## Agent Types and Kinds
 
 ```python

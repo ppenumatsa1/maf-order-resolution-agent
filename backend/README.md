@@ -8,7 +8,9 @@
 | Azure app-hosted | Implemented | Same FastAPI host pattern on ACA/Postgres/App Insights. |
 | Foundry hosted agent | Implemented | `backend/foundry/main.py` hosts the same workflow with Responses protocol (`backend/agent.yaml`). |
 
-There is one business workflow path: `backend/app/maf/workflows/order_resolution.py`.
+There is one business workflow path rooted at `backend/app/maf/workflows/order_resolution.py`,
+with modular internals in `backend/app/maf/prompts/`, `agents/`, `tools/`, `executors/`,
+and `runner.py`.
 
 ## Run locally
 
@@ -45,7 +47,15 @@ azd ai agent invoke order-resolution-hosted "Resolve delayed order ORD-1001" --p
 azd ai agent invoke order-resolution-hosted "Why was that resolution selected?" --protocol responses --conversation-id c1 --no-prompt
 ```
 
+The hosted deploy source is configured in `infra/foundry-hosted/azure.yaml` as `./agent`; `make foundry-deploy` automatically syncs `backend/` into that folder before `azd deploy`.
+
 For high-risk turns that request approval, continue the same conversation with `Approve` or `Reject`.
+
+Latest hosted-tracing status (2026-07-15):
+
+- Public Foundry Conversations/Transactions are restored and visible.
+- Hosted tracing/root-cause fix included removing `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING` from `backend/agent.yaml` to avoid stream-wrapper incompatibility on the hosted Foundry path.
+- Private lane currently needs additional investigation for intermittent upstream `HTTP 500 server_error` during smoke/probe after deploy activation.
 
 Telemetry:
 
@@ -77,6 +87,8 @@ Telemetry:
 
 Legacy shims and `app/foundry/*` adapter paths are removed.
 
+Delivery ownership and verification gate authority are defined in `docs/design/engineering-operating-model.md`.
+
 ## Event contract (SSE)
 
 Stable emitted event types:
@@ -102,4 +114,3 @@ Baselines:
 
 - `ORD-1009` delayed: HITL expected.
 - `ORD-1001` late delivery: no HITL expected.
-

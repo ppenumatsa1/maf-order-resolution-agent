@@ -32,3 +32,7 @@ Build a demo-ready multi-agent orchestration using Microsoft Agent Framework-ali
 5. Follow-up messages within the same thread use prior memory.
 6. OTEL traces are created and configurable for App Insights export.
 7. Eval harness produces report with pass/fail metrics.
+
+## Delivery contract
+
+Implementation authority and release evidence requirements are defined in `docs/design/engineering-operating-model.md`.

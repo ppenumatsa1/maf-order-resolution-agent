@@ -4,6 +4,7 @@ from app.core.config import AppConfig
 from app.infrastructure.events import EventBus
 from app.infrastructure.rag import NoopRAGProvider
 from app.maf.factory import create_workflow
+from app.maf.runner import OrderResolutionMafRunner
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 
 
@@ -41,7 +42,7 @@ class _McpTool:
         return {"source": "test", "query": query}
 
 
-def test_create_workflow_uses_order_resolution_workflow() -> None:
+def test_create_workflow_uses_order_resolution_runner() -> None:
     workflow = create_workflow(
         config=AppConfig(
             workflow_mode="maf_sdk",
@@ -55,4 +56,5 @@ def test_create_workflow_uses_order_resolution_workflow() -> None:
         mcp_tool=_McpTool(),
         rag_provider=NoopRAGProvider(),
     )
-    assert isinstance(workflow, OrderResolutionWorkflow)
+    assert isinstance(workflow, OrderResolutionMafRunner)
+    assert isinstance(workflow._workflow, OrderResolutionWorkflow)

@@ -15,7 +15,7 @@ set -euo pipefail
 #   export FOUNDRY_PROJECT_ENDPOINT=https://...services.ai.azure.com/api/projects/order-resolution-ni
 #   export APPINSIGHTS_APP_ID=...
 #   export AZURE_CLIENT_SECRET=...   # required when deploy auth mode is service-principal
-#   export FOUNDRY_RUNTIME_ENV_FILE=infra/foundry-hosted/runtime/.env
+#   export FOUNDRY_DATABASE_URL=postgresql://...  # required for hosted runtime DB connection
 #   ./scripts/github/bootstrap_foundry_github_config.sh
 
 require_bin() {
@@ -42,7 +42,7 @@ RUNNER_LABEL="${RUNNER_LABEL:-foundry-private}"
 FOUNDRY_AZD_ENV_NAME="${FOUNDRY_AZD_ENV_NAME:-foundry-private-env}"
 FOUNDRY_LOCATION="${FOUNDRY_LOCATION:-eastus2}"
 FOUNDRY_DEPLOY_AUTH_MODE="${FOUNDRY_DEPLOY_AUTH_MODE:-service-principal}"
-FOUNDRY_RUNTIME_ENV_FILE="${FOUNDRY_RUNTIME_ENV_FILE:-infra/foundry-hosted/runtime/.env}"
+FOUNDRY_DATABASE_URL="${FOUNDRY_DATABASE_URL:-}"
 
 if [[ -z "$REPO" ]]; then
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
@@ -56,8 +56,8 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$FOUNDRY_RUNTIME_ENV_FILE" ]]; then
-  echo "FOUNDRY_RUNTIME_ENV_FILE does not exist: $FOUNDRY_RUNTIME_ENV_FILE"
+if [[ -z "$FOUNDRY_DATABASE_URL" ]]; then
+  echo "FOUNDRY_DATABASE_URL is required."
   exit 1
 fi
 
@@ -86,8 +86,8 @@ gh variable set FOUNDRY_LOCATION -R "$REPO" -b "$FOUNDRY_LOCATION"
 gh variable set FOUNDRY_DEPLOY_AUTH_MODE -R "$REPO" -b "$FOUNDRY_DEPLOY_AUTH_MODE"
 gh variable set APPINSIGHTS_APP_ID -R "$REPO" -b "$APPINSIGHTS_APP_ID"
 
-echo "Setting environment secret FOUNDRY_RUNTIME_ENV in $ENV_NAME"
-gh secret set FOUNDRY_RUNTIME_ENV -R "$REPO" -e "$ENV_NAME" < "$FOUNDRY_RUNTIME_ENV_FILE"
+echo "Setting environment secret FOUNDRY_DATABASE_URL in $ENV_NAME"
+gh secret set FOUNDRY_DATABASE_URL -R "$REPO" -e "$ENV_NAME" -b "$FOUNDRY_DATABASE_URL"
 if [[ "$FOUNDRY_DEPLOY_AUTH_MODE" == "service-principal" ]]; then
   : "${AZURE_CLIENT_SECRET:?AZURE_CLIENT_SECRET is required when FOUNDRY_DEPLOY_AUTH_MODE=service-principal}"
   echo "Setting environment secret AZURE_CLIENT_SECRET in $ENV_NAME"

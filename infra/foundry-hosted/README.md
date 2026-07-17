@@ -1,12 +1,25 @@
-# Foundry-Hosted Private VNet Deployment
+# Foundry-Hosted Deployment (Public Dev + Private Baseline)
 
 This stack provisions and deploys a Foundry-hosted agent path using `azd` + Bicep from `infra/foundry-hosted`.
 
 Primary target region for this path is **eastus2**.
 
+## Deployment lanes
+
+Use two separate environments instead of toggling one account between modes.
+
+1. `foundry-public-dev` (rapid iteration): public network mode and direct developer-machine deployment.
+2. `foundry-private-env` (baseline/private): private networking, private endpoints, and private-runner execution path.
+
+Current status snapshot (2026-07-15):
+
+- Public lane: Conversations/Traces restored and confirmed for `order-resolution-hosted`.
+- Private lane: deploy continues to activate, but smoke/probe can intermittently fail with upstream `HTTP 500 server_error`; ongoing diagnostics focus on hosted runtime behavior after activation.
+
 ## What this stack includes
 
 - `azure.yaml` service host: `azure.ai.agent` (`order-resolution-hosted`)
+- `azure.yaml` deploy source path: `./agent` (generated from `backend/` by sync helper)
 - Bicep orchestration in `iac/main.bicep` for:
   - Foundry account/project + model deployments
   - VNet + agent subnet + private endpoint subnet
@@ -24,6 +37,32 @@ Primary target region for this path is **eastus2**.
   Rerun/repair profile for existing environments (capability-host/connections disabled, runner VM creation disabled).
 - `iac/parameters.dev.json`  
   Dev profile aligned to eastus2 defaults.
+- `iac/parameters.public-dev.json`  
+  Public development profile (`networkMode=public`) that disables private DNS/endpoints, runner access, NAT, and network injection.
+
+`iac/main.bicep` uses `networkMode` (`public|private`) to switch networking posture while keeping the hosted runtime path unchanged.
+
+## Public dev local workflow
+
+Set runtime values through azd environment and Foundry connection inputs:
+
+- `RUNTIME_DATABASE_URL=postgresql://...@...postgres.database.azure.com:5432/<db>?sslmode=require`
+- optional model config: `FOUNDRY_PROJECTS_ENDPOINT=...`, `FOUNDRY_MODEL_DEPLOYMENT_NAME=...`
+
+Then run:
+
+```bash
+make foundry-postgres-readiness
+AZURE_SUBSCRIPTION_ID="<subscription-id>" \
+AZURE_RESOURCE_GROUP="rg-maf-ora-foundry-public-dev" \
+FOUNDRY_AZD_ENV_NAME="foundry-public-dev" \
+RUNTIME_DATABASE_URL="<postgres-url>" \
+make foundry-deploy-public
+```
+
+The deploy helper configures AZD env values for public mode, provisions infra (including the runtime `CustomKeys` connection), syncs `backend/` into `infra/foundry-hosted/agent`, and deploys `order-resolution-hosted` without runtime dotenv mirroring.
+
+Provisioning now reads `iac/main.parameters.json`, which maps AZD environment keys (for example `NETWORK_MODE`) into Bicep parameters. The helper script `scripts/foundry/ensure_foundry_azd_defaults.sh` backfills missing keys so ad-hoc `make foundry-provision` and CI runs stay deterministic.
 
 ## CI/CD workflows
 
@@ -36,8 +75,7 @@ The private-runner workflow path supports:
 1. `azd provision`
 2. `azd deploy order-resolution-hosted`
 3. smoke invoke
-4. hosted E2E regression
-5. App Insights telemetry gate (thread-correlated)
+4. hosted E2E regression (optional)
 
 ## Authentication mode
 
@@ -71,7 +109,7 @@ Optional defaults:
 - `RUNNER_LABEL` (default: `foundry-private`)
 - `RUNNER_VERSION` (default: `2.328.0`)
 
-## Runner readiness check (before orchestrator dispatch)
+## Runner readiness check
 
 Verify GitHub sees an online runner for the required label:
 
@@ -81,11 +119,9 @@ RUNNER_LABEL=foundry-private \
 ./scripts/github/verify_foundry_runner_ready.sh
 ```
 
-The orchestrator workflow now runs this check as a preflight job.
-
 ## Existing VM runbook
 
-Run this on each private runner VM (`vm-maffnd-runner`, `vm-maffnd-runner-iac`) via SSH/Bastion:
+Run this on the retained private runner VM (`vm-maffnd-runner`) via SSH/Bastion:
 
 ```bash
 cd /path/to/repo
@@ -116,6 +152,25 @@ gh api repos/ppenumatsa1/maf-order-resolution-agent/actions/runners \
 - Missing tools on runner host:
   - Re-run `./scripts/github/bootstrap_vm_runner_host.sh`.
 
+## PostgreSQL readiness helper (public dev)
+
+`scripts/foundry/check_public_postgres_readiness.sh` validates that a candidate Azure PostgreSQL Flexible Server can be reused for public dev:
+
+- server state is `Ready`
+- public network access is enabled
+- Azure-services firewall rule (`0.0.0.0`) is present
+- optional `DATABASE_URL` check enforces `sslmode=require` and host match
+
+Example:
+
+```bash
+SUBSCRIPTION_ID="<subscription-id>" \
+RESOURCE_GROUP="rg-maf-ora-foundry" \
+SERVER_NAME="maffndpg7930" \
+DATABASE_URL="$DATABASE_URL" \
+./scripts/foundry/check_public_postgres_readiness.sh
+```
+
 ## Local validation
 
 ```bash
@@ -132,3 +187,5 @@ Repository deterministic gates remain:
 - `make eval-backend`
 - `make test-e2e`
 - `./scripts/skills/design-review-skill.sh`
+
+Delivery ownership, required gate mapping, and evidence handoff expectations are documented in `docs/design/engineering-operating-model.md`.

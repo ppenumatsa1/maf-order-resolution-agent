@@ -16,7 +16,21 @@ Primary scenarios include delayed delivery, damaged item, and policy-driven comp
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
 | Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                      |
-| Foundry hosted agent | In progress | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
+| Foundry hosted agent | Implemented (public) / Investigating (private) | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
+
+MAF internals are split for maintainability into `backend/app/maf/prompts`,
+`agents`, `tools`, `executors`, `runner`, and `workflows`.
+
+## Latest Foundry trace status (2026-07-15)
+
+- **Public Foundry is fixed and verified**: Conversations/Traces are visible again for `order-resolution-hosted` (v32).
+- Root cause was a hosted tracing compatibility issue plus missing canonical model wiring in earlier deploys.
+- Effective fix was:
+  1. keep host-owned OpenTelemetry setup in `backend/foundry/main.py`,
+  2. ensure canonical model env values are populated for hosted runtime,
+  3. remove `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING` from `backend/agent.yaml` (this wrapper conflicted with `FoundryChatClient` streaming),
+  4. require semantic trace evidence in telemetry gates.
+- **Private Foundry remains under investigation**: deploy activates, then smoke/probe intermittently returns upstream `HTTP 500 server_error`.
 
 ## Quick Start (Local)
 
@@ -65,6 +79,9 @@ make eval-backend
 make test-e2e
 ./scripts/skills/design-review-skill.sh
 ```
+
+`make test` and `make eval-backend` now auto-start the local Docker `postgres`
+service when `DATABASE_URL` points to localhost and PostgreSQL is not already running.
 
 Cross-target parity gate (requires endpoint matrix env vars):
 
@@ -134,6 +151,7 @@ The hosted agent package is rooted at `backend/` and uses:
 - `backend/agent.yaml` (`protocol: responses`, `version: 2.0.0`)
 - `backend/foundry/main.py` (thin Responses host around the shared workflow)
 - `backend/.foundry/agent-metadata.yaml` and `backend/eval.yaml` for hosted eval metadata
+- `infra/foundry-hosted/azure.yaml` service project path (`./agent`) generated from `backend/` via `scripts/foundry/sync_hosted_source.sh`
 
 ## Troubleshooting
 
@@ -143,6 +161,7 @@ The hosted agent package is rooted at `backend/` and uses:
 ## Documentation Map
 
 - System architecture: [docs/design/architecture.md](docs/design/architecture.md)
+- Engineering operating model (intent -> skills -> implementation -> evidence): [docs/design/engineering-operating-model.md](docs/design/engineering-operating-model.md)
 - Project phases and milestone history: [docs/design/implementation-phases.md](docs/design/implementation-phases.md)
 - Runtime decisions (Local -> Azure -> Foundry): [docs/design/local-azure-foundry-decisions.md](docs/design/local-azure-foundry-decisions.md)
 - HITL rules and test baseline: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)

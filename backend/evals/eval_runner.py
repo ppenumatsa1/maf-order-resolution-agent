@@ -17,12 +17,13 @@ from app.modules.order_resolution.models import WorkflowContext
 
 async def run_eval() -> None:
     root = Path(__file__).resolve().parents[1]
-    cases_path = root / "evals" / "cases.jsonl"
+    foundry_root = root / ".foundry"
+    cases_path = foundry_root / "datasets" / "order-resolution-hosted-cases.jsonl"
     config = get_config()
 
     event_bus = EventBus()
-    memory_store = create_memory_store(config.memory_provider, root / "data" / "memory")
-    checkpoint_store = CheckpointStore(root / "data" / "checkpoints")
+    memory_store = create_memory_store(config.memory_provider, foundry_root / "memory")
+    checkpoint_store = CheckpointStore(foundry_root / "checkpoints")
     rag_provider = create_rag_provider(config.rag_provider)
     if config.rag_provider == "pgvector":
         await PolicyKnowledgeIngestion(rag_provider).ingest_defaults_safe()
@@ -103,7 +104,8 @@ async def run_eval() -> None:
         "pass_rate": 0 if total == 0 else round((passed / total) * 100, 2),
         "results": results,
     }
-    report_path = root / "evals" / "report.json"
+    report_path = foundry_root / "results" / "report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     print(f"Report saved to: {report_path}")

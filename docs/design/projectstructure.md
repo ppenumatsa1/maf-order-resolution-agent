@@ -1,13 +1,12 @@
 # Project Structure
 
 ```text
-maf/
+maf-order-resolution-agent/
   backend/
     app/
-      api/
-        v1/
-          routers/
-          schemas/
+      api/v1/
+        routers/
+        schemas/
       core/
       infrastructure/
         events/
@@ -15,87 +14,43 @@ maf/
         persistence/
         rag/
       maf/
+        agents/
+        executors/
+        prompts/
+        tools/
         workflows/
-      modules/
-        order_resolution/
+        clients.py
+        factory.py
+        middleware.py
+        runner.py
+      modules/order_resolution/
       main.py
-    observability/
-      otel.py
-    evals/
-      cases.jsonl
-      eval_runner.py
-    data/
-      checkpoints/
-      memory/
-    requirements.txt
-    requirements-dev.txt
-    pytest.ini
-    Dockerfile
+    foundry/main.py
     tests/
-      test_api.py
-      test_workflow.py
-    .env.example
+    .foundry/
+      datasets/
+      evaluators/
+      suites/
+    agent.yaml
+    eval.yaml
   frontend/
     src/
-      components/
-      lib/
-      App.tsx
-      main.tsx
-      styles.css
     package.json
-    vite.config.ts
-    tsconfig.json
-    index.html
-    Dockerfile
-  scripts/
-    rubric/
-      e2e-rubric.md
-    playwright/
-      package.json
-      playwright.config.ts
-      tests/
-        workflow.e2e.spec.ts
   infra/
     azure-apphosted/
-      iac/
-        main.bicep
-      runtime/
-        entrypoint.sh
-        smoke-test.sh
     foundry-hosted/
-      iac/
-        main.bicep
-      runtime/
-        entrypoint.sh
-        smoke-test.sh
-  docs/
-    design/
-      prd.md
-      techstack.md
-      projectstructure.md
-      schema-io-telemetry.md
-      userflow.md
-        implementation-phases.md
-      docker-compose.yml
-      Makefile
-      .gitignore
+  scripts/
+    github/
+    parity/
+    playwright/
+    skills/
+  docs/design/
 ```
 
-Future multi-agent monorepo direction:
+## Boundary ownership
 
-```text
-maf/
-  README.md
-  order-resolution-agent/
-    code/
-    infra/
-    sre/
-    docs/
-  <next-agent>/
-    code/
-    infra/
-    sre/
-    docs/
-```
-
-Do not create the next agent folder until there is a concrete second agent to add.
+- `backend/app/api/v1/*`: HTTP and SSE contracts.
+- `backend/app/modules/order_resolution/*`: application service, domain models, ports, projections.
+- `backend/app/maf/*`: MAF runtime internals (prompts, agents, executors, workflow, runner).
+- `backend/app/infrastructure/*`: persistence and external adapters.
+- `backend/foundry/main.py`: Foundry-hosted Responses adapter that invokes the shared service/workflow path.

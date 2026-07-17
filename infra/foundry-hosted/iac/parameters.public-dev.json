@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "namePrefix": {
+      "value": "maforanipub"
+    },
+    "foundryProjectName": {
+      "value": "order-resolution-public-dev"
+    },
+    "hostedAgentName": {
+      "value": "order-resolution-hosted"
+    },
+    "networkMode": {
+      "value": "public"
+    },
+    "enableStandardAgentNetworkInjection": {
+      "value": false
+    },
+    "createPrivateDnsVnetLinks": {
+      "value": false
+    },
+    "createPrivateEndpoints": {
+      "value": false
+    },
+    "createNatGateway": {
+      "value": false
+    },
+    "createPrivateRunnerAccess": {
+      "value": false
+    },
+    "createBastionHost": {
+      "value": false
+    },
+    "createRunnerVm": {
+      "value": false
+    }
+  }
+}

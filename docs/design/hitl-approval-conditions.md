@@ -102,4 +102,4 @@ For non-HITL scenarios:
 - `backend/tests/test_workflow.py` includes:
   - low-risk path without HITL
   - high-risk path with HITL and resume
-- `backend/evals/cases.jsonl` includes mixed HITL expected outcomes.
+- `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl` includes mixed HITL expected outcomes.

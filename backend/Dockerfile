@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN adduser --disabled-password --gecos "" appuser
 
 COPY --chown=appuser:appuser . .
-RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+RUN mkdir -p /app/.foundry/checkpoints /app/.foundry/memory /app/.foundry/results \
+    && chown -R appuser:appuser /app/.foundry
 
 USER appuser
 

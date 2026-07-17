@@ -10,7 +10,10 @@ from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore
 from app.infrastructure.persistence.session_memory import SessionMemoryStore
 from app.maf.clients import FoundryModelsConfig
-from app.maf.workflows import order_resolution as workflow_module
+from app.maf.executors import hitl as hitl_executor_module
+from app.maf.executors import resolution as resolution_executor_module
+from app.maf.executors import triage as triage_executor_module
+from app.maf.executors import TriageExecutor
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 from app.modules.order_resolution.models import WorkflowContext
 
@@ -111,7 +114,7 @@ async def test_high_risk_flow_requests_hitl_then_resumes(
         "trace_id": "1" * 32,
         "span_id": "2" * 16,
     }
-    monkeypatch.setattr(workflow_module, "current_trace_context", lambda: trace_context)
+    monkeypatch.setattr(hitl_executor_module, "current_trace_context", lambda: trace_context)
     event_bus = EventBus()
     checkpoint_store = CheckpointStore(tmp_path / "checkpoints")
     workflow = OrderResolutionWorkflow(
@@ -385,7 +388,7 @@ async def test_foundry_config_emits_foundry_triage_mode(
         model="gpt-4.1-mini",
     )
     monkeypatch.setattr(
-        workflow_module,
+        triage_executor_module,
         "create_foundry_chat_client",
         lambda _config: (DummyClient(), DummyCredential(), config),
     )
@@ -397,6 +400,7 @@ async def test_foundry_config_emits_foundry_triage_mode(
         mcp_tool=MCPKnowledgeTool(endpoint=None),
     )
     workflow._SequentialBuilder = DummySequentialBuilder
+    workflow._triage_executor = TriageExecutor(DummySequentialBuilder, workflow._usage_tracker)
 
     thread_id = str(uuid4())
     context = WorkflowContext(
@@ -452,7 +456,7 @@ async def test_submit_resolution_is_idempotent_for_duplicate_approval(
         submit_calls["count"] += 1
         return f"resolution_submitted::{action}::{order_id}"
 
-    monkeypatch.setattr(workflow_module, "submit_resolution", fake_submit_resolution)
+    monkeypatch.setattr(resolution_executor_module, "submit_resolution", fake_submit_resolution)
 
     thread_id = str(uuid4())
     run_id = str(uuid4())

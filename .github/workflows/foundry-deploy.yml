@@ -1,830 +1,199 @@
 name: Foundry Deploy
 
 on:
-    workflow_dispatch:
-        inputs:
-            deployment_profile:
-                description: Deployment profile (private keeps existing behavior; public targets public surfaces)
-                required: false
-                type: choice
-                options:
-                    - private
-                    - public
-                default: private
-            runner_label:
-                description: Optional self-hosted runner label override
-                required: false
-                default: ""
-            environment:
-                description: Optional GitHub environment override
-                required: false
-                default: ""
-            run_smoke:
-                description: Run Foundry smoke invoke after deploy
-                required: false
-                default: "false"
-            run_telemetry_gate:
-                description: Validate fresh App Insights telemetry after deploy
-                required: false
-                default: "false"
-            run_e2e:
-                description: Run Foundry hosted E2E suite
-                required: false
-                default: "false"
-            probe_only:
-                description: Run runner-side hosted responses curl probe only
-                required: false
-                default: "false"
-            probe_message:
-                description: Probe message sent to hosted responses endpoint
-                required: false
-                default: Resolve delayed order ORD-1001
-            probe_agent_name:
-                description: Hosted agent name for probe calls
-                required: false
-                default: order-resolution-hosted
-            probe_responses_url_override:
-                description: Optional full probe responses endpoint URL override
-                required: false
-                default: ""
-    workflow_call:
-        inputs:
-            deployment_profile:
-                required: false
-                type: string
-                default: private
-            runner_label:
-                required: false
-                type: string
-                default: ""
-            environment:
-                required: false
-                type: string
-                default: ""
-            run_smoke:
-                required: false
-                type: string
-                default: "false"
-            run_telemetry_gate:
-                required: false
-                type: string
-                default: "false"
-            run_e2e:
-                required: false
-                type: string
-                default: "false"
-            probe_only:
-                required: false
-                type: string
-                default: "false"
-            probe_message:
-                required: false
-                type: string
-                default: Resolve delayed order ORD-1001
-            probe_agent_name:
-                required: false
-                type: string
-                default: order-resolution-hosted
-            probe_responses_url_override:
-                required: false
-                type: string
-                default: ""
+  workflow_dispatch:
+    inputs:
+      deployment_profile:
+        description: Deployment profile
+        required: false
+        type: choice
+        options:
+          - private
+          - public
+        default: private
+      runner_label:
+        description: Optional self-hosted runner label override
+        required: false
+        default: ""
+      environment:
+        description: Optional GitHub environment override
+        required: false
+        default: ""
+      run_smoke:
+        description: Run smoke invoke after deploy
+        required: false
+        default: "true"
+      run_e2e:
+        description: Run hosted E2E script after deploy
+        required: false
+        default: "false"
+      probe_only:
+        description: Run a lightweight invoke probe only
+        required: false
+        default: "false"
+      probe_message:
+        description: Probe message
+        required: false
+        default: Resolve delayed order ORD-1001
+      probe_agent_name:
+        description: Hosted agent name
+        required: false
+        default: order-resolution-hosted
+  workflow_call:
+    inputs:
+      deployment_profile:
+        required: false
+        type: string
+        default: private
+      runner_label:
+        required: false
+        type: string
+        default: ""
+      environment:
+        required: false
+        type: string
+        default: ""
+      run_smoke:
+        required: false
+        type: string
+        default: "true"
+      run_e2e:
+        required: false
+        type: string
+        default: "false"
+      probe_only:
+        required: false
+        type: string
+        default: "false"
+      probe_message:
+        required: false
+        type: string
+        default: Resolve delayed order ORD-1001
+      probe_agent_name:
+        required: false
+        type: string
+        default: order-resolution-hosted
 
 permissions:
-    id-token: write
-    contents: read
+  id-token: write
+  contents: read
+
+concurrency:
+  group: foundry-deploy-${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}
+  cancel-in-progress: true
 
 jobs:
-    runner_probe:
-        name: Runner-side hosted responses probe
-        if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') == 'true' }}
-        timeout-minutes: 15
-        runs-on:
-            - self-hosted
-            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
-        environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
-        env:
-            FOUNDRY_DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}
-        defaults:
-            run:
-                shell: bash
-        steps:
-            - uses: actions/checkout@v4
+  probe:
+    name: Probe hosted agent
+    if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') == 'true' }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
+    environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Configure writable CLI paths
-              run: |
-                  set -euo pipefail
-                  cfg_root="${GITHUB_WORKSPACE}/.runner-config"
-                  mkdir -p "${cfg_root}/.home" "${cfg_root}/.azure" "${cfg_root}/.azd" "${cfg_root}/.tmp"
-                  echo "HOME=${cfg_root}/.home" >> "$GITHUB_ENV"
-                  echo "AZURE_CONFIG_DIR=${cfg_root}/.azure" >> "$GITHUB_ENV"
-                  echo "AZD_CONFIG_DIR=${cfg_root}/.azd" >> "$GITHUB_ENV"
-                  echo "TMPDIR=${cfg_root}/.tmp" >> "$GITHUB_ENV"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-            - name: Azure and AZD login
-              env:
-                  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-              run: |
-                  set -euo pipefail
-                  auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
-                  if [[ "$auth_mode" == "service-principal" ]]; then
-                    if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
-                      echo "AZURE_CLIENT_SECRET is not set; using GitHub OIDC federated credential flow."
-                      if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
-                        echo "GitHub OIDC token env vars are missing; cannot authenticate."
-                        exit 1
-                      fi
-                      oidc_auth_header="$(printf 'Authorization: bearer %s' "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")"
-                      federated_token="$(curl -fsSL -H "$oidc_auth_header" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
-                      if [[ -z "$federated_token" || "$federated_token" == "null" ]]; then
-                        echo "Failed to acquire GitHub OIDC federated token."
-                        exit 1
-                      fi
-                      az login --service-principal \
-                        --username "${{ vars.AZURE_CLIENT_ID }}" \
-                        --tenant "${{ vars.AZURE_TENANT_ID }}" \
-                        --federated-token "$federated_token"
-                      if command -v azd >/dev/null 2>&1; then
-                        azd auth login \
-                          --federated-credential-provider github \
-                          --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-                          --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
-                          --no-prompt
-                      fi
-                    else
-                      az login --service-principal \
-                        --username "${{ vars.AZURE_CLIENT_ID }}" \
-                        --password "$AZURE_CLIENT_SECRET" \
-                        --tenant "${{ vars.AZURE_TENANT_ID }}"
-                      if command -v azd >/dev/null 2>&1; then
-                        azd auth login \
-                          --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-                          --client-secret "$AZURE_CLIENT_SECRET" \
-                          --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
-                          --no-prompt
-                      fi
-                    fi
-                  else
-                    az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
-                    if command -v azd >/dev/null 2>&1; then
-                      azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
-                    fi
-                  fi
-                  az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+      - uses: Azure/setup-azd@v2
 
-            - name: Install required azd extension
-              run: |
-                  set -euo pipefail
-                  installed_version="$(azd extension show azure.ai.agents | awk -F': ' '/Installed Version/{print $2}' | tr -d '\r')"
-                  if [[ -n "$installed_version" && "$installed_version" != "N/A" ]]; then
-                    azd extension upgrade azure.ai.agents --no-prompt || true
-                  else
-                    azd extension install azure.ai.agents --no-prompt
-                  fi
+      - name: Install Foundry azd extension
+        run: azd ext install azure.ai.agents --no-prompt
 
-            - name: Optional agent status snapshot (azd)
-              continue-on-error: true
-              run: |
-                  set -euo pipefail
-                  if ! command -v azd >/dev/null 2>&1; then
-                    echo "azd not installed on runner; skipping agent show."
-                    exit 0
-                  fi
-                  if [[ ! -d infra/foundry-hosted ]]; then
-                    echo "infra/foundry-hosted not found; skipping agent show."
-                    exit 0
-                  fi
-                  probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
-                  if [[ -z "$probe_azd_env" ]]; then
-                    if [[ "${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}" == "public" ]]; then
-                      probe_azd_env="foundry-public-dev2"
-                    else
-                      probe_azd_env="foundry-private-env"
-                    fi
-                  fi
-                  (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || azd env new "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
-                  status_json="$(cd infra/foundry-hosted && azd ai agent show --output json --no-prompt 2>&1 || true)"
-                  echo "$status_json"
-                  status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"')"
-                  version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // fromjson.resolvedVersion // empty) catch empty' | tr -d '"')"
-                  echo "Agent status snapshot: status=${status:-unknown} version=${version:-unknown}"
+      - name: Select azd environment
+        run: |
+          set -euo pipefail
+          profile="${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}"
+          if [[ "$profile" == "public" ]]; then
+            azd_env_name="${{ vars.FOUNDRY_PUBLIC_AZD_ENV_NAME || 'foundry-public-dev2' }}"
+          else
+            azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
+          fi
+          cd infra/foundry-hosted
+          azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
 
-            - name: Curl hosted responses endpoint
-              run: |
-                  set -euo pipefail
-                  probe_dir="${GITHUB_WORKSPACE}/.probe"
-                  mkdir -p "$probe_dir"
-                  headers_file="${probe_dir}/headers.txt"
-                  body_file="${probe_dir}/body.txt"
-                  responses_url="${{ inputs.probe_responses_url_override || github.event.inputs.probe_responses_url_override || '' }}"
-                  if [[ -z "$responses_url" ]]; then
-                    project_endpoint="${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
-                    if [[ -z "$project_endpoint" ]]; then
-                      echo "FOUNDRY_PROJECT_ENDPOINT variable is required."
-                      exit 1
-                    fi
-                    agent_name="${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}"
-                    responses_url="${project_endpoint%/}/agents/${agent_name}/endpoint/protocols/openai/responses?api-version=v1"
-                  fi
-                  probe_message="${{ inputs.probe_message || github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}"
-                  token="$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)"
-                  payload="$(jq -n --arg input "$probe_message" '{input: $input}')"
-                  http_code="$(curl -sS \
-                    -X POST "$responses_url" \
-                    --oauth2-bearer "$token" \
-                    -H "Content-Type: application/json" \
-                    -H "Accept: application/json" \
-                    --data "$payload" \
-                    -D "$headers_file" \
-                    -o "$body_file" \
-                    -w "%{http_code}")"
-                  apim_request_id="$(awk -F': ' 'BEGIN{IGNORECASE=1} /^apim-request-id:/ {sub(/\r$/, "", $2); print $2; exit}' "$headers_file")"
-                  probe_session_id="$(awk -F': ' 'BEGIN{IGNORECASE=1} /^x-agent-session-id:/ {sub(/\r$/, "", $2); print $2; exit}' "$headers_file")"
-                  sanitized_body="$(sed -E 's/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/[REDACTED_JWT]/g' "$body_file" | head -c 12000)"
-                  echo "Responses endpoint URL: $responses_url"
-                  echo "HTTP status code: $http_code"
-                  echo "apim-request-id: ${apim_request_id:-<missing>}"
-                  echo "----- response headers -----"
-                  cat "$headers_file"
-                  echo "----- response body (sanitized) -----"
-                  printf '%s\n' "$sanitized_body"
-                  {
-                    echo "## Runner probe result"
-                    echo "- URL: \`$responses_url\`"
-                    echo "- HTTP: \`$http_code\`"
-                    echo "- apim-request-id: \`${apim_request_id:-missing}\`"
-                    echo ""
-                    echo "### Body (sanitized, truncated)"
-                    echo '```json'
-                    printf '%s\n' "$sanitized_body"
-                    echo '```'
-                  } >> "$GITHUB_STEP_SUMMARY"
-                  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
-                    echo "::error::Probe failed with HTTP $http_code"
-                    probe_azd_env="${{ vars.AZD_ENV_NAME || '' }}"
-                    if [[ -n "$probe_azd_env" ]]; then
-                      (cd infra/foundry-hosted && azd env select "$probe_azd_env" --no-prompt >/dev/null 2>&1 || azd env new "$probe_azd_env" --no-prompt >/dev/null 2>&1 || true)
-                    elif [[ "${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}" == "public" ]]; then
-                      (cd infra/foundry-hosted && azd env select foundry-public-dev2 --no-prompt >/dev/null 2>&1 || azd env new foundry-public-dev2 --no-prompt >/dev/null 2>&1 || true)
-                    else
-                      (cd infra/foundry-hosted && azd env select foundry-private-env --no-prompt >/dev/null 2>&1 || azd env new foundry-private-env --no-prompt >/dev/null 2>&1 || true)
-                    fi
-                    if [[ -n "$probe_session_id" ]]; then
-                      echo "Collecting hosted agent monitor logs for probe failure diagnostics (session=$probe_session_id)..."
-                      set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$probe_session_id" --tail 120 --no-prompt)
-                      set -e
-                    elif echo "$sanitized_body" | grep -Eqi 'session_not_ready|424 Failed Dependency'; then
-                      echo "Collecting hosted agent monitor logs for probe readiness diagnostics..."
-                      set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
-                      set -e
-                    fi
-                    exit 1
-                  fi
+      - name: Invoke probe message
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          azd ai agent invoke "${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}" "${{ inputs.probe_message || github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}" --protocol responses --new-conversation --new-session --no-prompt
 
-    deploy:
-        name: Deploy Foundry Hosted Agent
-        if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') != 'true' }}
-        timeout-minutes: 25
-        runs-on:
-            - self-hosted
-            - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
-        environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
-        env:
-            FOUNDRY_DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}
-        defaults:
-            run:
-                shell: bash
-        steps:
-            - name: Reset self-hosted workspace permissions
-              run: |
-                  set -euo pipefail
-                  workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
-                  mkdir -p "$workspace"
-                  if command -v sudo >/dev/null 2>&1; then
-                    sudo chown -R "$(id -u):$(id -g)" "$workspace" || true
-                  fi
-                  chmod -R u+rwX "$workspace" || true
-                  find "$workspace" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+  deploy:
+    name: Deploy Foundry hosted agent
+    if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') != 'true' }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public' || 'foundry-private') }}
+    environment: ${{ inputs.environment || github.event.inputs.environment || (((inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'public') && 'foundry-public-env' || 'foundry-private-env') }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
 
-            - uses: actions/checkout@v4
+      - name: Validate hosted source path
+        run: |
+          set -euo pipefail
+          test -f backend/agent.yaml
+          test -f backend/foundry/main.py
 
-            - name: Stage hosted agent project from backend
-              run: |
-                  set -euo pipefail
-                  rm -rf infra/foundry-hosted/agent
-                  mkdir -p infra/foundry-hosted/agent
-                  cp -a backend/. infra/foundry-hosted/agent/
-                  rm -rf infra/foundry-hosted/agent/.venv infra/foundry-hosted/agent/tests
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-            - name: Azure and AZD login
-              env:
-                  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-              run: |
-                  set -euo pipefail
-                  auth_mode="${{ vars.FOUNDRY_DEPLOY_AUTH_MODE || 'service-principal' }}"
-                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
-                  if mkdir -p /mnt/.azure /mnt/.azd 2>/dev/null; then
-                    cfg_root="/mnt"
-                  fi
-                  mkdir -p "${cfg_root}/.azure" "${cfg_root}/.azd"
-                  export AZURE_CONFIG_DIR="${cfg_root}/.azure"
-                  export AZD_CONFIG_DIR="${cfg_root}/.azd"
-                  if [[ "$auth_mode" == "service-principal" ]]; then
-                    if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
-                      echo "AZURE_CLIENT_SECRET is not set; using GitHub OIDC federated credential flow."
-                      if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
-                        echo "GitHub OIDC token env vars are missing; cannot authenticate."
-                        exit 1
-                      fi
-                      federated_token="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r '.value')"
-                      if [[ -z "$federated_token" || "$federated_token" == "null" ]]; then
-                        echo "Failed to acquire GitHub OIDC federated token."
-                        exit 1
-                      fi
-                      az login --service-principal \
-                        --username "${{ vars.AZURE_CLIENT_ID }}" \
-                        --tenant "${{ vars.AZURE_TENANT_ID }}" \
-                        --federated-token "$federated_token"
-                      azd auth login \
-                        --federated-credential-provider github \
-                        --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-                        --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
-                        --no-prompt
-                    else
-                      az login --service-principal \
-                        --username "${{ vars.AZURE_CLIENT_ID }}" \
-                        --password "$AZURE_CLIENT_SECRET" \
-                        --tenant "${{ vars.AZURE_TENANT_ID }}"
-                      azd auth login \
-                        --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-                        --client-secret "$AZURE_CLIENT_SECRET" \
-                        --tenant-id "${{ vars.AZURE_TENANT_ID }}" \
-                        --no-prompt
-                    fi
-                  else
-                    az login --identity --client-id "${{ vars.AZURE_CLIENT_ID }}"
-                    azd auth login --managed-identity --client-id "${{ vars.AZURE_CLIENT_ID }}" --tenant-id "${{ vars.AZURE_TENANT_ID }}" --no-prompt
-                  fi
-                  az account set -s "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+      - uses: Azure/setup-azd@v2
 
-            - name: Configure writable azd paths on data disk
-              run: |
-                  set -euo pipefail
-                  cfg_root="${RUNNER_TEMP:-/tmp}/foundry-runner"
-                  if mkdir -p /mnt/.home /mnt/.azd /mnt/.tmp /mnt/.azure 2>/dev/null; then
-                    cfg_root="/mnt"
-                  fi
-                  mkdir -p "${cfg_root}/.home" "${cfg_root}/.azd" "${cfg_root}/.tmp" "${cfg_root}/.azure"
-                  echo "HOME=${cfg_root}/.home" >> "$GITHUB_ENV"
-                  echo "AZD_CONFIG_DIR=${cfg_root}/.azd" >> "$GITHUB_ENV"
-                  echo "TMPDIR=${cfg_root}/.tmp" >> "$GITHUB_ENV"
-                  echo "AZURE_CONFIG_DIR=${cfg_root}/.azure" >> "$GITHUB_ENV"
+      - name: Install Foundry azd extension
+        run: azd ext install azure.ai.agents --no-prompt
 
-            - name: Verify azd availability
-              run: azd version
+      - name: Select and configure azd environment
+        run: |
+          set -euo pipefail
+          profile="${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}"
+          if [[ "$profile" == "public" ]]; then
+            azd_env_name="${{ vars.FOUNDRY_PUBLIC_AZD_ENV_NAME || 'foundry-public-dev2' }}"
+            resource_group="${{ vars.FOUNDRY_PUBLIC_RESOURCE_GROUP || vars.FOUNDRY_RESOURCE_GROUP || 'rg-maf-ora-foundry-public-dev2' }}"
+            network_mode="public"
+          else
+            azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
+            resource_group="${{ vars.FOUNDRY_RESOURCE_GROUP || 'rg-maf-ora-foundry' }}"
+            network_mode="private"
+          fi
 
-            - name: Install required azd extension
-              run: |
-                  set -euo pipefail
-                  installed_version="$(azd extension show azure.ai.agents | awk -F': ' '/Installed Version/{print $2}' | tr -d '\r')"
-                  if [[ -n "$installed_version" && "$installed_version" != "N/A" ]]; then
-                    azd extension upgrade azure.ai.agents --no-prompt || true
-                  else
-                    azd extension install azure.ai.agents --no-prompt
-                  fi
+          cd infra/foundry-hosted
+          azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
+          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          azd env set AZURE_RESOURCE_GROUP "$resource_group"
+          azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
+          azd env set NETWORK_MODE "$network_mode"
+          azd env set FOUNDRY_DEPLOYMENT_PROFILE "$profile"
 
-            - name: Select or create azd environment
-              run: |
-                  set -euo pipefail
-                  cd infra/foundry-hosted
-                  profile="${FOUNDRY_DEPLOYMENT_PROFILE:-private}"
-                  if [[ "$profile" == "public" ]]; then
-                    azd_env_name="${{ vars.FOUNDRY_PUBLIC_AZD_ENV_NAME || '' }}"
-                    default_azd_env_name="foundry-public-env"
-                  else
-                    azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || '' }}"
-                    default_azd_env_name="foundry-private-env"
-                  fi
-                  if [[ -z "$azd_env_name" ]]; then
-                    azd_env_name="$default_azd_env_name"
-                  fi
-                  azd env select "$azd_env_name" || azd env new "$azd_env_name"
-                  azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
-                  azd env set AZURE_RESOURCE_GROUP "${{ vars.FOUNDRY_RESOURCE_GROUP }}"
-                  azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
-                  azd env set AZURE_AI_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
-                  azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID }}"
-                  azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT }}"
-                  azd env set FOUNDRY_DEPLOYMENT_PROFILE "$profile"
-                  runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
-                  if [[ -z "$runtime_db_url" ]]; then
-                    runtime_db_url="$(azd env get-value RUNTIME_DATABASE_URL 2>/dev/null || true)"
-                  fi
-                  if [[ -z "$runtime_db_url" ]]; then
-                    runtime_db_url="$(azd env get-value DATABASE_URL 2>/dev/null || true)"
-                  fi
-                  if [[ -z "$runtime_db_url" ]]; then
-                    echo "Missing runtime database URL. Set secret FOUNDRY_DATABASE_URL in the GitHub environment."
-                    exit 1
-                  fi
-                  runtime_db_host="$(printf '%s' "$runtime_db_url" | sed -E 's#^[a-zA-Z0-9+.-]+://([^@/]+@)?([^:/?]+).*$#\2#')"
-                  if [[ "$runtime_db_host" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
-                    echo "Invalid runtime database URL host ($runtime_db_host). Foundry hosted runtime cannot use loopback."
-                    echo "Update GitHub environment secret FOUNDRY_DATABASE_URL with an Azure PostgreSQL host URL."
-                    exit 1
-                  fi
-                  if [[ "$runtime_db_url" != *"sslmode=require"* ]]; then
-                    echo "Runtime database URL must include sslmode=require for Azure PostgreSQL."
-                    exit 1
-                  fi
-                  azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
-                  azd env set DATABASE_URL "$runtime_db_url"
-                  azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
-                  azd env set APP_ENV "${{ vars.APP_ENV || 'foundry-deploy' }}"
-                  azd env set STORE_PROVIDER "${{ vars.STORE_PROVIDER || 'postgres' }}"
-                  azd env set MEMORY_PROVIDER "${{ vars.MEMORY_PROVIDER || 'postgres' }}"
-                  azd env set RAG_PROVIDER "${{ vars.RAG_PROVIDER || 'pgvector' }}"
-                  azd env set ENABLE_TELEMETRY "${{ vars.ENABLE_TELEMETRY || 'true' }}"
-                  azd env set ENABLE_INSTRUMENTATION "${{ vars.ENABLE_INSTRUMENTATION || 'true' }}"
-                  azd env set OTEL_SERVICE_NAME "${{ vars.OTEL_SERVICE_NAME || 'maf-order-resolution-foundry-hosted' }}"
-                  azd env set OTEL_RECORD_CONTENT "${{ vars.OTEL_RECORD_CONTENT || 'false' }}"
-                  azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "${{ vars.AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING || 'true' }}"
-                  azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "${{ vars.AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED || 'false' }}"
-                  foundry_models_endpoint="${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT }}"
-                  if [[ -z "$foundry_models_endpoint" ]]; then
-                    echo "FOUNDRY_PROJECTS_ENDPOINT or FOUNDRY_PROJECT_ENDPOINT is required."
-                    exit 1
-                  fi
-                  foundry_model_deployment="${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || '' }}"
-                  if [[ -z "$foundry_model_deployment" ]]; then
-                    if azd_model_deployment="$(azd env get-value AZURE_AI_MODEL_DEPLOYMENT_NAME 2>/dev/null)"; then
-                      foundry_model_deployment="$azd_model_deployment"
-                    fi
-                  fi
-                  if [[ -z "$foundry_model_deployment" ]]; then
-                    foundry_model_deployment="gpt-4o-mini"
-                  fi
-                  if [[ ! "$foundry_model_deployment" =~ ^[A-Za-z0-9._-]+$ ]]; then
-                    echo "Invalid Foundry model deployment name."
-                    exit 1
-                  fi
-                  azd env set FOUNDRY_PROJECTS_ENDPOINT "$foundry_models_endpoint"
-                  azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "$foundry_model_deployment"
-                  echo "Foundry model configuration prepared: deployment=$foundry_model_deployment"
+          runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
+          if [[ -n "$runtime_db_url" ]]; then
+            azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
+            azd env set DATABASE_URL "$runtime_db_url"
+            azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
+          fi
 
-            - name: Refresh private runtime connection
-              if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
-              run: |
-                  set -euo pipefail
-                  echo "Refreshing private infra/runtime connection before deploy."
-                  make foundry-provision
+      - name: Deploy hosted agent
+        run: make foundry-deploy
 
-            - name: Deploy Foundry hosted agent
-              run: |
-                  set -euo pipefail
-                  timeout_seconds="${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}"
-                  max_attempts="${FOUNDRY_DEPLOY_MAX_ATTEMPTS:-3}"
-                  for attempt in $(seq 1 "$max_attempts"); do
-                    echo "Deploy attempt $attempt/$max_attempts (timeout=${timeout_seconds}s)"
-                    set +e
-                    deploy_output="$(FOUNDRY_DEPLOY_TIMEOUT_SECONDS="$timeout_seconds" make foundry-deploy 2>&1)"
-                    rc=$?
-                    set -e
-                    printf '%s\n' "$deploy_output"
-                    if [[ $rc -eq 0 ]]; then
-                      exit 0
-                    fi
-                    if echo "$deploy_output" | grep -Eq 'agent deployment timed out \(last status: creating\)'; then
-                      echo "Deploy timed out waiting for agent activation; checking current agent status before retry."
-                      for status_attempt in $(seq 1 20); do
-                        set +e
-                        status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt)"
-                        status_rc=$?
-                        set -e
-                        status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
-                        echo "agent_status=${status:-unknown} (check $status_attempt/20)"
-                        if [[ -n "$status_json" ]] && [[ "$status" =~ ^(failed|error)$ ]]; then
-                          echo "agent_status_detail=$status_json"
-                        fi
-                        if [[ $status_rc -eq 0 ]] && [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
-                          echo "Agent reported active after timeout; proceeding."
-                          exit 0
-                        fi
-                        sleep 15
-                      done
-                      if [[ "$attempt" -lt "$max_attempts" ]]; then
-                        echo "Retrying deploy after timeout."
-                        sleep 30
-                        continue
-                      fi
-                    fi
-                    echo "Deploy failed with a non-retriable error."
-                    exit "$rc"
-                  done
-                  echo "Deploy failed after retries."
-                  exit 1
+      - name: Smoke validation
+        if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
+        run: |
+          set -euo pipefail
+          make foundry-smoke SMOKE_MESSAGE="Resolve delayed order ORD-1001"
+          make foundry-smoke SMOKE_MESSAGE="Resolve delayed order ORD-1009"
 
-            - name: Wait for hosted agent status active
-              if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-              run: |
-                  set -euo pipefail
-                  max_checks="${FOUNDRY_AGENT_ACTIVE_MAX_CHECKS:-40}"
-                  retry_delay_seconds="${FOUNDRY_AGENT_ACTIVE_RETRY_DELAY_SECONDS:-15}"
-                  for check in $(seq 1 "$max_checks"); do
-                    status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt || true)"
-                    status="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.status // empty) catch empty' | tr -d '"' | tr '[:upper:]' '[:lower:]')"
-                    version="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson.version // fromjson.latestVersion // empty) catch empty' | tr -d '"')"
-                    echo "Agent readiness check $check/$max_checks status=${status:-unknown} version=${version:-unknown}"
-                    if [[ "$status" =~ ^(active|ready|succeeded)$ ]]; then
-                      echo "Hosted agent is active."
-                      exit 0
-                    fi
-                    if [[ "$status" =~ ^(failed|error)$ ]]; then
-                      echo "Hosted agent entered terminal failure state."
-                      echo "agent_status_detail=$status_json"
-                      exit 1
-                    fi
-                    sleep "$retry_delay_seconds"
-                  done
-                  echo "Hosted agent did not reach active/ready status in time."
-                  exit 1
-
-            - name: Smoke test Foundry hosted agent invoke
-              if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-              run: |
-                  set -euo pipefail
-                  assert_json_field() {
-                    local json="$1"
-                    local expr="$2"
-                    echo "$json" | jq -e "$expr" >/dev/null || {
-                      echo "Assertion failed: $expr"
-                      echo "$json"
-                      exit 1
-                    }
-                  }
-
-                  extract_payload() {
-                    local raw="$1"
-                    local payload=""
-                    payload="$(printf '%s\n' "$raw" | sed -n 's/^data: //p' | jq -r 'select(type=="object" and .type=="response.output_text.done" and (.text|type=="string")) | .text' 2>/dev/null | tail -1)"
-                    if [[ -n "$payload" ]]; then
-                      printf '%s\n' "$payload"
-                      return 0
-                    fi
-
-                    local json_block=""
-                    json_block="$(printf '%s\n' "$raw" | awk '
-                      found { print; next }
-                      /^\{/ {
-                        found = 1
-                        print
-                      }
-                    ')"
-                    if [[ -z "$json_block" ]]; then
-                      echo "Failed to extract workflow payload from smoke invoke output."
-                      echo "$raw"
-                      return 1
-                    fi
-
-                    payload="$(printf '%s\n' "$json_block" | jq -r '.. | objects | select(.type? == "output_text" and (.text|type=="string") and (.text|startswith("{"))) | .text' 2>/dev/null | head -1)"
-                    if [[ -z "$payload" ]]; then
-                      payload="$json_block"
-                    fi
-                    if ! echo "$payload" | jq -e '.status and .events' >/dev/null 2>&1; then
-                      echo "Failed to extract workflow payload from smoke invoke output."
-                      echo "$raw"
-                      return 1
-                    fi
-                    printf '%s\n' "$payload"
-                  }
-
-                  invoke_with_retries() {
-                    local message="$1"
-                    local mode="$2"
-                    local raw=""
-                    local rc=1
-                    local max_attempts="${FOUNDRY_SMOKE_MAX_ATTEMPTS:-16}"
-                    local retry_delay_seconds="${FOUNDRY_SMOKE_RETRY_DELAY_SECONDS:-10}"
-                    local endpoint_refresh_after_attempt="${FOUNDRY_SMOKE_ENDPOINT_REFRESH_AFTER_ATTEMPT:-4}"
-                    if (( endpoint_refresh_after_attempt >= max_attempts )); then
-                      endpoint_refresh_after_attempt=$((max_attempts - 1))
-                    fi
-                    if (( endpoint_refresh_after_attempt < 1 )); then
-                      endpoint_refresh_after_attempt=1
-                    fi
-                    local endpoint_refreshed="false"
-                    local latest_session_id=""
-                    for attempt in $(seq 1 "$max_attempts"); do
-                      set +e
-                      if (( attempt == 1 )); then
-                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --new-conversation --new-session --output raw --no-prompt 2>&1)"
-                      else
-                        raw="$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$message" --protocol responses --output raw --no-prompt 2>&1)"
-                      fi
-                      rc=$?
-                      set -e
-                      latest_session_id="$(printf '%s\n' "$raw" | awk '
-                        BEGIN { IGNORECASE=1 }
-                        match($0, /Session '\''([^'\'']+)'\''/, m) { print m[1]; exit }
-                        /^X-Agent-Session-Id:/ {
-                          value=$0
-                          sub(/^X-Agent-Session-Id:[[:space:]]*/, "", value)
-                          sub(/\r$/, "", value)
-                          print value
-                          exit
-                        }
-                      ' || true)"
-                      if [[ $rc -eq 0 ]] && echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|\"code\"[[:space:]]*:[[:space:]]*\"session_not_ready\"'; then
-                        rc=1
-                      fi
-                      if [[ $rc -eq 0 ]]; then
-                        printf '%s\n' "$raw"
-                        return 0
-                      fi
-                      if echo "$raw" | grep -Eqi 'session_not_ready|424 Failed Dependency|HTTP (404|409|424|429|5[0-9]{2})'; then
-                        echo "Smoke invoke transient failure for $mode (attempt $attempt/$max_attempts). Retrying..."
-                        if [[ -n "$latest_session_id" ]] && (( attempt % 4 == 0 )); then
-                          echo "Collecting targeted session logs for session_not_ready diagnostics (session=$latest_session_id)..."
-                          set +e
-                          (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
-                          set -e
-                        fi
-                        if (( attempt % 5 == 0 )); then
-                          status_json="$(cd infra/foundry-hosted && azd ai agent show order-resolution-hosted --output json --no-prompt 2>/dev/null || true)"
-                          status_summary="$(printf '%s\n' "$status_json" | jq -R -s 'try (fromjson | {status: (.status // "unknown"), version: (.version // .latestVersion // .resolvedVersion // empty)}) catch {"status":"unknown"}')"
-                          echo "Agent status snapshot: $status_summary"
-                        fi
-                        if [[ "$endpoint_refreshed" == "false" ]] && (( attempt >= endpoint_refresh_after_attempt )) && (( attempt < max_attempts )); then
-                          echo "Refreshing agent endpoint configuration after sustained transient responses errors."
-                          set +e
-                          (cd infra/foundry-hosted && azd ai agent endpoint update order-resolution-hosted --no-prompt)
-                          set -e
-                          endpoint_refreshed="true"
-                        fi
-                        sleep "$retry_delay_seconds"
-                        continue
-                      fi
-                      echo "Smoke invoke failed for $mode (rc=$rc)."
-                      echo "$raw"
-                      if [[ -n "$latest_session_id" ]]; then
-                        echo "Collecting targeted session logs for smoke failure diagnostics (session=$latest_session_id)..."
-                        set +e
-                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
-                        set -e
-                      else
-                        echo "Collecting hosted agent monitor logs for smoke failure diagnostics (no session id parsed)..."
-                        set +e
-                        (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
-                        set -e
-                      fi
-                      return "$rc"
-                    done
-                    echo "Smoke invoke failed for $mode after retries."
-                    echo "$raw"
-                    if [[ -n "$latest_session_id" ]]; then
-                      echo "Collecting targeted session logs after retries exhausted (session=$latest_session_id)..."
-                      set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --session-id "$latest_session_id" --tail 120 --no-prompt)
-                      set -e
-                    else
-                      echo "Collecting hosted agent monitor logs after retries exhausted (no session id parsed)..."
-                      set +e
-                      (cd infra/foundry-hosted && timeout 45 azd ai agent monitor --tail 120 --no-prompt)
-                      set -e
-                    fi
-                    return "$rc"
-                  }
-
-                  low_risk_message="ORD-1001 delayed order telemetry gate"
-                  high_risk_message="ORD-1009 delayed order telemetry gate"
-
-                  set +e
-                  low_raw="$(invoke_with_retries "$low_risk_message" "low-risk")"
-                  low_rc=$?
-                  set -e
-                  if [[ $low_rc -ne 0 ]]; then
-                    echo "Low-risk smoke invocation failed after retries."
-                    echo "$low_raw"
-                    exit "$low_rc"
-                  fi
-                  low_payload="$(extract_payload "$low_raw")"
-                  assert_json_field "$low_payload" '.status == "completed"'
-                  assert_json_field "$low_payload" '(.events // []) | map(.type) | index("workflow.output") != null'
-                  assert_json_field "$low_payload" '(.events // []) | map(.type) | index("hitl.request") == null'
-                  echo "Low-risk smoke path verified."
-
-                  set +e
-                  high_raw="$(invoke_with_retries "$high_risk_message" "high-risk")"
-                  high_rc=$?
-                  set -e
-                  if [[ $high_rc -ne 0 ]]; then
-                    echo "High-risk smoke invocation failed after retries."
-                    echo "$high_raw"
-                    exit "$high_rc"
-                  fi
-                  high_payload="$(extract_payload "$high_raw")"
-                  assert_json_field "$high_payload" '.status == "waiting_approval"'
-                  assert_json_field "$high_payload" '(.events // []) | map(.type) | index("checkpoint.created") != null'
-                  assert_json_field "$high_payload" '(.events // []) | map(.type) | index("hitl.request") != null'
-                  THREAD_ID="$(echo "$high_payload" | jq -r '[.. | objects | (.thread_id? // .conversation_id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty')"
-                  if [[ -z "$THREAD_ID" ]]; then
-                    echo "Could not determine smoke thread_id from high-risk responses output."
-                    echo "$high_raw"
-                    exit 1
-                  fi
-                  SESSION_ID="$(printf '%s\n' "$high_raw" | awk -F': ' 'BEGIN{IGNORECASE=1} /^X-Agent-Session-Id:/ {sub(/\r$/, "", $2); print $2; exit}')"
-                  if [[ -z "$SESSION_ID" ]]; then
-                    echo "Could not determine hosted session id from high-risk responses headers."
-                    echo "$high_raw"
-                    exit 1
-                  fi
-                  echo "High-risk smoke path verified."
-
-                  echo "FOUNDRY_SMOKE_THREAD_ID=$THREAD_ID" >> "$GITHUB_ENV"
-                  echo "FOUNDRY_SMOKE_SESSION_ID=$SESSION_ID" >> "$GITHUB_ENV"
-                  echo "FOUNDRY_SMOKE_MESSAGE=$high_risk_message" >> "$GITHUB_ENV"
-                  echo "Responses smoke thread id: $THREAD_ID"
-                  echo "Responses smoke session id: $SESSION_ID"
-
-            - name: Verify hosted response storage provider
-              if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-              run: |
-                  set -euo pipefail
-                  profile="${FOUNDRY_DEPLOYMENT_PROFILE:-private}"
-                  session_id="${FOUNDRY_SMOKE_SESSION_ID:?FOUNDRY_SMOKE_SESSION_ID is required}"
-                  if [[ "$profile" == "public" ]]; then
-                    expected_provider="FoundryStorageProvider"
-                  else
-                    expected_provider="InMemoryResponseProvider"
-                  fi
-
-                  for attempt in $(seq 1 3); do
-                    logs="$(cd infra/foundry-hosted && timeout 20 azd ai agent monitor order-resolution-hosted --session-id "$session_id" --tail 200 --no-prompt 2>&1 || true)"
-                    printf '%s\n' "$logs"
-                    if echo "$logs" | grep -Fq "storage_provider=${expected_provider}"; then
-                      if [[ "$profile" != "public" ]] || echo "$logs" | grep -Fq "Foundry storage POST"; then
-                        echo "Hosted response storage provider verified: $expected_provider"
-                        exit 0
-                      fi
-                    fi
-                    sleep 5
-                  done
-
-                  echo "Expected hosted response storage evidence was not found."
-                  echo "profile=$profile expected_provider=$expected_provider session_id=$session_id"
-                  exit 1
-
-            - name: Foundry hosted E2E regression
-              if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'true') == 'true' }}
-              run: |
-                  set -euo pipefail
-                  chmod +x scripts/github/foundry_hosted_e2e.sh
-                  scripts/github/foundry_hosted_e2e.sh "foundry-e2e-${{ github.run_id }}-${{ github.run_attempt }}"
-
-            - name: Telemetry gate (App Insights)
-              if: ${{ (inputs.run_telemetry_gate || github.event.inputs.run_telemetry_gate || 'true') == 'true' && (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-              run: |
-                  set -euo pipefail
-                  APP_ID="${{ vars.APPINSIGHTS_APP_ID }}"
-                  if [[ -z "$APP_ID" ]]; then
-                    echo "APPINSIGHTS_APP_ID variable is required for telemetry gate"
-                    exit 1
-                  fi
-                  THREAD_ID="${FOUNDRY_SMOKE_THREAD_ID:-}"
-                  if [[ -z "$THREAD_ID" ]]; then
-                    echo "FOUNDRY_SMOKE_THREAD_ID is missing; telemetry gate requires correlated smoke execution"
-                    exit 1
-                  fi
-
-                  # Wait up to 10 minutes for both business telemetry and the
-                  # Foundry-indexable GenAI transaction span.
-                  for i in $(seq 1 20); do
-                    business_query="union traces,requests,dependencies,exceptions | where timestamp > ago(20m) | extend workflowThreadId = tostring(customDimensions['workflow.thread_id']) | where workflowThreadId == '${THREAD_ID}' | summarize count()"
-                    BUSINESS_COUNT=$(az monitor app-insights query --app "$APP_ID" \
-                      --analytics-query "$business_query" \
-                      --query "tables[0].rows[0][0]" -o tsv)
-                    BUSINESS_COUNT=${BUSINESS_COUNT:-0}
-
-                    trace_query="let rootOperations = requests | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' | project operation_Id; union requests,dependencies | where timestamp > ago(20m) and operation_Id in (rootOperations) | extend responseId=tostring(customDimensions['gen_ai.response.id']) | where isnotempty(responseId) | summarize count()"
-                    TRACE_COUNT=$(az monitor app-insights query --app "$APP_ID" \
-                      --analytics-query "$trace_query" \
-                      --query "tables[0].rows[0][0]" -o tsv)
-                    TRACE_COUNT=${TRACE_COUNT:-0}
-
-                    echo "business_telemetry_count=$BUSINESS_COUNT foundry_trace_count=$TRACE_COUNT thread_id=$THREAD_ID (attempt $i/20)"
-                    if [[ "$BUSINESS_COUNT" =~ ^[0-9]+$ ]] && [[ "$BUSINESS_COUNT" -gt 0 ]] \
-                      && [[ "$TRACE_COUNT" =~ ^[0-9]+$ ]] && [[ "$TRACE_COUNT" -gt 0 ]]; then
-                      echo "Telemetry and Foundry trace transaction gates passed"
-                      exit 0
-                    fi
-                    sleep 30
-                  done
-
-                  echo "Telemetry gate failed: missing business telemetry or Foundry GenAI transaction span for thread_id=$THREAD_ID"
-                  diagnostic_query="let rootOperations = requests | where timestamp > ago(20m) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), conversationId=tostring(customDimensions['gen_ai.conversation.id']) | where agentName == 'order-resolution-hosted' and conversationId == '${THREAD_ID}' | project operation_Id; union withsource=TableName requests,dependencies | where timestamp > ago(20m) and operation_Id in (rootOperations) | extend agentName=tostring(customDimensions['gen_ai.agent.name']), responseId=tostring(customDimensions['gen_ai.response.id']), operationName=tostring(customDimensions['gen_ai.operation.name']) | project timestamp, TableName, name, operation_Id, agentName, operationName, responseId | order by timestamp desc | take 50"
-                  az monitor app-insights query --app "$APP_ID" \
-                    --analytics-query "$diagnostic_query" \
-                    -o table || true
-                  exit 1
+      - name: Hosted E2E validation
+        if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
+        run: ./scripts/github/foundry_hosted_e2e.sh

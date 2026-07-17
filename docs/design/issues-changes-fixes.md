@@ -3,6 +3,192 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-17, single-source hosted deploy path adopted)
+
+### What changed
+
+To eliminate backend/staged-folder drift, hosted deploys now use an automated sync
+from `backend/` to the deploy folder before `azd deploy`.
+
+### Changes applied
+
+1. Kept `infra/foundry-hosted/azure.yaml` service project as `./agent` (required by
+   `azd`: service paths cannot include `..`).
+2. Removed copy-based staging steps from:
+   - `scripts/foundry/deploy_public_dev.sh`
+   - `.github/workflows/foundry-deploy.yml`
+   - `.github/workflows/foundry-provision.yml`
+3. Added automated sync helper `scripts/foundry/sync_hosted_source.sh` and wired it
+   into `make foundry-deploy` so the deploy payload is refreshed from `backend/` every
+   time.
+4. Added deploy guardrails:
+   - source-file checks (`backend/agent.yaml`, `backend/foundry/main.py`) in deploy
+     script and workflows
+   - `make foundry-deploy` now verifies active agent metadata after deploy via
+     `azd ai agent show`.
+5. Updated readmes to document the sync-based deploy source path.
+
+## Latest execution update (2026-07-17, stage hierarchy visibility restored on public-dev2)
+
+### What failed
+
+Foundry traces for some recent conversations still looked flat/generic even after
+workflow stage span naming updates were merged.
+
+### Root cause
+
+The hosted deployment source is `infra/foundry-hosted/agent` (`azure.yaml` uses
+`project: ./agent`). The latest backend workflow changes were present in
+`backend/app/maf/workflows/order_resolution.py` but had not been re-staged into
+`infra/foundry-hosted/agent` before deploy, so the active hosted version still ran the
+older package.
+
+### Fixes applied
+
+1. Re-staged the hosted deployment source from `backend/` into
+   `infra/foundry-hosted/agent`.
+2. Redeployed to the existing public environment `foundry-public-dev2`
+   (`rg-maf-ora-foundry-public-dev2`) as active hosted version **34**.
+3. Re-ran both workflow paths on the same deployed version:
+   - no-HITL (`ORD-1001`)
+   - HITL + approve resume (`ORD-1009` + `Approve`).
+
+### Validation evidence
+
+- No-HITL conversation:
+  - `conv_37db5738471e938f009iDLANKQ6qyIl4Bgch5kZws06LUnryXi`
+  - status: `completed`
+  - stages/events include: `triage` -> `policy_retrieval` -> `resolution` -> `workflow.output`
+- HITL conversation:
+  - `conv_d6712704932b2dd100qkldJm1g8mgQHvoXKGTqMidtBsbp9HOM`
+  - status: `waiting_approval` then `completed` after approve
+  - stages/events include: `triage` -> `policy_retrieval` -> `resolution` ->
+    `checkpoint.created` -> `hitl.request` -> `hitl.response` -> `workflow.output`
+- Public active deploy version:
+  - `order-resolution-hosted` version `34`
+
+## Latest execution update (2026-07-17, public deploy recovered; smoke + hosted E2E passing)
+
+### What failed
+
+Public `foundry-public-dev` deployments initially activated, but hosted smoke returned
+`session_not_ready` (`HTTP 424`) and no request reached workflow execution.
+
+### Root cause
+
+1. `AZURE_AI_PROJECT_ID`/`FOUNDRY_PROJECT_ENDPOINT` were missing in the selected AZD
+   environment, causing early deploy failures.
+2. Hosted runtime readiness then failed on database startup:
+   - first with invalid/masked `DATABASE_URL` values propagated into the env (literal
+     masked prefix produced `invalid connection option`), and
+   - with stale Postgres credentials (`password authentication failed for user "pgadmin"`).
+3. `session_not_ready` was a downstream symptom of container startup failing at
+   `postgres_db.ensure_schema()`.
+
+### Fixes applied
+
+- Selected `foundry-public-dev` AZD environment and set:
+  - `AZURE_AI_PROJECT_ID`
+  - `FOUNDRY_PROJECT_ENDPOINT` / `FOUNDRY_PROJECTS_ENDPOINT`
+  - `FOUNDRY_MODEL_DEPLOYMENT_NAME`
+- Rotated public PostgreSQL admin password on server `maffndpg7930`.
+- Rewrote runtime DB envs with an explicit valid URL:
+  - `DATABASE_URL`
+  - `RUNTIME_DATABASE_URL`
+  - `FOUNDRY_RUNTIME_DATABASE_URL`
+- Redeployed hosted agent after env correction.
+
+### Public evidence captured
+
+- Deploy succeeded to active public hosted version **4**.
+- Smoke succeeded with HITL-waiting response and full expected event chain:
+  - conversation: `conv_a79a1a4bf2ebc96300VTzsnsqVlmhtp5rBAcizkwioNud4SUAQ`
+  - trace id: `3d55c2063dd8702021f31ffe3416508b`
+  - includes `policy_retrieval` started/completed stages and `hitl.request`.
+- Hosted Responses E2E script passed:
+  - conversations:
+    - `conv_3d51b53241332b8800KqGBxirCuBNKJHxvEa3OMD0in21HJAzC`
+    - `conv_98ed6beaa836501c00nf0m4N5ddDBjB9o1rTxRe1xPbFwOVqdH`
+    - `conv_dbc83201dfe48c3500nDIgsDBbP8hQaNQJcpurfFDpCpfizgXJ`
+
+### Telemetry note
+
+- App Insights query checks against known app IDs in this env currently return zero
+  rows; runtime functionality is recovered, but telemetry evidence remains pending
+  follow-up in this lane.
+
+## Latest execution update (2026-07-17, corrected to existing public-dev2 Foundry project)
+
+### Correction
+
+Deployment target was corrected back to the existing public project in:
+
+- resource group: `rg-maf-ora-foundry-public-dev2`
+- Foundry account: `maffndaibfscpfhjr7sp4`
+- project: `order-resolution-public-dev`
+
+### Actions
+
+1. Selected AZD env `foundry-public-dev2`.
+2. Repaired env drift in that environment:
+   - set canonical `FOUNDRY_PROJECTS_ENDPOINT` and `FOUNDRY_MODEL_DEPLOYMENT_NAME`,
+   - set `FOUNDRY_DEPLOYMENT_PROFILE=public`,
+   - corrected runtime DB URL values.
+3. Redeployed hosted agent to **version 33** in `public-dev2`.
+4. Re-ran smoke and hosted E2E on that existing target.
+
+### Evidence on existing target
+
+- Smoke conversation:
+  - `conv_72b1df3023f100a400F6vrfYrpbsGK7Vxgk4oUHztX7I84aLKI`
+  - trace id: `73550ae478ee1087e7495fb0978e02cc`
+  - status: `waiting_approval` with expected `hitl.request`.
+- Hosted E2E passed:
+  - `conv_5044cad9fb88ee1700gTGKRUW4okvaEjLfMmzqU9r2EKYqZmer`
+  - `conv_0d350cbfa28eaeda00nYOK2Sz5Bz4dHIhPIfrVoyfHVAI4EFEE`
+  - `conv_7d1d658f23cb109200b8GO3DCOc4hNuzrOOdpplvGN6bBgvj7B`
+- Session proof for version 33:
+  - `b7cecfbea4058bc1094abaa9c4afa8b46e8ca2b04997e216b37513e3472959f`
+- App Insights (`b29359cf-47cd-4bc1-b962-246f7f4da5c0`, last 60m):
+  - `dependency=30`, `trace=133`, `exception=4`.
+
+## Latest execution update (2026-07-15, public Conversations/Transactions restored; private regression under investigation)
+
+### What was the issue
+
+`order-resolution-hosted` intermittently produced successful smoke/E2E output but did
+not consistently produce Foundry portal-visible Conversations/Transactions in the
+public lane.
+
+### Confirmed root cause and fix (public)
+
+1. Hosted runtime had an instrumentation incompatibility when
+   `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true` was present for this path.
+2. That flag introduced a stream wrapper path incompatible with the
+   `FoundryChatClient` parsing contract used by the hosted workflow runtime.
+3. Removing the flag from `backend/agent.yaml` restored stable Foundry model-stream
+   behavior and Transactions visibility.
+4. Deploy/probe checks were tightened to assert semantic trace evidence rather than
+   relying only on generic correlated telemetry.
+
+Public evidence captured in this cycle:
+
+- Workflow run `29378272598` succeeded.
+- Active public version `32` served Responses traffic with Foundry model mode.
+- Portal screenshots and live checks confirmed Conversations/Transactions are visible.
+
+### Current private status (open)
+
+Private deploy still activates successfully, but smoke/probe can return upstream
+`HTTP 500 server_error` afterward. Current failing evidence set includes:
+
+- Deploy failures at smoke gate: `29416532488`, `29416754351`, `29417048134`, `29417630436`
+- Probe failures: `29416834894`, `29416963146`, `29417223018`, `29417301347`, `29417441836`
+- Header evidence repeatedly resolves private hosted version `56`
+
+Next action remains runner/deploy-lane traceback capture from the activated private
+container to isolate the post-activation runtime fault.
+
 ## Latest execution update (2026-07-14, Foundry Conversations root cause fixed)
 
 The clean Microsoft Agent Framework hosted sample proved that the public Foundry

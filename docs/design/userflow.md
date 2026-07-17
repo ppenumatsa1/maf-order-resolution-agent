@@ -14,7 +14,12 @@ Current status:
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
 | Azure app-hosted | Implemented | Same shared workflow behavior on ACA + Postgres. |
-| Foundry-hosted   | Implemented | Responses-hosted entrypoint (`backend/foundry/main.py`) runs the same shared workflow. |
+| Foundry-hosted   | Implemented | Responses-native hosted entrypoint runs the same shared MAF workflow. |
+
+Operational status note (2026-07-15):
+
+- Public Foundry lane currently shows expected Conversations/Traces for `order-resolution-hosted`.
+- Private Foundry lane is under active investigation for intermittent upstream `HTTP 500 server_error` in smoke/probe despite successful deployment activation.
 
 ## Current Runtime User Flow (Implemented Path)
 
@@ -137,7 +142,7 @@ Primary file touchpoints in this path:
 
 - The existing `tool.call` event now includes `policy_evidence_ids` (chunk IDs from retrieval) and `policy_retrieval` metadata (`provider`, `query_id`, `count`).
 - Event type contracts are unchanged.
-- The legacy SSE stream remains stable. A parallel rich stream at `/api/chat/stream/{thread_id}/rich` projects native workflow events into AG-UI-compatible lifecycle, step, tool, text/output, HITL/custom, and raw events, and the current UI consumes it for live timeline updates.
+- The stable SSE stream remains the primary contract. A parallel rich stream at `/api/chat/stream/{thread_id}/rich` projects native workflow events into AG-UI-compatible lifecycle, step, tool, text/output, HITL/custom, and raw events, and the current UI consumes it for live timeline updates.
 
 ## API Pagination Contracts
 
@@ -150,3 +155,4 @@ Primary file touchpoints in this path:
 For exact conditions that trigger human approval and ready-to-run test scenarios, see:
 
 - `hitl-approval-conditions.md`
+- `engineering-operating-model.md`

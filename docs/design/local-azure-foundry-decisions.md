@@ -1,6 +1,14 @@
 # Local -> Azure -> Foundry Decisions
 
-This document records the architecture decisions made across the three runtime stages.
+This document records historical transition decisions across runtime stages.
+
+> **Status: archival transition log.**
+> Some sections intentionally retain prior invocations/dual-protocol cutover context for historical debugging chronology.
+> Current canonical runtime and delivery policy is Responses-native and is defined in:
+> - `docs/design/engineering-operating-model.md`
+> - `docs/design/architecture.md`
+> - `.github/copilot-instructions.md`
+> - `agents.md`
 
 ## Decision summary
 

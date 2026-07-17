@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from app.maf import clients
-from app.maf.workflows import order_resolution as workflow_module
+from app.maf.executors import triage as triage_executor_module
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
 
 
@@ -187,9 +187,9 @@ async def test_workflow_uses_foundry_agents_when_configured(
         project_endpoint="https://example.services.ai.azure.com/api/projects/p",
         model="gpt-4.1-mini",
     )
-    monkeypatch.setattr(workflow_module, "get_foundry_models_config", lambda: config)
+    monkeypatch.setattr(triage_executor_module, "get_foundry_models_config", lambda: config)
     monkeypatch.setattr(
-        workflow_module,
+        triage_executor_module,
         "create_foundry_chat_client",
         lambda _config: (DummyClient(), DummyCredential(), config),
     )

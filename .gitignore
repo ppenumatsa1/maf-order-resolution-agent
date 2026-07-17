@@ -19,8 +19,9 @@ dist/
 # Env and local data
 .env
 backend/.env
-backend/data/checkpoints/*.json
-backend/data/memory/*.json
+backend/.foundry/checkpoints/*.json
+backend/.foundry/memory/*.json
+backend/.foundry/results/*.json
 
 # Logs
 *.log
@@ -37,6 +38,5 @@ local.ini
 # Generated Bicep build artifacts (keep parameters.dev.json tracked)
 infra/foundry-hosted/iac/main.json
 infra/foundry-hosted/iac/modules/*.json
-
-# Local Foundry control sample
+infra/foundry-hosted/agent
 backend/tmp-foundry-sample/

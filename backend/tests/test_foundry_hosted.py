@@ -169,8 +169,7 @@ def test_hosted_manifest_propagates_deployment_profile() -> None:
         manifest_text
     )
     assert (
-        "name: FOUNDRY_MODEL_DEPLOYMENT_NAME\n"
-        "      value: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}"
+        "name: FOUNDRY_MODEL_DEPLOYMENT_NAME\n      value: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}"
     ) in manifest_text
     assert not hasattr(foundry_main, "setup_observability")
 

@@ -4,20 +4,10 @@ import os
 from pathlib import Path
 from threading import RLock
 
-from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/maf_workflow"
-
-
-RUNTIME_ENV_PATH = Path(__file__).resolve().parents[2] / "runtime" / ".env"
-PACKAGED_RUNTIME_ENV_PATH = Path(__file__).resolve().parents[1] / "runtime.env"
-
-# Foundry-hosted deploys may not project all azd env values into process env.
-# Load runtime env from either backend/runtime/.env or packaged app/runtime.env.
-load_dotenv(RUNTIME_ENV_PATH, override=False)
-load_dotenv(PACKAGED_RUNTIME_ENV_PATH, override=False)
 
 
 class PostgresDatabase:
@@ -28,7 +18,12 @@ class PostgresDatabase:
 
     @property
     def database_url(self) -> str:
-        return os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+        value = os.getenv("DATABASE_URL")
+        if value:
+            return value
+        if os.getenv("APP_ENV", "").lower().startswith("foundry"):
+            raise RuntimeError("DATABASE_URL must be set for Foundry-hosted runtime.")
+        return DEFAULT_DATABASE_URL
 
     def get_pool(self) -> ConnectionPool:
         with self._lock:

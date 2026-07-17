@@ -211,7 +211,10 @@ def _coerce_conversation_id(payload: dict[str, Any], context: Any | None) -> str
                     if isinstance(nested_conversation_id, str) and nested_conversation_id.strip():
                         return nested_conversation_id.strip()
                 nested_previous_response_id = nested.get("previous_response_id")
-                if isinstance(nested_previous_response_id, str) and nested_previous_response_id.strip():
+                if (
+                    isinstance(nested_previous_response_id, str)
+                    and nested_previous_response_id.strip()
+                ):
                     return nested_previous_response_id.strip()
 
     payload_id = payload.get("id")

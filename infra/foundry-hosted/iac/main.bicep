@@ -7,6 +7,13 @@ param location string = resourceGroup().location
 @minLength(3)
 param namePrefix string = 'maffnd'
 
+@description('Network profile for the Foundry-hosted infrastructure')
+@allowed([
+  'public'
+  'private'
+])
+param networkMode string = 'private'
+
 @description('Foundry project name')
 param foundryProjectName string = 'order-resolution'
 
@@ -193,6 +200,13 @@ param foundryEmbeddingsDeploymentCapacity int = 1
 @description('Responsible AI policy name applied to model deployments')
 param foundryRaiPolicyName string = 'Microsoft.Default'
 
+@description('Connection name for hosted runtime custom key values')
+param runtimeConnectionName string = 'orderresolutionruntimesecrets'
+
+@description('Hosted runtime PostgreSQL connection string stored in Foundry CustomKeys connection as database_url')
+@secure()
+param runtimeDatabaseUrl string = ''
+
 var suffix = toLower(uniqueString(resourceGroup().id))
 var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
 var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalizedPrefix}ai${suffix}', 64) : foundryAccountName
@@ -207,7 +221,26 @@ var effectiveNatPublicIpName = empty(natPublicIpName) ? take('${namePrefix}-nat-
 var effectiveCosmosConnectionName = '${effectiveCosmosAccountName}-${foundryProjectName}'
 var effectiveStorageConnectionName = '${effectiveStorageAccountName}-${foundryProjectName}'
 var effectiveAiSearchConnectionName = '${effectiveAiSearchName}-${foundryProjectName}'
+var effectiveRuntimeConnectionName = runtimeConnectionName
 var effectiveCosmosLocation = empty(cosmosLocation) ? location : cosmosLocation
+var privateNetworking = networkMode == 'private'
+var enableNat = privateNetworking && createNatGateway
+var enablePrivateDns = privateNetworking
+var enablePrivateEndpoints = privateNetworking && createPrivateEndpoints
+var enableAgentNetworkInjection = privateNetworking && enableStandardAgentNetworkInjection
+var enablePrivateRunnerAccess = privateNetworking && createPrivateRunnerAccess
+var agentSubnetResourceId = resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
+var foundryNetworkInjectionProperties = enableAgentNetworkInjection ? {
+  #disable-next-line BCP037
+  networkInjections: [
+    {
+      #disable-next-line BCP037
+      scenario: 'agent'
+      #disable-next-line BCP037
+      subnetArmId: agentSubnetResourceId
+    }
+  ]
+} : {}
 
 #disable-next-line no-hardcoded-env-urls
 var blobZoneName = 'privatelink.blob.core.windows.net'
@@ -229,11 +262,12 @@ var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryServicesZoneN
 var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryCognitiveZoneName)
 var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryOpenAiZoneName)
 var acrZoneIndex = indexOf(privateDnsZoneNames, 'privatelink.azurecr.io')
-var resolvedProjectPrincipalId = manageProjectConnections ? projectConnections.outputs.projectPrincipalId : foundryProject.identity.principalId
-var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections.outputs.projectWorkspaceId : ''
-var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections.outputs.cosmosConnection : effectiveCosmosConnectionName
-var resolvedStorageConnectionName = manageProjectConnections ? projectConnections.outputs.storageConnection : effectiveStorageConnectionName
-var resolvedAiSearchConnectionName = manageProjectConnections ? projectConnections.outputs.aiSearchConnection : effectiveAiSearchConnectionName
+var resolvedProjectPrincipalId = manageProjectConnections ? projectConnections!.outputs.projectPrincipalId : foundryProject.identity.principalId
+var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections!.outputs.projectWorkspaceId : ''
+var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections!.outputs.cosmosConnection : effectiveCosmosConnectionName
+var resolvedStorageConnectionName = manageProjectConnections ? projectConnections!.outputs.storageConnection : effectiveStorageConnectionName
+var resolvedAiSearchConnectionName = manageProjectConnections ? projectConnections!.outputs.aiSearchConnection : effectiveAiSearchConnectionName
+var resolvedRuntimeConnectionName = !empty(runtimeDatabaseUrl) ? runtimeConnection!.outputs.runtimeConnection : effectiveRuntimeConnectionName
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: effectiveContainerRegistryName
@@ -243,7 +277,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   }
   properties: {
     adminUserEnabled: false
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
   }
 }
 
@@ -279,7 +313,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
   }
 }
 
@@ -290,7 +324,7 @@ resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
     name: 'basic'
   }
   properties: {
-    publicNetworkAccess: 'disabled'
+    publicNetworkAccess: privateNetworking ? 'disabled' : 'enabled'
   }
 }
 
@@ -307,7 +341,7 @@ resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' = {
         isZoneRedundant: false
       }
     ]
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
     disableLocalAuth: true
   }
 }
@@ -326,29 +360,24 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     allowProjectManagement: true
     customSubDomainName: effectiveFoundryAccountName
     disableLocalAuth: true
-    networkAcls: {
+    networkAcls: privateNetworking ? {
       defaultAction: 'Deny'
       virtualNetworkRules: [
         {
-          id: resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
+          id: agentSubnetResourceId
           ignoreMissingVnetServiceEndpoint: false
         }
       ]
+    } : {
+      defaultAction: 'Allow'
+      virtualNetworkRules: []
     }
-    publicNetworkAccess: 'Disabled'
-    #disable-next-line BCP037
-    networkInjections: enableStandardAgentNetworkInjection ? [
-      {
-        #disable-next-line BCP037
-        scenario: 'agent'
-        #disable-next-line BCP037
-        subnetArmId: resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
-      }
-    ] : []
+    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
+    ...foundryNetworkInjectionProperties
   }
-  dependsOn: [
+  dependsOn: privateNetworking ? [
     virtualNetwork
-  ]
+  ] : []
 }
 
 resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
@@ -411,7 +440,7 @@ resource projectFoundryUserRoleAssignment 'Microsoft.Authorization/roleAssignmen
   }
 }
 
-resource natPublicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = if (createNatGateway) {
+resource natPublicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = if (enableNat) {
   name: effectiveNatPublicIpName
   location: location
   sku: {
@@ -422,7 +451,7 @@ resource natPublicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = if (crea
   }
 }
 
-resource natGateway 'Microsoft.Network/natGateways@2023-09-01' = if (createNatGateway) {
+resource natGateway 'Microsoft.Network/natGateways@2023-09-01' = if (enableNat) {
   name: effectiveNatGatewayName
   location: location
   sku: {
@@ -438,16 +467,16 @@ resource natGateway 'Microsoft.Network/natGateways@2023-09-01' = if (createNatGa
   }
 }
 
-module virtualNetwork './modules/vnet.bicep' = {
+module virtualNetwork './modules/vnet.bicep' = if (privateNetworking) {
   name: 'foundry-vnet-${suffix}'
   params: {
-    enabled: true
+    enabled: privateNetworking
     location: location
     vnetName: effectiveVirtualNetworkName
     vnetAddressPrefix: vnetAddressPrefix
     agentSubnetName: agentSubnetName
     agentSubnetPrefix: agentSubnetPrefix
-    natGatewayResourceId: createNatGateway ? natGateway.id : ''
+    natGatewayResourceId: enableNat ? natGateway.id : ''
     privateEndpointSubnetName: privateEndpointSubnetName
     privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
     // Keep runner subnet declared in VNet to avoid destructive subnet pruning on shared reruns.
@@ -455,7 +484,7 @@ module virtualNetwork './modules/vnet.bicep' = {
     runnerSubnetName: runnerSubnetName
     runnerSubnetPrefix: runnerSubnetPrefix
     runnerSubnetNsgResourceId: ''
-    runnerSubnetNatGatewayResourceId: createNatGateway ? natGateway.id : ''
+    runnerSubnetNatGatewayResourceId: enableNat ? natGateway.id : ''
     // Keep AzureBastionSubnet declared in VNet to avoid deletion attempts when Bastion already exists.
     createBastionSubnet: true
     bastionSubnetName: bastionSubnetName
@@ -463,10 +492,10 @@ module virtualNetwork './modules/vnet.bicep' = {
   }
 }
 
-module privateRunnerAccess './modules/private-runner-access.bicep' = if (createPrivateRunnerAccess) {
+module privateRunnerAccess './modules/private-runner-access.bicep' = if (enablePrivateRunnerAccess) {
   name: 'private-runner-access-${suffix}'
   params: {
-    enabled: createPrivateRunnerAccess
+    enabled: enablePrivateRunnerAccess
     location: location
     vnetName: effectiveVirtualNetworkName
     runnerSubnetName: runnerSubnetName
@@ -490,11 +519,11 @@ module privateRunnerAccess './modules/private-runner-access.bicep' = if (createP
   ]
 }
 
-module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (createPrivateRunnerAccess && createRunnerVm && assignRunnerSubscriptionRbac) {
+module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (enablePrivateRunnerAccess && createRunnerVm && assignRunnerSubscriptionRbac) {
   name: 'runner-subscription-rbac-${suffix}'
   scope: subscription()
   params: {
-    principalId: privateRunnerAccess.outputs.runnerUamiPrincipalId
+    principalId: privateRunnerAccess!.outputs.runnerUamiPrincipalId
     assignContributor: true
     assignUserAccessAdministrator: assignRunnerUserAccessAdministrator
   }
@@ -503,99 +532,99 @@ module runnerSubscriptionRbac './modules/runner-subscription-rbac.bicep' = if (c
   ]
 }
 
-module privateDns './modules/private-dns.bicep' = {
+module privateDns './modules/private-dns.bicep' = if (enablePrivateDns) {
   name: 'private-network-dns'
   params: {
     enabled: true
-    virtualNetworkId: virtualNetwork.outputs.id
+    virtualNetworkId: virtualNetwork!.outputs.id
     zoneNames: privateDnsZoneNames
     createVnetLinks: createPrivateDnsVnetLinks
   }
 }
 
-module storagePrivateEndpoint './modules/private-endpoint.bicep' = {
+module storagePrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints) {
   name: 'private-endpoint-storage'
   params: {
-    enabled: createPrivateEndpoints
+    enabled: true
     location: location
     name: '${namePrefix}-storage-pe-${suffix}'
-    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
     targetResourceId: storage.id
     groupIds: [
       'blob'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[blobZoneIndex]
+      privateDns!.outputs.zoneIds[blobZoneIndex]
     ]
   }
 }
 
-module searchPrivateEndpoint './modules/private-endpoint.bicep' = {
+module searchPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints) {
   name: 'private-endpoint-search'
   params: {
-    enabled: createPrivateEndpoints
+    enabled: true
     location: location
     name: '${namePrefix}-search-pe-${suffix}'
-    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
     targetResourceId: aiSearch.id
     groupIds: [
       'searchService'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[searchZoneIndex]
+      privateDns!.outputs.zoneIds[searchZoneIndex]
     ]
   }
 }
 
-module cosmosPrivateEndpoint './modules/private-endpoint.bicep' = {
+module cosmosPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints) {
   name: 'private-endpoint-cosmos'
   params: {
-    enabled: createPrivateEndpoints
+    enabled: true
     location: location
     name: '${namePrefix}-cosmos-pe-${suffix}'
-    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
     targetResourceId: cosmosDB.id
     groupIds: [
       'Sql'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[cosmosZoneIndex]
+      privateDns!.outputs.zoneIds[cosmosZoneIndex]
     ]
   }
 }
 
-module foundryPrivateEndpoint './modules/private-endpoint.bicep' = {
+module foundryPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints) {
   name: 'private-endpoint-foundry-account'
   params: {
-    enabled: createPrivateEndpoints
+    enabled: true
     location: location
     name: '${namePrefix}-foundry-pe-${suffix}'
-    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
     targetResourceId: foundryAccount.id
     groupIds: [
       'account'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[foundryServicesZoneIndex]
-      privateDns.outputs.zoneIds[foundryCognitiveZoneIndex]
-      privateDns.outputs.zoneIds[foundryOpenAiZoneIndex]
+      privateDns!.outputs.zoneIds[foundryServicesZoneIndex]
+      privateDns!.outputs.zoneIds[foundryCognitiveZoneIndex]
+      privateDns!.outputs.zoneIds[foundryOpenAiZoneIndex]
     ]
   }
 }
 
-module acrPrivateEndpoint './modules/private-endpoint.bicep' = {
+module acrPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints) {
   name: 'private-endpoint-acr'
   params: {
-    enabled: createPrivateEndpoints
+    enabled: true
     location: location
     name: '${namePrefix}-acr-pe-${suffix}'
-    subnetId: virtualNetwork.outputs.privateEndpointSubnetId
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
     targetResourceId: containerRegistry.id
     groupIds: [
       'registry'
     ]
     privateDnsZoneIds: [
-      privateDns.outputs.zoneIds[acrZoneIndex]
+      privateDns!.outputs.zoneIds[acrZoneIndex]
     ]
   }
 }
@@ -627,6 +656,20 @@ module projectConnections './modules/foundry-project-existing-connections.bicep'
   ]
 }
 
+module runtimeConnection './modules/foundry-project-runtime-secret-connection.bicep' = if (!empty(runtimeDatabaseUrl)) {
+  name: 'runtime-secret-connection-${suffix}'
+  params: {
+    accountName: effectiveFoundryAccountName
+    projectName: foundryProjectName
+    location: location
+    runtimeConnectionName: effectiveRuntimeConnectionName
+    runtimeDatabaseUrl: runtimeDatabaseUrl
+  }
+  dependsOn: [
+    foundryProject
+  ]
+}
+
 module formatProjectWorkspaceId './modules/format-project-workspace-id.bicep' = if (manageProjectConnections) {
   name: 'format-workspace-id-${suffix}'
   params: {
@@ -640,9 +683,9 @@ module storageAccountRoleAssignment './modules/azure-storage-account-role-assign
     storageAccountName: effectiveStorageAccountName
     projectPrincipalId: resolvedProjectPrincipalId
   }
-  dependsOn: [
+  dependsOn: enablePrivateEndpoints ? [
     storagePrivateEndpoint
-  ]
+  ] : []
 }
 
 module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
@@ -651,9 +694,9 @@ module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.
     cosmosDBName: effectiveCosmosAccountName
     projectPrincipalId: resolvedProjectPrincipalId
   }
-  dependsOn: [
+  dependsOn: enablePrivateEndpoints ? [
     cosmosPrivateEndpoint
-  ]
+  ] : []
 }
 
 module aiSearchRoleAssignments './modules/ai-search-role-assignments.bicep' = if (assignPreCaphostRbac) {
@@ -662,9 +705,9 @@ module aiSearchRoleAssignments './modules/ai-search-role-assignments.bicep' = if
     aiSearchName: effectiveAiSearchName
     projectPrincipalId: resolvedProjectPrincipalId
   }
-  dependsOn: [
+  dependsOn: enablePrivateEndpoints ? [
     searchPrivateEndpoint
-  ]
+  ] : []
 }
 
 module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = if (createAccountCapabilityHost) {
@@ -672,11 +715,11 @@ module addAccountCapabilityHost './modules/add-account-capability-host.bicep' = 
   params: {
     accountName: effectiveFoundryAccountName
     accountCapabilityHostName: accountCapabilityHostName
-    agentSubnetResourceId: virtualNetwork.outputs.agentSubnetId
+    agentSubnetResourceId: privateNetworking ? virtualNetwork!.outputs.agentSubnetId : ''
   }
-  dependsOn: [
+  dependsOn: enablePrivateEndpoints ? [
     foundryPrivateEndpoint
-  ]
+  ] : []
 }
 
 module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = if (createProjectCapabilityHost) {
@@ -729,7 +772,7 @@ var isCrossRegionAiSearch = toLower(effectiveAiSearchLocation) != toLower(locati
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryProjectEndpoint string = foundryProjectEndpoint
-output natGatewayId string = createNatGateway ? natGateway.id : ''
+output natGatewayId string = enableNat ? natGateway.id : ''
 output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
@@ -742,22 +785,34 @@ output connectionNames object = {
   cosmos: resolvedCosmosConnectionName
   storage: resolvedStorageConnectionName
   aiSearch: resolvedAiSearchConnectionName
+  runtimeSecrets: resolvedRuntimeConnectionName
 }
-output virtualNetwork object = {
-  name: virtualNetwork.outputs.name
-  id: virtualNetwork.outputs.id
-  agentSubnetId: virtualNetwork.outputs.agentSubnetId
-  privateEndpointSubnetId: virtualNetwork.outputs.privateEndpointSubnetId
+output virtualNetwork object = privateNetworking ? {
+  name: virtualNetwork!.outputs.name
+  id: virtualNetwork!.outputs.id
+  agentSubnetId: virtualNetwork!.outputs.agentSubnetId
+  privateEndpointSubnetId: virtualNetwork!.outputs.privateEndpointSubnetId
+} : {
+  name: ''
+  id: ''
+  agentSubnetId: ''
+  privateEndpointSubnetId: ''
 }
-output privateEndpointIds object = {
-  storage: storagePrivateEndpoint.outputs.id
-  aiSearch: searchPrivateEndpoint.outputs.id
-  cosmos: cosmosPrivateEndpoint.outputs.id
-  foundry: foundryPrivateEndpoint.outputs.id
-  acr: acrPrivateEndpoint.outputs.id
+output privateEndpointIds object = enablePrivateEndpoints ? {
+  storage: storagePrivateEndpoint!.outputs.id
+  aiSearch: searchPrivateEndpoint!.outputs.id
+  cosmos: cosmosPrivateEndpoint!.outputs.id
+  foundry: foundryPrivateEndpoint!.outputs.id
+  acr: acrPrivateEndpoint!.outputs.id
+} : {
+  storage: ''
+  aiSearch: ''
+  cosmos: ''
+  foundry: ''
+  acr: ''
 }
-output aiSearchTopologyWarning string = isCrossRegionAiSearch ? 'WARNING: AI Search location differs from deployment location; this introduces a cross-region private-link data path and should be reviewed for latency/residency requirements.' : ''
-output privateRunnerAccess object = createPrivateRunnerAccess ? {
+output aiSearchTopologyWarning string = (privateNetworking && isCrossRegionAiSearch) ? 'WARNING: AI Search location differs from deployment location; this introduces a cross-region private-link data path and should be reviewed for latency/residency requirements.' : ''
+output privateRunnerAccess object = enablePrivateRunnerAccess ? {
   enabled: true
   runnerSubnetId: privateRunnerAccess!.outputs.runnerSubnetId
   bastionSubnetId: privateRunnerAccess!.outputs.bastionSubnetId

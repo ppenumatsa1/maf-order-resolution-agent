@@ -54,7 +54,7 @@ services:
       MCP_BEARER_TOKEN: demo-bearer-token
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/maf_workflow
     volumes:
-      - ./backend/data:/app/data
+      - ./backend/.foundry:/app/.foundry
 
   frontend:
     build:

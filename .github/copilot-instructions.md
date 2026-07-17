@@ -13,6 +13,15 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Keep API response contracts stable for frontend and Playwright tests.
 - Keep the legacy SSE event stream stable; expose richer AG-UI-compatible events only as additive surfaces.
 
+## Delivery formalization
+
+- **You provide** architecture intent, business rules, and acceptance criteria.
+- **Skills provide** current Microsoft platform and SDK guidance.
+- **Copilot provides** implementation, tests, and infra/doc updates.
+- **Gates provide** release evidence for correctness, recovery, telemetry, and Foundry parity.
+
+Canonical contract: `docs/design/engineering-operating-model.md`.
+
 ## Workflow Guardrails
 
 - Keep API, application service, MAF runtime, and infrastructure concerns separated:
@@ -22,11 +31,13 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
   - `backend/app/core/*` owns config, database, telemetry, and runtime composition.
   - `backend/app/infrastructure/*` is the repository-pattern/adapters namespace.
   - `backend/app/maf/*` owns the MAF runtime namespace.
+  - Within `backend/app/maf/*`, keep prompts/agents/tools/executors/runner/workflow
+    separated; avoid reintroducing monolithic workflow-stage logic.
 - Do not add back removed legacy routes/modules such as `/api/foundry*` or
   `backend/app/foundry/*`.
 - Any change to HITL decision logic must update:
   - `docs/design/hitl-approval-conditions.md`
-  - tests in `backend/tests/test_workflow.py` and/or eval cases in `backend/evals/cases.jsonl`
+  - tests in `backend/tests/test_workflow.py` and/or eval cases in `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`
 - Do not remove or rename emitted event types without updating frontend/event consumers:
   - `workflow.stage`
   - `tool.call`
@@ -102,5 +113,6 @@ When behavior changes, update these docs in the same PR:
 - `backend/README.md`
 - `docs/design/userflow.md`
 - `docs/design/hitl-approval-conditions.md`
+- `docs/design/engineering-operating-model.md`
 - `.github/copilot-instructions.md`
 - `agents.md`

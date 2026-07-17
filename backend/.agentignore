@@ -15,6 +15,7 @@ azure.yaml
 .env.*
 .azure/
 .git/
+.foundry/results/
 
 # Python
 __pycache__/

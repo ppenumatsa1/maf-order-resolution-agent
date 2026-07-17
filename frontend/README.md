@@ -23,3 +23,7 @@ UI highlights:
 - Workflow history uses paginated API calls (`/api/workflows?page=<n>&page_size=<n>`).
 - Event timeline uses rich SSE (`/api/chat/stream/{thread_id}/rich`) for live updates, while polling details remains as fallback.
 - Right panel includes a RAG Evidence view that surfaces retrieved policy evidence and chunk IDs from workflow events/details when available.
+
+Hosted runtime note (2026-07-15):
+
+- Frontend workflow behavior and SSE event contracts are unchanged by the recent Foundry tracing fixes; updates were confined to hosted runtime/deploy surfaces.

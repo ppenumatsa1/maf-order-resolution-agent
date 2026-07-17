@@ -1,5 +1,10 @@
 # Scripts
 
+Current hosted-validation note (2026-07-15):
+
+- `scripts/github/foundry_hosted_e2e.sh` and workflow smoke checks are the primary hosted regressions used after each Foundry deploy.
+- Public trace visibility is currently confirmed; private-lane smoke/probe diagnostics are still in active use for intermittent upstream `HTTP 500 server_error`.
+
 ## Contents
 
 - `rubric/e2e-rubric.md`: evaluation rubric for end-to-end workflow quality.

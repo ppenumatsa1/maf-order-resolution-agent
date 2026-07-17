@@ -35,11 +35,10 @@ if [[ -z "$RUNTIME_DATABASE_URL" ]]; then
   exit 1
 fi
 
-echo "Staging hosted agent project from backend/"
-rm -rf infra/foundry-hosted/agent
-mkdir -p infra/foundry-hosted/agent
-cp -a backend/. infra/foundry-hosted/agent/
-rm -rf infra/foundry-hosted/agent/.venv infra/foundry-hosted/agent/tests
+if [[ ! -f backend/agent.yaml || ! -f backend/foundry/main.py ]]; then
+  echo "Hosted source validation failed: backend/agent.yaml and backend/foundry/main.py are required."
+  exit 1
+fi
 
 echo "Selecting AZD environment: ${FOUNDRY_AZD_ENV_NAME}"
 (

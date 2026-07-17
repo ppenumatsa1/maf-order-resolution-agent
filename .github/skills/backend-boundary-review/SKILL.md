@@ -29,7 +29,7 @@ Use this skill when reviewing backend changes for repository boundary compliance
 
 1. Inspect touched backend files for misplaced HTTP, schema, domain, core, infrastructure, or MAF runtime responsibilities.
 2. Search changed imports for legacy shim paths and block newly introduced usage.
-3. For HITL logic changes, verify matching updates in backend tests and/or `backend/evals/cases.jsonl`.
+3. For HITL logic changes, verify matching updates in backend tests and/or `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
 4. For API/event contract changes, verify the frontend, tests, and documentation were intentionally updated.
 
 ## Pass/fail behavior

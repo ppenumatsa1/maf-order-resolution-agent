@@ -52,7 +52,7 @@ Use this repository-owned skill for the application's MAF workflow path. It appl
 - If HITL decision conditions change, update
   `docs/design/hitl-approval-conditions.md` and the low-risk, high-risk/resume, and
   damaged-item coverage in `backend/tests/test_workflow.py` and/or
-  `backend/evals/cases.jsonl`.
+  `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
 
 ## Current Microsoft documentation
 
@@ -64,4 +64,3 @@ Use Microsoft Learn's current Agent Framework documentation before changing SDK 
 | Sequential orchestration and streaming | `microsoft_docs_search(query="Microsoft Agent Framework Python SequentialBuilder workflow streaming")` |
 | Human-in-the-loop workflow requests and resume | `microsoft_docs_search(query="Microsoft Agent Framework Python sequential human in the loop request info")` |
 | Middleware and telemetry APIs | `microsoft_docs_search(query="Microsoft Agent Framework Python middleware telemetry")` |
-

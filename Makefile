@@ -1,11 +1,11 @@
 SHELL := /bin/bash
 COMPOSE_ENV_FILE ?= backend/.env
 
-.PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env \
+.PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env ensure-test-postgres \
 	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
 	parity-all run-mock-mcp up down logs ps docker-test \
 	validate-quick validate-full deploy-app deploy-full clean \
-	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path foundry-sync-env
+	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path
 
 help:
 	@echo "Available targets:"
@@ -33,7 +33,6 @@ help:
 	@echo "  foundry-up      - Self-contained Foundry hosted-agent azd up (BYO VNET + private deps)"
 	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
 	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
-	@echo "  foundry-sync-env - Sync infra/foundry-hosted/runtime/.env into current azd env"
 	@echo "  foundry-smoke   - Invoke hosted agent health check via responses protocol"
 	@echo "  foundry-access-path - Deploy private runner/Bastion access path via Bicep"
 	@echo "  clean           - Remove caches and test artifacts"
@@ -54,6 +53,10 @@ ensure-backend-env:
 	test -d backend/.venv || $(MAKE) venv-backend
 	. backend/.venv/bin/activate && python -c "import pytest" >/dev/null 2>&1 || $(MAKE) install-backend
 
+ensure-test-postgres:
+	@DATABASE_URL="$${DATABASE_URL:-$${FOUNDRY_RUNTIME_DATABASE_URL:-$${RUNTIME_DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable}}}" \
+		./scripts/local/ensure_test_postgres.sh
+
 run-backend: ensure-backend-env
 	cd backend && . .venv/bin/activate && uvicorn app.main:app --reload --port 8000
 
@@ -68,10 +71,10 @@ lint: ensure-backend-env
 
 test: lint test-backend
 
-test-backend: ensure-backend-env
+test-backend: ensure-backend-env ensure-test-postgres
 	cd backend && . .venv/bin/activate && pytest -q
 
-eval-backend: ensure-backend-env
+eval-backend: ensure-backend-env ensure-test-postgres
 	cd backend && . .venv/bin/activate && python -m evals.eval_runner
 
 test-e2e:
@@ -81,7 +84,7 @@ test-e2e:
 		health_json="$$(curl -fsS http://localhost:8000/api/health 2>/dev/null || true)"; \
 		if [[ -z "$$health_json" || "$$health_json" != *'"workflow_mode":"maf_sdk"'* ]]; then \
 			echo "Ensuring deterministic local backend for E2E (WORKFLOW_MODE=maf_sdk)."; \
-			$(MAKE) COMPOSE_ENV_FILE=backend/.env.e2e up; \
+			$(MAKE) COMPOSE_ENV_FILE=backend/.env up; \
 		fi; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
@@ -166,42 +169,26 @@ deploy-full:
 	azd deploy
 
 foundry-up:
+	./scripts/foundry/ensure_foundry_azd_defaults.sh
 	cd infra/foundry-hosted && azd up --no-prompt
 
 foundry-provision:
+	./scripts/foundry/ensure_foundry_azd_defaults.sh
 	cd infra/foundry-hosted && azd provision --no-prompt
 
 foundry-deploy:
-	cd infra/foundry-hosted && azd deploy order-resolution-hosted --no-prompt --timeout "$${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}"
-
-foundry-sync-env:
-	@set -euo pipefail; \
-	cd infra/foundry-hosted; \
-	if [[ ! -f runtime/.env ]]; then \
-		echo "Missing infra/foundry-hosted/runtime/.env"; \
-		exit 1; \
-	fi; \
-	appinsights_line="$$(grep -E '^APPLICATIONINSIGHTS_CONNECTION_STRING=' runtime/.env || true)"; \
-	if [[ -z "$$appinsights_line" || "$$appinsights_line" == 'APPLICATIONINSIGHTS_CONNECTION_STRING=' ]]; then \
-		echo "APPLICATIONINSIGHTS_CONNECTION_STRING must be set in infra/foundry-hosted/runtime/.env"; \
-		exit 1; \
-	fi; \
-	mkdir -p ../../backend/runtime; \
-	cp runtime/.env ../../backend/runtime/.env; \
-	echo "derived backend/runtime/.env from runtime/.env"; \
-	while IFS= read -r line; do \
-		[[ -z "$$line" || "$$line" =~ ^[[:space:]]*# ]] && continue; \
-		key="$${line%%=*}"; \
-		value="$${line#*=}"; \
-		azd env set "$$key" "$$value" >/dev/null; \
-		echo "synced $$key"; \
-	done < runtime/.env
+	@test -f backend/agent.yaml
+	@test -f backend/foundry/main.py
+	@./scripts/foundry/sync_hosted_source.sh
+	@agent_name="$${FOUNDRY_HOSTED_AGENT_NAME:-order-resolution-hosted}"; \
+	cd infra/foundry-hosted && azd deploy "$$agent_name" --no-prompt --timeout "$${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}" && \
+	azd ai agent show "$$agent_name" --output json --no-prompt >/dev/null
 
 foundry-smoke:
 	@if [[ -n "$${SMOKE_THREAD_ID:-}" ]]; then \
 		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --conversation-id "$${SMOKE_THREAD_ID}" --no-prompt; \
 	else \
-		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --no-prompt; \
+		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --new-conversation --new-session --no-prompt; \
 	fi
 
 foundry-access-path:
@@ -210,6 +197,12 @@ foundry-access-path:
 		--template-file iac/access-path.bicep \
 		--parameters @iac/access-path.parameters.json \
 		--parameters runnerVmSshPublicKey="$$(cat "$${RUNNER_SSH_PUBKEY_PATH:-$$HOME/.ssh/id_rsa.pub}")"
+
+foundry-postgres-readiness:
+	./scripts/foundry/check_public_postgres_readiness.sh
+
+foundry-deploy-public:
+	./scripts/foundry/deploy_public_dev.sh
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +

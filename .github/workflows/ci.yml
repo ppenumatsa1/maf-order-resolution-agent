@@ -18,6 +18,8 @@ jobs:
       base_ref: ${{ steps.base.outputs.base_ref }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Resolve diff base
         id: base
         run: |

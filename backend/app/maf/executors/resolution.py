@@ -64,4 +64,3 @@ class ResolutionExecutor:
             }
             await emit(thread_id, output)
             self._memory_store.append_message(thread_id, "assistant", output["message"])
-

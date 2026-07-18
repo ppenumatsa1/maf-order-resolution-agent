@@ -63,9 +63,7 @@ def _apply_appinsights_connection_env_aliases() -> None:
     # AgentServer's bootstrap parser is strict; provide a compact canonical form.
     match = re.search(r"InstrumentationKey=([^;\s]+)", appinsights_alias)
     if match:
-        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
-            f"InstrumentationKey={match.group(1)}"
-        )
+        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = f"InstrumentationKey={match.group(1)}"
         return
 
     os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = appinsights_alias
@@ -531,7 +529,9 @@ def _initialize_app() -> Any:
         "HOSTED_ENV_DIAGNOSTIC "
         + json.dumps(
             {
-                "applicationinsights_connection_string": _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+                "applicationinsights_connection_string": _env_state(
+                    "APPLICATIONINSIGHTS_CONNECTION_STRING"
+                ),
                 "appinsights_connection_string": _env_state("APPINSIGHTS_CONNECTION_STRING"),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),

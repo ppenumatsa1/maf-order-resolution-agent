@@ -24,4 +24,3 @@ def fetch_policy(issue_type: str) -> str:
 
 def submit_resolution(action: str, order_id: str) -> str:
     return f"resolution_submitted::{action}::{order_id}"
-

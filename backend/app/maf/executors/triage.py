@@ -75,4 +75,3 @@ class TriageExecutor:
         issue_type = classify_issue(msg)
         order_id = "ord-1009" if "1009" in msg else "ord-1001"
         return f"order_id={order_id}; issue_type={issue_type}"
-

@@ -50,4 +50,3 @@ def create_order_resolution_agents(
         ],
     )
     return triage_agent, policy_agent, resolution_agent
-

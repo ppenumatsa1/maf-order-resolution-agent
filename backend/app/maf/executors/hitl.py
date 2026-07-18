@@ -87,4 +87,3 @@ class HitlExecutor:
             "assistant",
             "Request rejected by reviewer; escalated to specialist.",
         )
-

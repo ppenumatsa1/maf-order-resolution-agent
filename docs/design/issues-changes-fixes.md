@@ -2092,3 +2092,30 @@ Private-v2 telemetry parity is still open:
 ### Next focused action
 
 Patch private deploy/provision env seeding so `FOUNDRY_RUNTIME_ENV` is always set (including App Insights/OTEL keys), then rerun private deploy workflow and re-check App Insights KQL for run-correlated request/dependency/trace rows.
+
+## Latest execution update (2026-07-18, repeatable PostgreSQL fix via IaC)
+
+### What failed
+
+- Recent private deploy runs started failing smoke with `HTTP 424 session_not_ready`.
+- Hosted runtime logs showed deterministic DB bootstrap failure:
+  - `failed to resolve host 'maffndpg7930.postgres.database.azure.com'`
+  - `psycopg_pool.PoolTimeout: couldn't get a connection after 30.00 sec`
+
+### Root cause
+
+- The private-v2 lane expected `maffndpg7930` in `rg-maf-ora-foundry-v2`, but no repeatable IaC-managed PostgreSQL definition existed in the Foundry hosted template.
+- Workflows were deriving runtime DB URLs from “first server in RG” fallback logic, which is non-deterministic and fragile.
+
+### Fix applied (repeatable IaC path)
+
+1. Added PostgreSQL Flexible Server + firewall rule + `maf_workflow` database resources to `infra/foundry-hosted/iac/main.bicep`.
+2. Added PostgreSQL parameters to `infra/foundry-hosted/iac/main.parameters.json`:
+   - `CREATE_POSTGRES_SERVER`
+   - `POSTGRES_SERVER_NAME`
+   - `POSTGRES_ADMIN_USERNAME`
+   - `POSTGRES_ADMIN_PASSWORD`
+   - `POSTGRES_DATABASE_NAME`
+   - `POSTGRES_LOCATION`
+3. Added defaults for these env keys in `scripts/foundry/ensure_foundry_azd_defaults.sh`.
+4. Hardened both Foundry workflows to use deterministic PostgreSQL env keys and server-name-based URL construction instead of list-first fallback.

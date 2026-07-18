@@ -240,6 +240,11 @@ jobs:
           azd env set ASSIGN_PRE_CAPHOST_RBAC "$assign_pre_caphost_rbac"
           azd env set ASSIGN_POST_CAPHOST_RBAC "$assign_post_caphost_rbac"
           azd env set MANAGE_PROJECT_CONNECTIONS "$manage_project_connections"
+          azd env set CREATE_POSTGRES_SERVER "true"
+          azd env set POSTGRES_SERVER_NAME "${{ vars.POSTGRES_SERVER_NAME || 'maffndpg7930' }}"
+          azd env set POSTGRES_ADMIN_USERNAME "${{ vars.POSTGRES_ADMIN_USERNAME || 'pgadmin' }}"
+          azd env set POSTGRES_DATABASE_NAME "${{ vars.POSTGRES_DATABASE_NAME || 'maf_workflow' }}"
+          azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
 
           project_id="${{ vars.FOUNDRY_PROJECT_ID || '' }}"
           project_endpoint="${{ vars.FOUNDRY_PROJECT_ENDPOINT || vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
@@ -279,19 +284,20 @@ jobs:
           fi
 
           postgres_password="${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}"
+          postgres_server_name="$(azd env get-value POSTGRES_SERVER_NAME)"
+          postgres_admin_username="$(azd env get-value POSTGRES_ADMIN_USERNAME)"
+          postgres_database_name="$(azd env get-value POSTGRES_DATABASE_NAME)"
+          if [[ -n "$postgres_password" ]]; then
+            azd env set POSTGRES_ADMIN_PASSWORD "$postgres_password"
+          fi
           if [[ -z "$runtime_db_url" && -n "$postgres_password" ]]; then
-            postgres_fqdn="$(az postgres flexible-server list --resource-group "$resource_group" --query "[0].fullyQualifiedDomainName" -o tsv)"
+            postgres_fqdn="$(az postgres flexible-server show --resource-group "$resource_group" --name "$postgres_server_name" --query "fullyQualifiedDomainName" -o tsv)"
             if [[ -z "$postgres_fqdn" ]]; then
-              echo "Unable to resolve PostgreSQL server in resource group $resource_group"
+              echo "Unable to resolve PostgreSQL server '$postgres_server_name' in resource group $resource_group"
               exit 1
             fi
-            if [[ "$profile" == "public" ]]; then
-              postgres_db_name="maf_workflow_public_dev"
-            else
-              postgres_db_name="maf_workflow"
-            fi
             encoded_password="$(python -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$postgres_password")"
-            runtime_db_url="postgresql://pgadmin:${encoded_password}@${postgres_fqdn}:5432/${postgres_db_name}?sslmode=require"
+            runtime_db_url="postgresql://${postgres_admin_username}:${encoded_password}@${postgres_fqdn}:5432/${postgres_database_name}?sslmode=require"
           fi
 
           if [[ -z "$runtime_db_url" ]]; then

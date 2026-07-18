@@ -207,6 +207,25 @@ param runtimeConnectionName string = 'orderresolutionruntimesecrets'
 @secure()
 param runtimeDatabaseUrl string = ''
 
+@description('Create PostgreSQL Flexible Server for workflow persistence.')
+param createPostgresServer bool = true
+
+@description('Optional override for PostgreSQL server name.')
+param postgresServerName string = 'maffndpg7930'
+
+@description('PostgreSQL administrator username.')
+param postgresAdminUsername string = 'pgadmin'
+
+@description('PostgreSQL administrator password (required when createPostgresServer is true).')
+@secure()
+param postgresAdminPassword string = ''
+
+@description('Workflow database name.')
+param postgresDatabaseName string = 'maf_workflow'
+
+@description('PostgreSQL server location.')
+param postgresLocation string = 'centralus'
+
 var suffix = toLower(uniqueString(resourceGroup().id))
 var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
 var effectiveFoundryAccountName = empty(foundryAccountName) ? take('${normalizedPrefix}ai${suffix}', 64) : foundryAccountName
@@ -222,6 +241,7 @@ var effectiveCosmosConnectionName = '${effectiveCosmosAccountName}-${foundryProj
 var effectiveStorageConnectionName = '${effectiveStorageAccountName}-${foundryProjectName}'
 var effectiveAiSearchConnectionName = '${effectiveAiSearchName}-${foundryProjectName}'
 var effectiveRuntimeConnectionName = runtimeConnectionName
+var effectivePostgresServerName = toLower(postgresServerName)
 var effectiveCosmosLocation = empty(cosmosLocation) ? location : cosmosLocation
 var privateNetworking = networkMode == 'private'
 var enableNat = privateNetworking && createNatGateway
@@ -316,6 +336,48 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
     publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
+  }
+}
+
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = if (createPostgresServer) {
+  name: effectivePostgresServerName
+  location: postgresLocation
+  sku: {
+    name: 'Standard_B1ms'
+    tier: 'Burstable'
+  }
+  properties: {
+    administratorLogin: postgresAdminUsername
+    administratorLoginPassword: postgresAdminPassword
+    version: '16'
+    storage: {
+      storageSizeGB: 32
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+  }
+}
+
+resource postgresAzureServicesFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (createPostgresServer) {
+  name: 'allow-azure-services'
+  parent: postgresServer
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+resource postgresWorkflowDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = if (createPostgresServer) {
+  name: postgresDatabaseName
+  parent: postgresServer
+  properties: {
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
   }
 }
 
@@ -778,6 +840,8 @@ output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
 output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
+output postgresFullyQualifiedDomainName string = createPostgresServer ? postgresServer!.properties.fullyQualifiedDomainName : ''
+output postgresDatabaseName string = postgresDatabaseName
 output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost!.outputs.accountCapabilityHostName : ''
 output projectCapabilityHost string = createProjectCapabilityHost ? addProjectCapabilityHost!.outputs.projectCapabilityHostName : ''
 output projectPrincipalId string = resolvedProjectPrincipalId

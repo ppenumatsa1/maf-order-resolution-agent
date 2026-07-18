@@ -53,6 +53,24 @@
     "runtimeConnectionName": {
       "value": "orderresolutionruntimesecrets"
     },
+    "createPostgresServer": {
+      "value": "${CREATE_POSTGRES_SERVER}"
+    },
+    "postgresServerName": {
+      "value": "${POSTGRES_SERVER_NAME}"
+    },
+    "postgresAdminUsername": {
+      "value": "${POSTGRES_ADMIN_USERNAME}"
+    },
+    "postgresAdminPassword": {
+      "value": "${POSTGRES_ADMIN_PASSWORD}"
+    },
+    "postgresDatabaseName": {
+      "value": "${POSTGRES_DATABASE_NAME}"
+    },
+    "postgresLocation": {
+      "value": "${POSTGRES_LOCATION}"
+    },
     "runtimeDatabaseUrl": {
       "value": "${RUNTIME_DATABASE_URL}"
     }

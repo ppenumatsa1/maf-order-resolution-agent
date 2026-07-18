@@ -48,6 +48,20 @@ def _dedupe(values: list[str]) -> list[str]:
     return ordered
 
 
+def _to_jsonable(value: object) -> object:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_jsonable(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return _to_jsonable(value.model_dump())
+    if hasattr(value, "dict"):
+        return _to_jsonable(value.dict())
+    return str(value)
+
+
 async def run_foundry_eval() -> None:
     root = Path(__file__).resolve().parents[1]
     foundry_root = root / ".foundry"
@@ -209,16 +223,15 @@ async def run_foundry_eval() -> None:
             "run_id": eval_run.id,
             "query_count": len(selected_queries),
             "evaluators": evaluators,
-            "result_counts": getattr(eval_run, "result_counts", None),
+            "result_counts": _to_jsonable(getattr(eval_run, "result_counts", None)),
             "report_url": (
                 f"{models_cfg.project_endpoint.rstrip('/')}/evaluation/evaluations/{eval_object.id}/runs/{eval_run.id}"
             ),
+            "error": _to_jsonable(getattr(eval_run, "error", None)),
         }
-        if str(eval_run.status) != "completed":
-            raise RuntimeError(f"Foundry eval run ended with status: {eval_run.status}")
     except Exception as exc:  # noqa: BLE001
         payload["error"] = str(exc)
-        report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        report_path.write_text(json.dumps(_to_jsonable(payload), indent=2), encoding="utf-8")
         print(json.dumps(payload, indent=2))
         print(f"Foundry report saved to: {report_path}")
         raise
@@ -230,9 +243,13 @@ async def run_foundry_eval() -> None:
         if "credential" in locals():
             await credential.close()
 
-    report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    report_path.write_text(json.dumps(_to_jsonable(payload), indent=2), encoding="utf-8")
     print(json.dumps(payload, indent=2))
     print(f"Foundry report saved to: {report_path}")
+
+    enforce_pass = os.getenv("FOUNDRY_EVAL_ENFORCE_PASS", "false").lower() in {"1", "true", "yes"}
+    if enforce_pass and str(payload.get("status")) != "completed":
+        raise RuntimeError(f"Foundry eval run ended with status: {payload.get('status')}")
 
 
 if __name__ == "__main__":

@@ -370,6 +370,9 @@ jobs:
               fi
             fi
           fi
+          if [[ -n "$appinsights_connection_string" ]]; then
+            appinsights_connection_string="$(echo "$appinsights_connection_string" | tr -d '\r\n' | sed -E 's/[;[:space:]]+$//')"
+          fi
           if [[ -n "$appinsights_connection_string" && "$appinsights_connection_string" != *"InstrumentationKey="* ]]; then
             echo "Resolved Application Insights connection string is invalid."
             if [[ "$profile" == "private" ]]; then

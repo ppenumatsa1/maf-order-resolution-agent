@@ -135,6 +135,10 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   which indicates stale/invalid private connection string injection. Private profile
   workflow now hard-fails when resolved App Insights connection string is missing or
   malformed (must contain `InstrumentationKey=`) rather than silently deploying.
+- Final RCA refinement: Azure resource API returns App Insights connection strings
+  with trailing semicolon; Azure AgentServer parser treats empty trailing segment as
+  invalid (`dictionary update sequence element #0 has length 1`). Workflows now trim
+  trailing semicolons/whitespace before seeding runtime env.
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

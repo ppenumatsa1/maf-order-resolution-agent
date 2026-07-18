@@ -475,3 +475,11 @@ jobs:
       - name: Hosted E2E validation
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
         run: ./scripts/github/foundry_hosted_e2e.sh
+
+      - name: Collect hosted runtime logs
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          azd ai agent monitor order-resolution-hosted --type system --tail 200 --utc --no-prompt || true
+          azd ai agent monitor order-resolution-hosted --tail 200 --utc --no-prompt || true

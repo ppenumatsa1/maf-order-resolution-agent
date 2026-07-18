@@ -299,6 +299,41 @@ def test_runtime_database_url_override_keeps_existing_remote_database_url(
     assert os.getenv("DATABASE_URL") == existing_url
 
 
+def test_appinsights_env_alias_sets_canonical_connection_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
+    monkeypatch.setenv(
+        "APPINSIGHTS_CONNECTION_STRING",
+        "InstrumentationKey=12345678-1234-1234-1234-1234567890ab;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus2.livediagnostics.monitor.azure.com/;ApplicationId=f3bf2e8e-9ca7-433c-ab54-0a886618d564",
+    )
+
+    foundry_main._apply_appinsights_connection_env_aliases()
+
+    assert os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") == (
+        "InstrumentationKey=12345678-1234-1234-1234-1234567890ab"
+    )
+
+
+def test_appinsights_env_alias_preserves_existing_canonical_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "APPLICATIONINSIGHTS_CONNECTION_STRING",
+        "InstrumentationKey=aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb",
+    )
+    monkeypatch.setenv(
+        "APPINSIGHTS_CONNECTION_STRING",
+        "InstrumentationKey=cccccccc-1111-2222-3333-dddddddddddd",
+    )
+
+    foundry_main._apply_appinsights_connection_env_aliases()
+
+    assert os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") == (
+        "InstrumentationKey=aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
+    )
+
+
 def test_parse_input_extracts_conversation_and_message() -> None:
     parsed = foundry_main._parse_input(
         {

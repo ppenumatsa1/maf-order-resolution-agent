@@ -154,6 +154,14 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   - `APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=<key>`
   - `APPINSIGHTS_CONNECTION_STRING=InstrumentationKey=<key>`
   to avoid AgentServer parser failures on extended connection-string variants.
+- Root-cause fix in hosted runtime bootstrap:
+  - `backend/foundry/main.py` now promotes `APPINSIGHTS_CONNECTION_STRING` to
+    `APPLICATIONINSIGHTS_CONNECTION_STRING` (compact `InstrumentationKey=<uuid>`
+    form) **before** `ResponsesAgentServerHost()` initializes AgentServer
+    observability.
+  - This directly addresses AgentServer b7 behavior, which reads only
+    `APPLICATIONINSIGHTS_CONNECTION_STRING` during startup and throws
+    `Invalid connection string` when it is empty.
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

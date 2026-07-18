@@ -51,8 +51,29 @@ def _apply_runtime_database_url_override() -> None:
         os.environ["DATABASE_URL"] = runtime_database_url
 
 
+def _apply_appinsights_connection_env_aliases() -> None:
+    canonical = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+    if canonical and not canonical.startswith("${"):
+        return
+
+    appinsights_alias = os.getenv("APPINSIGHTS_CONNECTION_STRING", "").strip()
+    if not appinsights_alias or appinsights_alias.startswith("${"):
+        return
+
+    # AgentServer's bootstrap parser is strict; provide a compact canonical form.
+    match = re.search(r"InstrumentationKey=([^;\s]+)", appinsights_alias)
+    if match:
+        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
+            f"InstrumentationKey={match.group(1)}"
+        )
+        return
+
+    os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = appinsights_alias
+
+
 _apply_foundry_model_env_aliases()
 _apply_runtime_database_url_override()
+_apply_appinsights_connection_env_aliases()
 
 if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":
     order_resolution_service = None

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -122,9 +121,14 @@ def setup_observability() -> ObservabilityStatus:
 
     service_name = os.getenv("OTEL_SERVICE_NAME", "maf-customer-resolution")
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-    app_insights_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") or os.getenv(
-        "APPINSIGHTS_CONNECTION_STRING"
-    )
+    canonical_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+    alias_connection_string = os.getenv("APPINSIGHTS_CONNECTION_STRING", "").strip()
+    # Prefer alias when it carries the full region-aware connection string while
+    # the canonical variable is intentionally compacted for hosted runtime bootstrap.
+    if "IngestionEndpoint=" in alias_connection_string:
+        app_insights_connection_string = alias_connection_string
+    else:
+        app_insights_connection_string = canonical_connection_string or alias_connection_string
     if not app_insights_connection_string:
         instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY") or os.getenv(
             "APPINSIGHTS_INSTRUMENTATION_KEY"
@@ -133,13 +137,6 @@ def setup_observability() -> ObservabilityStatus:
             app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
     if app_insights_connection_string:
         app_insights_connection_string = app_insights_connection_string.strip().rstrip(";")
-        instrumentation_key_match = re.search(
-            r"InstrumentationKey=([^;\s]+)", app_insights_connection_string
-        )
-        if instrumentation_key_match:
-            app_insights_connection_string = (
-                f"InstrumentationKey={instrumentation_key_match.group(1)}"
-            )
 
     resource = _create_observability_resource(service_name)
 

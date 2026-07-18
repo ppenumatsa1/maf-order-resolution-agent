@@ -123,6 +123,40 @@ def test_setup_observability_uses_appinsights_alias(
     assert instrumentation_calls == [{"enable_sensitive_data": False}]
 
 
+def test_setup_observability_prefers_full_alias_over_compact_canonical(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    provider = _FakeProvider()
+
+    azure = types.ModuleType("azure")
+    monitor = types.ModuleType("azure.monitor")
+    opentelemetry = types.ModuleType("azure.monitor.opentelemetry")
+
+    def configure_azure_monitor(**kwargs: Any) -> None:
+        calls.append(kwargs)
+
+    opentelemetry.configure_azure_monitor = configure_azure_monitor  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "azure", azure)
+    monkeypatch.setitem(sys.modules, "azure.monitor", monitor)
+    monkeypatch.setitem(sys.modules, "azure.monitor.opentelemetry", opentelemetry)
+    monkeypatch.setenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "InstrumentationKey=compact-only")
+    monkeypatch.setenv(
+        "APPINSIGHTS_CONNECTION_STRING",
+        "InstrumentationKey=full-value;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/;",
+    )
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+    monkeypatch.setattr(telemetry.trace, "get_tracer_provider", lambda: provider)
+
+    status = telemetry.setup_observability()
+
+    assert status.azure_monitor_configured is True
+    assert (
+        calls[0]["connection_string"]
+        == "InstrumentationKey=full-value;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/"
+    )
+
+
 def test_setup_observability_degrades_when_application_insights_fails(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,

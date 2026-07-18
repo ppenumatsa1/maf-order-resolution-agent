@@ -373,17 +373,20 @@ jobs:
           if [[ -n "$appinsights_connection_string" ]]; then
             appinsights_connection_string="$(echo "$appinsights_connection_string" | tr -d '\r\n' | sed -E 's/[;[:space:]]+$//')"
           fi
+          appinsights_connection_string_full="$appinsights_connection_string"
           appinsights_instrumentation_key="$(echo "$appinsights_connection_string" | sed -n 's/.*InstrumentationKey=\\([^;]*\\).*/\\1/p')"
+          canonical_appinsights_connection_string="$appinsights_connection_string_full"
           if [[ "$profile" == "private" && -n "$appinsights_instrumentation_key" ]]; then
             # AgentServer hosted runtime is strict about connection-string shape.
-            appinsights_connection_string="InstrumentationKey=${appinsights_instrumentation_key}"
+            canonical_appinsights_connection_string="InstrumentationKey=${appinsights_instrumentation_key}"
           fi
-          if [[ -n "$appinsights_connection_string" && "$appinsights_connection_string" != *"InstrumentationKey="* ]]; then
+          if [[ -n "$appinsights_connection_string_full" && "$appinsights_connection_string_full" != *"InstrumentationKey="* ]]; then
             echo "Resolved Application Insights connection string is invalid."
             if [[ "$profile" == "private" ]]; then
               exit 1
             fi
-            appinsights_connection_string=""
+            appinsights_connection_string_full=""
+            canonical_appinsights_connection_string=""
           fi
 
           azd env set ENABLE_TELEMETRY "$enable_telemetry"
@@ -391,8 +394,8 @@ jobs:
           azd env set OTEL_SERVICE_NAME "$otel_service_name"
           azd env set OTEL_SERVICE_NAMESPACE "$otel_service_namespace"
           azd env set OTEL_RECORD_CONTENT "$otel_record_content"
-          azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
-          azd env set APPINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
+          azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$canonical_appinsights_connection_string"
+          azd env set APPINSIGHTS_CONNECTION_STRING "$appinsights_connection_string_full"
           azd env set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "$otlp_traces_endpoint"
 
           runtime_env_payload="$(printf '%s\n' \
@@ -405,8 +408,8 @@ jobs:
             "OTEL_SERVICE_NAME=$otel_service_name" \
             "OTEL_SERVICE_NAMESPACE=$otel_service_namespace" \
             "OTEL_RECORD_CONTENT=$otel_record_content" \
-            "APPLICATIONINSIGHTS_CONNECTION_STRING=$appinsights_connection_string" \
-            "APPINSIGHTS_CONNECTION_STRING=$appinsights_connection_string" \
+            "APPLICATIONINSIGHTS_CONNECTION_STRING=$canonical_appinsights_connection_string" \
+            "APPINSIGHTS_CONNECTION_STRING=$appinsights_connection_string_full" \
             "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$otlp_traces_endpoint")"
           azd env set FOUNDRY_RUNTIME_ENV "$runtime_env_payload"
 

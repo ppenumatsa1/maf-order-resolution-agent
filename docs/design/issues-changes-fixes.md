@@ -5,6 +5,44 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, App Insights connection-string shape parity vs hosted-agent docs/samples)
+
+### What was checked
+
+1. Reviewed hosted-agent tutorial and Foundry samples for telemetry wiring guidance.
+2. Verified current Foundry project connections in `rg-maf-ora-foundry-v2` and runtime env shaping.
+3. Ran direct telemetry probes against `maffnd-mon-4aiw7fw5gjdo4-appi`.
+
+### Findings
+
+1. Official hosted guidance/samples expect `APPLICATIONINSIGHTS_CONNECTION_STRING` to be auto-injected when AppInsights project connection exists.
+2. Current project has storage/cosmos/search/customkeys connections, but no AppInsights project connection.
+3. Our private workflow was compacting the connection string to `InstrumentationKey=<key>` for both:
+   - `APPLICATIONINSIGHTS_CONNECTION_STRING`
+   - `APPINSIGHTS_CONNECTION_STRING`
+4. `InstrumentationKey`-only works for ingestion API probes but breaks `azure.monitor.opentelemetry` exporter path with:
+   - `Exporter is missing a valid region.`
+   - no telemetry rows emitted for probe spans.
+
+### Fixes applied
+
+1. Updated `.github/workflows/foundry-deploy.yml` and `.github/workflows/foundry-provision.yml`:
+   - preserve full region-aware connection string in `APPINSIGHTS_CONNECTION_STRING`
+   - keep compact canonical value only in `APPLICATIONINSIGHTS_CONNECTION_STRING` for hosted AgentServer bootstrap compatibility
+2. Updated `backend/app/core/telemetry.py`:
+   - prefer full `APPINSIGHTS_CONNECTION_STRING` when it includes `IngestionEndpoint=...`
+   - stop collapsing telemetry exporter connection strings down to instrumentation-key only
+3. Added regression test:
+   - `backend/tests/test_telemetry.py::test_setup_observability_prefers_full_alias_over_compact_canonical`
+
+### Validation evidence
+
+1. `backend/.venv/bin/pytest backend/tests/test_telemetry.py backend/tests/test_foundry_hosted.py` -> passed (40 tests).
+2. Manual telemetry probes:
+   - `v2/track` custom event -> `itemsAccepted=1`, query returned row in `customEvents`.
+   - OpenTelemetry span with full connection string -> row observed in `dependencies`.
+   - OpenTelemetry span with instrumentation-key-only string -> `Exporter is missing a valid region` and no query row (expected failure mode, now avoided by fix).
+
 ## Latest execution update (2026-07-18, deploy env bootstrap failure + deterministic Postgres name parsing fix)
 
 ### What failed

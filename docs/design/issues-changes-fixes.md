@@ -129,6 +129,12 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - Runtime telemetry bootstrap now accepts both `APPLICATIONINSIGHTS_CONNECTION_STRING`
   and `APPINSIGHTS_CONNECTION_STRING` env names (plus instrumentation-key fallback),
   and logs hosted startup observability status for deterministic diagnostics.
+- Hosted logs now surfaced explicit telemetry parse failure:
+  - `ValueError: Invalid connection string`
+  - `appinsights_configured=False`
+  which indicates stale/invalid private connection string injection. Private profile
+  workflow now hard-fails when resolved App Insights connection string is missing or
+  malformed (must contain `InstrumentationKey=`) rather than silently deploying.
 
 ### What changed
 

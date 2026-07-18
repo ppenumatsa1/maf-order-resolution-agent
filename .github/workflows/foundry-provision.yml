@@ -262,20 +262,32 @@ jobs:
             if [[ -n "$inferred_appinsights_connection_string" ]]; then
               appinsights_connection_string="$inferred_appinsights_connection_string"
             fi
-          fi
-          if [[ -z "$appinsights_connection_string" ]]; then
-            appinsights_connection_string="${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
-          fi
-          if [[ -z "$appinsights_connection_string" ]]; then
-            inferred_suffix="$(echo "$account_name" | sed -E 's/^.*ai([a-z0-9]+)$/\1/')"
-            appi_name="maffnd-mon-${inferred_suffix}-appi"
-            appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
-          fi
-          if [[ -z "$appinsights_connection_string" ]]; then
-            appi_name="$(az resource list --resource-group "$resource_group" --resource-type Microsoft.Insights/components --query "[0].name" -o tsv)"
-            if [[ -n "$appi_name" ]]; then
-              appinsights_connection_string="$(az resource show --resource-group "$resource_group" --name "$appi_name" --resource-type Microsoft.Insights/components --query properties.ConnectionString -o tsv)"
+            if [[ -z "$appinsights_connection_string" ]]; then
+              echo "Unable to resolve private App Insights connection string from RG '${resource_group}' and account '${account_name}'."
+              exit 1
             fi
+          else
+            if [[ -z "$appinsights_connection_string" ]]; then
+              appinsights_connection_string="${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
+            fi
+            if [[ -z "$appinsights_connection_string" ]]; then
+              inferred_suffix="$(echo "$account_name" | sed -E 's/^.*ai([a-z0-9]+)$/\1/')"
+              appi_name="maffnd-mon-${inferred_suffix}-appi"
+              appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
+            fi
+            if [[ -z "$appinsights_connection_string" ]]; then
+              appi_name="$(az resource list --resource-group "$resource_group" --resource-type Microsoft.Insights/components --query "[0].name" -o tsv)"
+              if [[ -n "$appi_name" ]]; then
+                appinsights_connection_string="$(az resource show --resource-group "$resource_group" --name "$appi_name" --resource-type Microsoft.Insights/components --query properties.ConnectionString -o tsv)"
+              fi
+            fi
+          fi
+          if [[ -n "$appinsights_connection_string" && "$appinsights_connection_string" != *"InstrumentationKey="* ]]; then
+            echo "Resolved Application Insights connection string is invalid."
+            if [[ "$profile" == "private" ]]; then
+              exit 1
+            fi
+            appinsights_connection_string=""
           fi
 
           azd env set ENABLE_TELEMETRY "$enable_telemetry"

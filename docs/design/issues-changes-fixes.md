@@ -148,6 +148,9 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   future runs can prove whether runtime placeholder substitution is occurring.
 - Diagnostics now emit explicit `HOSTED_ENV_DIAGNOSTIC` JSON to stderr to ensure
   visibility even when module logger level filters out `logger.info`.
+- Diagnostic payload now includes structural metadata (`length`, segment counts,
+  equals/semicolon counts) for connection-string shape validation without exposing
+  secret content.
 
 ### What changed
 

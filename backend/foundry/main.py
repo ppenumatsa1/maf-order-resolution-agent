@@ -476,10 +476,17 @@ def _build_app() -> Any:
 def _initialize_app() -> Any:
     def _env_state(name: str) -> dict[str, Any]:
         value = os.getenv(name, "")
+        segments = [segment for segment in value.split(";") if segment]
+        kv_segments = [segment for segment in segments if "=" in segment]
         return {
             "present": bool(value),
             "placeholder": value.startswith("${"),
             "has_instrumentation_key": "InstrumentationKey=" in value,
+            "length": len(value),
+            "semicolon_count": value.count(";"),
+            "equals_count": value.count("="),
+            "segment_count": len(segments),
+            "kv_segment_count": len(kv_segments),
         }
 
     # AgentServerHost must configure the provider first so its Foundry

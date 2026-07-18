@@ -750,6 +750,17 @@ module storageAccountRoleAssignment './modules/azure-storage-account-role-assign
   ] : []
 }
 
+module storageAccountRoleAssignmentFoundryAccountIdentity './modules/azure-storage-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
+  name: 'storage-account-rbac-foundry-account-${suffix}'
+  params: {
+    storageAccountName: effectiveStorageAccountName
+    projectPrincipalId: foundryAccount.identity.principalId
+  }
+  dependsOn: enablePrivateEndpoints ? [
+    storagePrivateEndpoint
+  ] : []
+}
+
 module cosmosAccountRoleAssignments './modules/cosmosdb-account-role-assignment.bicep' = if (assignPreCaphostRbac) {
   name: 'cosmos-account-rbac-${suffix}'
   params: {
@@ -797,6 +808,7 @@ module addProjectCapabilityHost './modules/add-project-capability-host.bicep' = 
   dependsOn: [
     addAccountCapabilityHost
     storageAccountRoleAssignment
+    storageAccountRoleAssignmentFoundryAccountIdentity
     cosmosAccountRoleAssignments
     aiSearchRoleAssignments
   ]

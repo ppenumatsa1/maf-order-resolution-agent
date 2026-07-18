@@ -5,6 +5,35 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, Foundry eval population verified + storage-permission RBAC closure via IaC)
+
+### What was verified
+
+1. Private deploy run `29661230552` completed deploy + smoke + hosted E2E and executed the Foundry report-only eval step.
+2. Eval artifact was published:
+   - artifact: `foundry-eval-29661230552-1`
+   - report file: `backend/.foundry/results/foundry-report.json`
+3. Foundry eval run metadata was populated:
+   - `eval_id`: `eval_8b0feaefdaf8473485a97c62eb7b82ec`
+   - `run_id`: `evalrun_8d34b7dc88304eb089b34ff05929e8c6`
+   - `report_url`: `https://maffndai4aiw7fw5gjdo4.services.ai.azure.com/api/projects/order-resolution/evaluation/evaluations/eval_8b0feaefdaf8473485a97c62eb7b82ec/runs/evalrun_8d34b7dc88304eb089b34ff05929e8c6`
+
+### Remaining failure cause from report
+
+Foundry eval status was `failed` with 403:
+
+- `UserError/Auth/Authorization/ResourceMsiTokenDoesntHavePermissionsOnStorage`
+- message identifies project MSI permissions on storage account `maffndst4aiw7fw5gjdo4`.
+
+### IaC fix applied (no ad-hoc permission mutation)
+
+Updated `infra/foundry-hosted/iac/main.bicep` to assign storage-account RBAC through IaC to both identities involved in hosted/eval paths:
+
+1. existing: project identity -> Storage Blob Data Contributor
+2. added: Foundry account identity -> Storage Blob Data Contributor
+
+The new module dependency is wired into project capability-host creation ordering so provisioning remains deterministic.
+
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
 
 ### What changed

@@ -364,15 +364,13 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview
     disableLocalAuth: true
     networkAcls: privateNetworking ? {
       defaultAction: 'Deny'
-      virtualNetworkRules: [
-        {
-          id: agentSubnetResourceId
-          ignoreMissingVnetServiceEndpoint: false
-        }
-      ]
+      virtualNetworkRules: []
+      ipRules: []
+      bypass: 'AzureServices'
     } : {
       defaultAction: 'Allow'
       virtualNetworkRules: []
+      ipRules: []
     }
     publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
     ...foundryNetworkInjectionProperties

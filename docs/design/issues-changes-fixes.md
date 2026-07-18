@@ -53,6 +53,12 @@ Run private `foundry-provision` + `foundry-deploy` with the new preflight active
     - HTTP `403`
     - `{"error":{"code":"403","message":"Traffic is not from an approved private endpoint."}}`
 - This confirms the original deploy blocker remains, but is now deterministically surfaced before `azd deploy` instead of failing later in deploy internals.
+- Additional parity check against Microsoft sample (`15-private-network-standard-agent-setup`) found one critical networking delta:
+  - sample Foundry account uses `networkAcls.defaultAction='Deny'` with `virtualNetworkRules: []` (no subnet allowlist), plus private endpoints and network injection;
+  - our template was still enforcing `virtualNetworkRules` to the agent subnet only.
+- Applied parity fix in `infra/foundry-hosted/iac/main.bicep`:
+  - private mode now sets `networkAcls` to `defaultAction: 'Deny'`, `virtualNetworkRules: []`, `ipRules: []`, `bypass: 'AzureServices'`.
+  - network isolation remains enforced by private endpoints + network injection, matching the sample design.
 
 ## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
 

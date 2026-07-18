@@ -123,6 +123,9 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - Private profile now **prefers deterministic IaC App Insights connection string**
   over environment secret value to prevent stale secret drift to old/deleted apps.
 - Secret/variable/generic-list lookups remain as fallback for non-private paths.
+- Deterministic lookup now resolves the App Insights connection string first via
+  ARM resource query (`az resource show ... Microsoft.Insights/components`) so
+  private workflow seeding does not depend on optional CLI extension behavior.
 
 ### What changed
 

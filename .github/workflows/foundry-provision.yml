@@ -255,7 +255,10 @@ jobs:
           if [[ "$profile" == "private" ]]; then
             inferred_suffix="$(echo "$account_name" | sed -E 's/^.*ai([a-z0-9]+)$/\1/')"
             appi_name="maffnd-mon-${inferred_suffix}-appi"
-            inferred_appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
+            inferred_appinsights_connection_string="$(az resource show --resource-group "$resource_group" --name "$appi_name" --resource-type Microsoft.Insights/components --query properties.ConnectionString -o tsv 2>/dev/null || true)"
+            if [[ -z "$inferred_appinsights_connection_string" ]]; then
+              inferred_appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
+            fi
             if [[ -n "$inferred_appinsights_connection_string" ]]; then
               appinsights_connection_string="$inferred_appinsights_connection_string"
             fi

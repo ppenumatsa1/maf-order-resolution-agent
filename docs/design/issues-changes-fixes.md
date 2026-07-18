@@ -126,6 +126,9 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - Deterministic lookup now resolves the App Insights connection string first via
   ARM resource query (`az resource show ... Microsoft.Insights/components`) so
   private workflow seeding does not depend on optional CLI extension behavior.
+- Runtime telemetry bootstrap now accepts both `APPLICATIONINSIGHTS_CONNECTION_STRING`
+  and `APPINSIGHTS_CONNECTION_STRING` env names (plus instrumentation-key fallback),
+  and logs hosted startup observability status for deterministic diagnostics.
 
 ### What changed
 

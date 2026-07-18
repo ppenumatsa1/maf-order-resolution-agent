@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from collections.abc import Iterable
@@ -13,6 +14,8 @@ from app.api.v1.schemas.chat import ChatRunRequest
 from app.api.v1.schemas.hitl import HitlResponseRequest
 from app.core import telemetry as _telemetry
 from app.core.telemetry import get_tracer
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_foundry_model_env_aliases() -> None:
@@ -472,7 +475,14 @@ def _build_app() -> Any:
 def _initialize_app() -> Any:
     # AgentServerHost must configure the provider first so its Foundry
     # enrichment processors can emit portal-indexable GenAI transaction spans.
-    _telemetry.setup_observability()
+    telemetry_status = _telemetry.setup_observability()
+    logger.info(
+        "Hosted observability initialized: telemetry_enabled=%s instrumentation_enabled=%s azure_monitor=%s otlp=%s",
+        telemetry_status.telemetry_enabled,
+        telemetry_status.instrumentation_enabled,
+        telemetry_status.azure_monitor_configured,
+        telemetry_status.otlp_configured,
+    )
     return _build_app()
 
 

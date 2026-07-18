@@ -121,7 +121,15 @@ def setup_observability() -> ObservabilityStatus:
 
     service_name = os.getenv("OTEL_SERVICE_NAME", "maf-customer-resolution")
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-    app_insights_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    app_insights_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") or os.getenv(
+        "APPINSIGHTS_CONNECTION_STRING"
+    )
+    if not app_insights_connection_string:
+        instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY") or os.getenv(
+            "APPINSIGHTS_INSTRUMENTATION_KEY"
+        )
+        if instrumentation_key:
+            app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
 
     resource = _create_observability_resource(service_name)
 

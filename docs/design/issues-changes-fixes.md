@@ -48,6 +48,16 @@ The new module dependency is wired into project capability-host creation orderin
    - `run_id`: `evalrun_0a1139eb458b482181800be57dfbf49c`
 4. Post-provision RBAC checks now confirm both project/account identities have expected storage roles at account scope, so this failure is not due to missing IaC role assignment entries.
 
+### Follow-up IaC change for private lane eval ingress
+
+Given RBAC was present but eval still failed with `temporaryDataReference/createOrGet` 403, we added a network-path correction in IaC for storage:
+
+1. `infra/foundry-hosted/iac/main.bicep` storage account now keeps private-endpoint topology while setting:
+   - `publicNetworkAccess: Enabled`
+   - private mode `networkAcls.defaultAction: Deny`
+   - private mode `networkAcls.bypass: AzureServices`
+2. This preserves deny-by-default network ACLs for public clients and allows trusted Azure service ingress required by Foundry cloud-eval assetstore staging.
+
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
 
 ### What changed

@@ -335,7 +335,15 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
-    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
+    // Keep private endpoint path while allowing trusted Azure service ingress needed by Foundry eval assetstore.
+    publicNetworkAccess: 'Enabled'
+    networkAcls: privateNetworking ? {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    } : {
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
+    }
   }
 }
 

@@ -142,6 +142,8 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.
+- Diagnostics now emit explicit `HOSTED_ENV_DIAGNOSTIC` JSON to stderr to ensure
+  visibility even when module logger level filters out `logger.info`.
 
 ### What changed
 

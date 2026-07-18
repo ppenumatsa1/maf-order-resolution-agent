@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import import_module
@@ -497,6 +498,20 @@ def _initialize_app() -> Any:
         _env_state("APPINSIGHTS_CONNECTION_STRING"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
+    )
+    print(
+        "HOSTED_ENV_DIAGNOSTIC "
+        + json.dumps(
+            {
+                "applicationinsights_connection_string": _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+                "appinsights_connection_string": _env_state("APPINSIGHTS_CONNECTION_STRING"),
+                "database_url": _env_state("DATABASE_URL"),
+                "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
+            },
+            separators=(",", ":"),
+        ),
+        file=sys.stderr,
+        flush=True,
     )
     return _build_app()
 

@@ -102,6 +102,13 @@ jobs:
             azd_env_name="${{ vars.FOUNDRY_PUBLIC_AZD_ENV_NAME || 'foundry-public-dev2' }}"
             resource_group="${{ vars.FOUNDRY_PUBLIC_RESOURCE_GROUP || vars.FOUNDRY_RESOURCE_GROUP || 'rg-maf-ora-foundry-public-dev2' }}"
             network_mode="public"
+            create_private_dns_vnet_links="false"
+            create_private_endpoints="false"
+            create_nat_gateway="false"
+            create_private_runner_access="false"
+            create_bastion_host="false"
+            create_runner_vm="false"
+            enable_standard_agent_network_injection="false"
             create_account_capability_host="false"
             create_project_capability_host="false"
             assign_pre_caphost_rbac="false"
@@ -111,6 +118,13 @@ jobs:
             azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
             resource_group="${{ vars.FOUNDRY_RESOURCE_GROUP || 'rg-maf-ora-foundry' }}"
             network_mode="private"
+            create_private_dns_vnet_links="true"
+            create_private_endpoints="true"
+            create_nat_gateway="true"
+            create_private_runner_access="false"
+            create_bastion_host="true"
+            create_runner_vm="true"
+            enable_standard_agent_network_injection="true"
             create_account_capability_host="false"
             create_project_capability_host="true"
             assign_pre_caphost_rbac="true"
@@ -123,19 +137,34 @@ jobs:
           if [[ "$profile" == "private" ]]; then
             principal_id="$(az ad sp show --id "${{ vars.AZURE_CLIENT_ID }}" --query id -o tsv)"
             rg_scope="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${resource_group}"
-            uaa_or_owner_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='User Access Administrator' || roleDefinitionName=='Owner'])" -o tsv)"
+            uaa_or_owner_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --include-inherited --query "length([?roleDefinitionName=='User Access Administrator' || roleDefinitionName=='Owner'])" -o tsv)"
             if [[ "$uaa_or_owner_count" == "0" ]]; then
-              echo "Deployment principal lacks UAA/Owner at ${rg_scope}; disabling capability-host RBAC provisioning toggles."
-              create_account_capability_host="false"
-              create_project_capability_host="false"
-              assign_pre_caphost_rbac="false"
-              assign_post_caphost_rbac="false"
+              echo "Deployment principal (${principal_id}) lacks User Access Administrator or Owner at ${rg_scope}."
+              echo "Private provision requires roleAssignments/write to create deterministic project capability-host and RBAC wiring."
+              echo "Grant UAA at RG scope and rerun. Refusing to silently disable capability-host/RBAC steps."
+              exit 1
+            fi
+            existing_account_name="$(az cognitiveservices account list --resource-group "$resource_group" --query "[0].name" -o tsv)"
+            if [[ -n "$existing_account_name" ]]; then
+              injection_count="$(az cognitiveservices account show -g "$resource_group" -n "$existing_account_name" --query "length(properties.networkInjections)" -o tsv)"
+              if [[ "$injection_count" == "0" ]]; then
+                echo "Existing private Foundry account '$existing_account_name' has no networkInjections configured."
+                echo "Hosted agent private admission wiring is creation-time only; reprovision into a fresh account/RG with ENABLE_STANDARD_AGENT_NETWORK_INJECTION=true."
+                exit 1
+              fi
             fi
           fi
           azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
           azd env set AZURE_RESOURCE_GROUP "$resource_group"
           azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
           azd env set NETWORK_MODE "$network_mode"
+          azd env set CREATE_PRIVATE_DNS_VNET_LINKS "$create_private_dns_vnet_links"
+          azd env set CREATE_PRIVATE_ENDPOINTS "$create_private_endpoints"
+          azd env set CREATE_NAT_GATEWAY "$create_nat_gateway"
+          azd env set CREATE_PRIVATE_RUNNER_ACCESS "$create_private_runner_access"
+          azd env set CREATE_BASTION_HOST "$create_bastion_host"
+          azd env set CREATE_RUNNER_VM "$create_runner_vm"
+          azd env set ENABLE_STANDARD_AGENT_NETWORK_INJECTION "$enable_standard_agent_network_injection"
           azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || 'gpt-4o-mini' }}"
           azd env set CREATE_ACCOUNT_CAPABILITY_HOST "$create_account_capability_host"
           azd env set CREATE_PROJECT_CAPABILITY_HOST "$create_project_capability_host"
@@ -213,8 +242,8 @@ jobs:
           rg_scope="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${resource_group}"
           account_scope="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query id -o tsv)"
 
-          contributor_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='Contributor'])" -o tsv)"
-          uaa_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='User Access Administrator'])" -o tsv)"
+          contributor_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --include-inherited --query "length([?roleDefinitionName=='Contributor'])" -o tsv)"
+          uaa_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --include-inherited --query "length([?roleDefinitionName=='User Access Administrator'])" -o tsv)"
           if [[ "$contributor_count" == "0" ]]; then
             echo "Missing Contributor at scope $rg_scope for deployment principal."
             exit 1

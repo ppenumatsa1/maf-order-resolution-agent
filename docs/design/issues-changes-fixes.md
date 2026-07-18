@@ -1643,3 +1643,319 @@ This avoids unnecessary infra churn and targets the actual failing layer.
 - [infra/foundry-hosted/iac/access-path.bicep](../../infra/foundry-hosted/iac/access-path.bicep)
 - [infra/foundry-hosted/iac/access-path.parameters.json](../../infra/foundry-hosted/iac/access-path.parameters.json)
 - [infra/foundry-hosted/iac/modules/private-runner-access.bicep](../../infra/foundry-hosted/iac/modules/private-runner-access.bicep)
+
+---
+
+## 2026-07-18T02:30Z — DEFINITIVE RCA: private 403 = missing PROJECT capability host
+
+Back-tracked from the last-known-good deploy (`feb052b`, run `29617103198`, 2026-07-17)
+to HEAD and inspected live control-plane state of the recreated account
+`maffndaiktbblpk7mli2a` (RG `rg-maf-ora-foundry`).
+
+### Confirmed facts (live `az` queries, subscription `4f18d577-...`)
+
+- Account capability host EXISTS and is healthy:
+  `maffndaiktbblpk7mli2a@aml_aiagentservice`, `capabilityHostKind=Agents`,
+  `customerSubnet=snet-agent-host`, `provisioningState=Succeeded` (created 00:47 with the
+  account). => network injection effectively applied at account creation.
+- **PROJECT capability host list is EMPTY (`[]`)** for `projects/order-resolution`.
+- Project managed identity (`5425b213-...`) has ONLY `Foundry User` on the account. It is
+  MISSING every pre-caphost data-plane role (Storage Blob Data Contributor on storage,
+  Cosmos DB Operator on cosmos, Search Index Data Contributor + Search Service Contributor
+  on search) and post-caphost container roles (Storage Blob Data Owner, Cosmos DB Built-in
+  Data Contributor).
+- OIDC deployment SP (`appId 1aefdd7d-...`) has only **Contributor** at RG scope (the two RG
+  role assignments are both Contributor; none is User Access Administrator or Owner). It
+  cannot create role assignments — which is why provision `29625658341` failed with a
+  roleAssignments/write authorization error.
+
+### Root-cause chain
+
+1. Account recreate needed the OIDC principal to assign project-identity RBAC, but that
+   principal only has Contributor at RG (no UAA/Owner) → role-assignment writes fail.
+2. RBAC-guard added in commit `92841ea` (foundry-provision.yml) detected the missing
+   UAA/Owner and **silently disabled** `assign_pre_caphost_rbac`,
+   `assign_post_caphost_rbac`, and `create_project_capability_host` to avoid a hard failure.
+3. Provision then "succeeded" but skipped project-identity RBAC and the project capability
+   host entirely.
+4. Without the project capability host, the project Agents data-plane private admission path
+   is never established → `/api/projects/order-resolution/agents` returns
+   `403 Traffic is not from an approved private endpoint` (same missing data-plane also
+   explains the container→model 403).
+
+### Where it worked vs now
+
+- Working account (2026-07-17) had a project capability host + project-identity data-plane
+  RBAC (created when the principal had sufficient rights / older account). Deploy+smoke+e2e
+  passed; only defect was the model path not being exercised (deterministic).
+- Recreated account (2026-07-18) is missing the project capability host and project RBAC.
+  The `virtualNetworkRules:[]` and API-version diffs are NOT the cause; the missing project
+  caphost is.
+
+### Fix options
+
+- Option A (targeted, no account recreate; fastest to green): as subscription Owner, assign
+  the four pre-caphost roles to the project identity, create the project capability host,
+  then assign post-caphost container roles; re-run deploy to confirm the 403 clears. Then
+  make it reproducible: grant the OIDC SP `User Access Administrator` at RG and replace the
+  silent RBAC auto-disable with an explicit preflight failure.
+- Option B (reproducible-first): grant OIDC SP `User Access Administrator` at RG, remove the
+  silent auto-disable, re-run provision (creates RBAC + project caphost), then deploy.
+
+### 2026-07-18T02:55Z — Targeted repair applied (project caphost + RBAC)
+
+As subscription Owner, replicated the repo IaC modules manually on account
+`maffndaiktbblpk7mli2a` / project `order-resolution` (project identity `5425b213-...`):
+
+- Pre-caphost RBAC assigned: Storage Blob Data Contributor (storage
+  `maffndstktbblpk7mli2a`), Cosmos DB Operator (cosmos `maffndcosmosktbblpk7mli2a`),
+  Search Index Data Contributor + Search Service Contributor (search
+  `maffndsrchktbblpk7mli2a`).
+- Created project capability host `caphostproj` (`capabilityHostKind=Agents`,
+  vectorStore=search conn, storage=storage conn, threadStorage=cosmos conn),
+  api-version `2025-04-01-preview` -> `provisioningState=Succeeded`.
+- Post-caphost RBAC assigned: Storage Blob Data Owner (conditional ABAC on
+  `<workspaceId 26d64a8e...>*-azureml-agent` containers) and Cosmos DB Built-in Data
+  Contributor (SQL role on `enterprise_memory`).
+
+Verified role set now matches the IaC/docs exactly. Docs cross-check
+(learn.microsoft.com standard agent setup) confirms same roles/ordering and API.
+Next: trigger private deploy to prove the `/agents` 403 clears, then fold these into IaC
+(OIDC UAA + project-identity RBAC + caphost) so a clean provision reproduces this.
+
+### 2026-07-18T03:20Z — Agents management-API 403 is NOT fixable by account config toggles
+
+After creating the project caphost + RBAC and applying networkInjections, ran a
+controlled elimination from INSIDE the VNet (runner VM `vm-maffnd-runner`, snet-runner,
+via approved account PE 10.90.2.8). Probed the agents management API and other data-plane
+paths on the same account/host:
+
+| Path (host services.ai.azure.com -> 10.90.2.8) | Result |
+| --- | --- |
+| `/api/projects/order-resolution/agents?api-version=v1` | **403 "Traffic is not from an approved private endpoint"** |
+| `/openai/deployments?api-version=2024-10-21` | 404 Resource not found (network OK, reached service) |
+| `/openai/models?api-version=2024-10-21` (cognitiveservices token) | 401 PermissionDenied (network OK, authz only) |
+
+Same host/IP; only the AGENTS path returns the network-admission 403. The openai/cognitive
+paths are reachable. => the agents management data-plane enforces its own private
+admission, independent of the account PE.
+
+The `/agents` 403 persisted UNCHANGED across every toggle tested (each reverted after):
+
+- project capability host present (created `caphostproj`, Succeeded);
+- project-identity data-plane RBAC (all 6 roles present);
+- `networkInjections` PATCHed onto the account (reads back populated, state Succeeded);
+- `networkAcls.virtualNetworkRules = [agentSubnet]` vs `[]`;
+- `publicNetworkAccess = Enabled` vs `Disabled`;
+- caller identity granted `Foundry User` + `Azure AI User` on the account.
+
+Models `gpt-4o-mini` + `text-embedding-3-small` are deployed (Succeeded).
+
+### Interpretation
+
+- Microsoft Learn: hosted-agent network injection must be present at **account creation**;
+  adding it later is unsupported. The control plane ACCEPTED a post-creation
+  `networkInjections` PATCH (property now populated) but the agents admission path did not
+  start working — consistent with injection needing to be wired at creation, not patched.
+- The last clean provision emitted NO injection because `enableStandardAgentNetworkInjection`
+  resolved false; the account capability host `customerSubnet` came from the
+  `add-account-capability-host` module, which is a separate mechanism and does not wire the
+  agents admission path.
+- `infra/foundry-hosted/iac/main.bicep:376` DOES spread `networkInjections` into the account
+  creation PUT, but only when `enableStandardAgentNetworkInjection` is true.
+
+### Genuine fixes applied (retained on the live account)
+
+- project capability host `caphostproj` (Succeeded);
+- project-identity RBAC: Storage Blob Data Contributor, Cosmos DB Operator, Search Index
+  Data Contributor, Search Service Contributor, Storage Blob Data Owner (conditional),
+  Cosmos DB Built-in Data Contributor (enterprise_memory);
+- `networkInjections` populated on the account (will be re-applied at creation on next clean
+  provision).
+
+### Verdict
+
+The private agents management data-plane admission cannot be repaired by in-place account
+configuration. A reliable private lane requires a CLEAN account creation with
+`enableStandardAgentNetworkInjection=true` so injection is in the initial account PUT, plus
+OIDC UAA so provision creates project caphost + RBAC deterministically (no silent skip).
+This is a deploy-workflow-validated operation; `gh workflow run` is currently blocked in this
+environment, so the clean re-provision must be dispatched by the user or via re-enabled CI.
+
+### 2026-07-17T22:20Z — Execution unblock verified + OIDC SP identity corrected
+
+Verification only (no dispatch, no provisioning). User switched `gh` to account
+`ppenumatsa1` and shifted to autopilot to unblock CI dispatch.
+
+- `gh auth status`: active account = `ppenumatsa1`, scopes `repo`,`workflow`; repo
+  permissions `admin:true,push:true`. `foundry-provision.yml` and `foundry-deploy.yml`
+  are visible/active. => `gh workflow run` dispatch is now available (earlier
+  "Permission denied and could not request permission from user" is resolved).
+- `az account show`: logged in as `ppenumatsa@microsoft.com` (subscription Owner).
+
+Correction to prior RCA (identity was wrong):
+
+- The private env `foundry-private-env` uses env-scoped `AZURE_CLIENT_ID =
+  7fcd23e4-3ca3-457b-9e53-fc63ad58bf75` (SP objectId `06060201-cd7f-4df2-a5e0-785b2dcf9a16`),
+  NOT the repo-level `1aefdd7d-...` recorded earlier. The repo-level appId no longer
+  resolves as an SP (stale variable; env-scoped value is authoritative).
+- Actual RBAC of the real OIDC SP `7fcd23e4-...`:
+  - `Contributor` on `rg-maf-ora-foundry`
+  - `Foundry Project Manager` at subscription scope
+  - NO `User Access Administrator`/`Owner`. `Foundry Project Manager` does not grant
+    `Microsoft.Authorization/roleAssignments/write`.
+
+Implication: the remaining reproducible-provision prerequisite is unchanged in substance
+(grant the OIDC SP `User Access Administrator` on the target RG before provision) but now
+targets SP `7fcd23e4-...` / objectId `06060201-...`. Not yet applied (implementation
+deferred per user: "we will run later").
+
+### 2026-07-17T22:18Z — UAA granted to correct OIDC SP + pre-implementation readiness check
+
+Per user request, granted `User Access Administrator` to the **actual** private-env OIDC SP
+before implementation:
+
+- Target SP appId: `7fcd23e4-3ca3-457b-9e53-fc63ad58bf75`
+- Target SP objectId: `06060201-cd7f-4df2-a5e0-785b2dcf9a16`
+- Scope: `/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-maf-ora-foundry`
+- Result: assignment created successfully (`UAA_COUNT` changed from `0` to present)
+
+Effective role set after grant:
+
+- RG `rg-maf-ora-foundry`: `Contributor`, `User Access Administrator`
+- Subscription scope: `Foundry Project Manager`
+
+Readiness checks completed (no deploy/provision dispatched yet):
+
+- `gh` active account = `ppenumatsa1`, scopes include `workflow`, repo admin true
+- Foundry workflows visible and active: `foundry-provision.yml`, `foundry-deploy.yml`
+- `az` context = subscription `4f18d577-3506-4a11-85e5-a83b14727a84`, user
+  `ppenumatsa@microsoft.com`
+- `foundry-private-env` variables point at current private account/project and use
+  `AZURE_CLIENT_ID=7fcd23e4-...` with `FOUNDRY_DEPLOY_AUTH_MODE=service-principal`
+
+### 2026-07-17T22:26Z — IaC/workflow guard fix implemented (fail-fast + deterministic network wiring)
+
+Implemented the first private reproducibility fix in `.github/workflows/foundry-provision.yml`:
+
+- Removed the silent auto-disable path that previously turned off:
+  - `CREATE_PROJECT_CAPABILITY_HOST`
+  - `ASSIGN_PRE_CAPHOST_RBAC`
+  - `ASSIGN_POST_CAPHOST_RBAC`
+  when the deployment SP lacked UAA/Owner.
+- Replaced with explicit fail-fast behavior:
+  - if UAA/Owner is missing at RG scope, workflow exits with a clear remediation message.
+  - no hidden state mutations / no false-green provisions.
+- Added deterministic profile wiring for AZD env values each run:
+  - private profile now explicitly sets
+    `CREATE_PRIVATE_DNS_VNET_LINKS=true`,
+    `CREATE_PRIVATE_ENDPOINTS=true`,
+    `CREATE_NAT_GATEWAY=true`,
+    `CREATE_PRIVATE_RUNNER_ACCESS=false`,
+    `CREATE_BASTION_HOST=true`,
+    `CREATE_RUNNER_VM=true`,
+    `ENABLE_STANDARD_AGENT_NETWORK_INJECTION=true`.
+  - public profile now explicitly sets those to `false`, including
+    `ENABLE_STANDARD_AGENT_NETWORK_INJECTION=false`.
+
+This closes the specific drift/regression where stale env values or missing UAA caused private
+reprovision to skip caphost/RBAC and later fail with agents data-plane admission 403.
+
+### 2026-07-17T22:31Z — Fleet + rubber-duck follow-up hardening applied
+
+Ran parallel fleet scan + rubber-duck review on the workflow fix and applied two high-signal
+hardening updates:
+
+1. **Inherited RBAC check correctness**
+   - Updated UAA/Owner/Contributor role checks to include inherited assignments:
+     `az role assignment list --include-inherited ...`
+   - This prevents false negatives when UAA/Owner is granted at parent scopes.
+
+2. **Creation-time injection guard for existing private accounts**
+   - Added explicit guard in private provision and private deploy preflight:
+     - if an existing Foundry account has `properties.networkInjections` length `0`,
+       fail fast with a clear recreate instruction.
+   - This avoids accidental reruns that pretend injection can be retrofitted in-place.
+
+This keeps the fail-fast behavior deterministic while preventing two known failure modes:
+scope-inheritance RBAC false fails and no-injection existing-account drift.
+
+### 2026-07-17T22:35Z — Started clean private recreate execution (new RG lane)
+
+Execution phase started per plan after pre-reqs were in place.
+
+- Local AZD environments remain the expected two:
+  - `foundry-private-env` (default)
+  - `foundry-public-dev2`
+- New target resource group for clean recreate:
+  - `rg-maf-ora-foundry-v2` (not present before start)
+- Current `foundry-private-env` had no explicit
+  `ENABLE_STANDARD_AGENT_NETWORK_INJECTION` / caphost/RBAC toggle keys; this is exactly why
+  workflow-side explicit profile wiring was added.
+
+Next actions in this run:
+- create `rg-maf-ora-foundry-v2`,
+- repoint `foundry-private-env` to the new RG,
+- run `make foundry-provision`,
+- then `make foundry-deploy` + smoke + hosted E2E if provision succeeds.
+
+### 2026-07-17T22:40Z — Provision attempt #1 failed; RCA = transient account Accepted state
+
+`make foundry-provision` in `rg-maf-ora-foundry-v2` created most resources but failed while
+creating the Foundry private endpoint deployment with:
+
+- `AccountProvisioningStateInvalid`
+- message: account `maffndai4aiw7fw5gjdo4` still in `Accepted` when PE creation ran
+
+Post-failure inspection:
+
+- account provisioning moved to `Succeeded`
+- `networkInjections` is correctly present (preview API check), with
+  `scenario=agent`, `subnetArmId=.../snet-agent-host`, `useMicrosoftManagedNetwork=false`
+- failed unit was nested deployment `private-endpoint-foundry-account`
+
+Action: rerun provision now that account is fully `Succeeded` to complete pending PE wiring.
+
+### 2026-07-17T22:46Z — Provision retry succeeded in new RG
+
+Re-ran `make foundry-provision` against `rg-maf-ora-foundry-v2` after the transient Accepted
+state cleared.
+
+Result: success. The previously failing Foundry private endpoint now completed:
+
+- `maffnd-foundry-pe-4aiw7fw5gjdo4` => `Succeeded`
+
+Provision status now green for the clean private stack in the new RG. Proceeding to deploy.
+
+### 2026-07-17T22:50Z — Deploy attempt #1 failed: missing AZURE_AI_PROJECT_ID in local AZD env
+
+`make foundry-deploy` failed early with:
+
+- `Microsoft Foundry project ID is required: AZURE_AI_PROJECT_ID is not set`
+
+Why this occurred:
+
+- local `make foundry-deploy` path does not auto-derive project id/endpoint from the newly
+  provisioned resources (CI workflow does this in its environment-setup step).
+
+Action:
+
+- resolve account + project in `rg-maf-ora-foundry-v2`,
+- set `AZURE_AI_PROJECT_ID` and related Foundry endpoint/id keys in `foundry-private-env`,
+- rerun deploy.
+
+### 2026-07-17T22:53Z — Deploy attempt #2 from local host blocked by private network (expected)
+
+After setting project id/endpoint keys locally, `make foundry-deploy` reached the agent
+existence check but failed with:
+
+- `403 Public access is disabled. Please configure private endpoint.`
+
+This confirms local operator-host deploy is outside the private data-plane admission path.
+Expected path for private lane is the self-hosted private runner / workflow execution.
+
+Action:
+
+- update GitHub `foundry-private-env` variables to the new RG/account/project,
+- dispatch `foundry-deploy.yml` on `foundry-private` runner with smoke (+ e2e),
+- continue validation from that in-VNet execution path.

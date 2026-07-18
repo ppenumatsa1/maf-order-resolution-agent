@@ -548,6 +548,23 @@ jobs:
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
         run: ./scripts/github/foundry_hosted_e2e.sh
 
+      - name: Ensure Python venv support for eval runner
+        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        run: |
+          set -euo pipefail
+          probe_dir="$(mktemp -d)"
+          if python3 -m venv "$probe_dir/probe-venv" >/dev/null 2>&1; then
+            rm -rf "$probe_dir"
+            exit 0
+          fi
+          rm -rf "$probe_dir"
+          if ! command -v sudo >/dev/null 2>&1; then
+            echo "python3-venv is missing and sudo is unavailable on this runner."
+            exit 1
+          fi
+          sudo apt-get update -y
+          sudo apt-get install -y python3-venv
+
       - name: Foundry report-only evaluation
         id: foundry_eval
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}

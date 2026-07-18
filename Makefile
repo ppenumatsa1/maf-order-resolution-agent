@@ -174,7 +174,7 @@ foundry-up:
 
 foundry-provision:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
-	cd infra/foundry-hosted && azd provision --no-prompt
+	cd infra/foundry-hosted && azd provision --no-prompt $(if $(FOUNDRY_PROVISION_NO_STATE),--no-state,)
 
 foundry-deploy:
 	@test -f backend/agent.yaml

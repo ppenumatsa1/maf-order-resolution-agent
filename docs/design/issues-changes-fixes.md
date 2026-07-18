@@ -31,6 +31,24 @@ The private Foundry account had `publicNetworkAccess=Disabled` and private DNS/e
    - verify injection is persisted before proceeding.
 3. Manual verification command confirmed the account now reports injected private agent subnet.
 
+### Follow-up in progress
+
+1. Microsoft documentation review confirms hosted-agent limitation: virtual network
+   injection must be configured when the Foundry account is first created; adding it to
+   an existing hosted account is not supported.
+2. Current remediation path is in-flight:
+   - deleted private Foundry project/account in `rg-maf-ora-foundry`,
+   - dispatched private reprovision to recreate the account with private network
+     injection from creation time,
+   - pending re-deploy + smoke + hosted E2E validation on the recreated account.
+3. First reprovision attempt (`29623675722`) reported `SUCCESS: There are no changes to provision`
+   after account deletion because AZD state comparison skipped drifted resources. Follow-up
+   fix applied:
+   - `Makefile` `foundry-provision` now supports `FOUNDRY_PROVISION_NO_STATE=1` to pass
+     `azd provision --no-state`.
+   - `.github/workflows/foundry-provision.yml` now runs private reprovision with
+     `FOUNDRY_PROVISION_NO_STATE=1` to force missing-resource recreation.
+
 ## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
 
 ### What failed

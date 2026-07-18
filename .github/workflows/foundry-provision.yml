@@ -152,7 +152,7 @@ jobs:
           azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
 
       - name: Provision infrastructure
-        run: make foundry-provision
+        run: FOUNDRY_PROVISION_NO_STATE=1 make foundry-provision
 
       - name: Ensure private Foundry network injection
         if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}

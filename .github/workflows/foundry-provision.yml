@@ -129,7 +129,7 @@ jobs:
             create_project_capability_host="true"
             assign_pre_caphost_rbac="true"
             assign_post_caphost_rbac="true"
-            manage_project_connections="true"
+            manage_project_connections="false"
           fi
 
           cd infra/foundry-hosted

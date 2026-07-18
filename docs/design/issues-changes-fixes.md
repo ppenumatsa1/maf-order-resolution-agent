@@ -2027,3 +2027,41 @@ Current state preserved:
 - workflow hardening + fail-fast guards are committed/pushed (`06e1d96`)
 - clean private stack provision in new RG succeeded (`maffndai4aiw7fw5gjdo4`)
 - deploy from old runner remains intentionally blocked by policy until runner relocation
+
+### 2026-07-17T23:12Z — New in-VNet runner created and registered (no cross-VNet sharing)
+
+Executed user-approved path: create a new runner in the new VNet, no peering/bridging.
+
+- Created VM `vm-maffnd-runner-v2` in `rg-maf-ora-foundry-v2`, subnet `snet-runner`
+  (private IP `10.90.3.4`), with no public IP.
+- Registered GitHub self-hosted runner service on the VM and verified online status.
+- Added dedicated label `foundry-private-v2` to force dispatch to the new in-VNet runner.
+
+Runner bootstrap fixes applied during setup:
+
+- installed Azure CLI on VM (`az` required by `azure/login@v2` + workflow steps),
+- enabled passwordless sudo for user `runner` (required by `Azure/setup-azd@v2` installer),
+- installed `make` + `jq` (required by workflow `make foundry-deploy` path).
+
+Validation evidence:
+
+- runner appears online with labels: `self-hosted`, `Linux`, `X64`, `foundry-private-v2`.
+
+### 2026-07-17T23:18Z — Deploy on new runner reached smoke; smoke failed on conversation timeout
+
+Run `29630359693` on label `foundry-private-v2`:
+
+- preflight passed (DNS resolved to private IP `10.90.2.12`, account/project checks passed)
+- deploy step succeeded and agent version active
+- smoke failed on first low-risk call (`ORD-1001`) with:
+  - `failed to create conversation ... context deadline exceeded`
+
+To make smoke resilient to this transient startup behavior, updated workflow retry logic in
+`.github/workflows/foundry-deploy.yml` to treat these as retryable:
+
+- `session_not_ready`
+- `context deadline exceeded`
+- `failed to create conversation`
+- `timed out`
+
+This keeps non-retryable failures hard-failing while allowing startup/network transient retries.

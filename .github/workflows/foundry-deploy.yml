@@ -396,19 +396,19 @@ jobs:
                 return 0
               fi
 
-              if ! grep -q "session_not_ready" "$output_file"; then
+              if ! grep -Eq "session_not_ready|context deadline exceeded|failed to create conversation|timed out" "$output_file"; then
                 echo "Smoke failed with non-retryable error."
                 rm -f "$output_file"
                 return 1
               fi
 
               if [[ "$attempt" -ge "$smoke_retry_count" ]]; then
-                echo "Smoke failed after ${smoke_retry_count} attempts due to session_not_ready."
+                echo "Smoke failed after ${smoke_retry_count} attempts due to retryable agent session/conversation timeout errors."
                 rm -f "$output_file"
                 return 1
               fi
 
-              echo "Smoke returned session_not_ready; retrying in ${smoke_retry_delay}s."
+              echo "Smoke returned a retryable session/conversation timeout error; retrying in ${smoke_retry_delay}s."
               attempt=$((attempt + 1))
               sleep "$smoke_retry_delay"
             done

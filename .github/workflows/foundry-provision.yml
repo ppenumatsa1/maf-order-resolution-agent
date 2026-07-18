@@ -112,6 +112,11 @@ jobs:
           if [[ -n "$seeded_project_endpoint" ]]; then
             azd env set FOUNDRY_PROJECTS_ENDPOINT "$seeded_project_endpoint"
           fi
+          account_name="$(az cognitiveservices account list --resource-group "$resource_group" --query "[0].name" -o tsv)"
+          if [[ -n "$account_name" ]]; then
+            echo "FOUNDRY_ACCOUNT_NAME=$account_name" >> "$GITHUB_ENV"
+          fi
+          echo "FOUNDRY_RESOURCE_GROUP=$resource_group" >> "$GITHUB_ENV"
 
           runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
           if [[ -n "$runtime_db_url" ]]; then
@@ -148,3 +153,37 @@ jobs:
 
       - name: Provision infrastructure
         run: make foundry-provision
+
+      - name: Ensure private Foundry network injection
+        if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
+        run: |
+          set -euo pipefail
+          resource_group="${FOUNDRY_RESOURCE_GROUP}"
+          account_name="${FOUNDRY_ACCOUNT_NAME:-}"
+          if [[ -z "$resource_group" ]]; then
+            echo "Missing private resource group context."
+            exit 1
+          fi
+          if [[ -z "$account_name" ]]; then
+            account_name="$(az cognitiveservices account list --resource-group "$resource_group" --query "[0].name" -o tsv)"
+          fi
+          if [[ -z "$account_name" ]]; then
+            echo "Unable to resolve private Foundry account."
+            exit 1
+          fi
+          account_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query id -o tsv)"
+          subnet_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'properties.networkAcls.virtualNetworkRules[0].id' -o tsv)"
+          if [[ -z "$subnet_id" ]]; then
+            echo "Unable to resolve private subnet for Foundry network injection."
+            exit 1
+          fi
+          az resource update \
+            --ids "$account_id" \
+            --api-version 2025-06-01 \
+            --set properties.networkInjections="[{\"scenario\":\"agent\",\"subnetArmId\":\"$subnet_id\"}]" \
+            --output none
+          injection_count="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'length(properties.networkInjections)' -o tsv)"
+          if [[ "$injection_count" == "0" ]]; then
+            echo "Failed to persist private Foundry network injection."
+            exit 1
+          fi

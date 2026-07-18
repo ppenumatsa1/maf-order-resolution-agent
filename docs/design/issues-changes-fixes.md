@@ -3,6 +3,34 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
+
+### What failed
+
+Private deploy smoke failed with a non-retryable internal error (not `session_not_ready`) after introducing explicit private model-path parity:
+
+- `ERROR: agent error (): An internal server error occurred.`
+
+### Root cause
+
+Hosted runtime started and passed `/readiness`, but model calls failed from inside the private hosted container:
+
+- `POST .../api/projects/order-resolution/openai/v1/responses -> HTTP 403 Forbidden`
+- `Public access is disabled. Please configure private endpoint.`
+
+The private Foundry account had `publicNetworkAccess=Disabled` and private DNS/endpoints configured, but `properties.networkInjections` was `null`, so model-path traffic resolved to blocked public access instead of the private injected path.
+
+### Fixes applied
+
+1. Added an explicit private network-injection enforcement step in:
+   - `.github/workflows/foundry-provision.yml`
+   - `.github/workflows/foundry-deploy.yml`
+2. For private profile runs, workflows now:
+   - resolve account + subnet from account network ACLs,
+   - patch `properties.networkInjections=[{scenario: agent, subnetArmId: ...}]` via ARM update,
+   - verify injection is persisted before proceeding.
+3. Manual verification command confirmed the account now reports injected private agent subnet.
+
 ## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
 
 ### What failed

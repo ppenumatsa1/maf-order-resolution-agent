@@ -228,6 +228,11 @@ jobs:
           azd env set FOUNDRY_PROJECTS_ENDPOINT "$project_endpoint"
           azd env set FOUNDRY_PROJECT_ENDPOINT "$project_endpoint"
           azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || 'gpt-4o-mini' }}"
+          if [[ -z "$account_name" ]]; then
+            account_name="$(echo "$project_endpoint" | sed -E 's#https://([^.]+)\..*#\1#')"
+          fi
+          echo "FOUNDRY_ACCOUNT_NAME=$account_name" >> "$GITHUB_ENV"
+          echo "FOUNDRY_RESOURCE_GROUP=$resource_group" >> "$GITHUB_ENV"
 
           runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
           if [[ -n "$runtime_db_url" ]]; then
@@ -261,6 +266,33 @@ jobs:
           azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
           azd env set DATABASE_URL "$runtime_db_url"
           azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
+
+      - name: Ensure private Foundry network injection
+        if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
+        run: |
+          set -euo pipefail
+          resource_group="${FOUNDRY_RESOURCE_GROUP}"
+          account_name="${FOUNDRY_ACCOUNT_NAME}"
+          if [[ -z "$resource_group" || -z "$account_name" ]]; then
+            echo "Missing private Foundry account context."
+            exit 1
+          fi
+          account_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query id -o tsv)"
+          subnet_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'properties.networkAcls.virtualNetworkRules[0].id' -o tsv)"
+          if [[ -z "$subnet_id" ]]; then
+            echo "Unable to resolve private subnet for Foundry network injection."
+            exit 1
+          fi
+          az resource update \
+            --ids "$account_id" \
+            --api-version 2025-06-01 \
+            --set properties.networkInjections="[{\"scenario\":\"agent\",\"subnetArmId\":\"$subnet_id\"}]" \
+            --output none
+          injection_count="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'length(properties.networkInjections)' -o tsv)"
+          if [[ "$injection_count" == "0" ]]; then
+            echo "Failed to persist private Foundry network injection."
+            exit 1
+          fi
 
       - name: Deploy hosted agent
         run: make foundry-deploy

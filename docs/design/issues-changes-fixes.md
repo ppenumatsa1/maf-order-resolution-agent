@@ -39,6 +39,15 @@ Also expanded `infra/foundry-hosted/iac/modules/azure-storage-account-role-assig
 
 The new module dependency is wired into project capability-host creation ordering so provisioning remains deterministic.
 
+### Re-validation after IaC permission updates
+
+1. Provision rerun (IaC applied): `29661812852` -> success.
+2. Deploy + smoke + hosted E2E + eval rerun: `29661920808` -> workflow success, eval artifact published.
+3. Foundry eval still reports the same 403 (`ResourceMsiTokenDoesntHavePermissionsOnStorage`) for:
+   - `eval_id`: `eval_543158136bf5477e9cdf212d50a224b6`
+   - `run_id`: `evalrun_0a1139eb458b482181800be57dfbf49c`
+4. Post-provision RBAC checks now confirm both project/account identities have expected storage roles at account scope, so this failure is not due to missing IaC role assignment entries.
+
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
 
 ### What changed

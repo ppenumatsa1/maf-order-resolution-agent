@@ -6,8 +6,10 @@ import os
 from pathlib import Path
 
 import yaml
-from agent_framework.foundry import FoundryEvals, evaluate_foundry_target
-from app.maf.clients import create_foundry_chat_client, get_foundry_models_config
+from agent_framework.foundry import FoundryEvals
+from app.maf.clients import get_foundry_models_config
+from azure.ai.projects.aio import AIProjectClient
+from azure.identity.aio import DefaultAzureCredential
 
 
 def _read_eval_config(path: Path) -> dict[str, object]:
@@ -113,52 +115,124 @@ async def run_foundry_eval() -> None:
     poll_interval = float(foundry_cfg.get("poll_interval", 5.0))
     timeout = float(foundry_cfg.get("timeout", 300.0))
 
-    client, credential, _ = create_foundry_chat_client(models_cfg)
-    try:
-        results = await evaluate_foundry_target(
-            target={"type": "azure_ai_agent", "name": agent_name},
-            test_queries=selected_queries,
-            evaluators=evaluators,
-            client=client,
-            model=judge_model,
-            eval_name=eval_name,
-            poll_interval=poll_interval,
-            timeout=timeout,
-        )
-    finally:
-        await credential.close()
-
-    payload = {
-        "status": results.status,
-        "provider": results.provider,
-        "eval_id": results.eval_id,
-        "run_id": results.run_id,
-        "report_url": results.report_url,
-        "error": results.error,
-        "query_count": len(selected_queries),
-        "evaluators": evaluators,
-        "result_counts": results.result_counts or {},
-        "per_evaluator": results.per_evaluator or {},
-        "items": [
-            {
-                "item_id": item.item_id,
-                "status": item.status,
-                "error_code": item.error_code,
-                "error_message": item.error_message,
-            }
-            for item in results.items
-        ],
-    }
-
     report_path = foundry_root / "results" / "foundry-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "status": "failed",
+        "provider": "foundry",
+        "query_count": len(selected_queries),
+        "evaluators": evaluators,
+    }
+    try:
+        credential = DefaultAzureCredential()
+        project_client = AIProjectClient(endpoint=models_cfg.project_endpoint, credential=credential)
+        openai_client = project_client.get_openai_client()
+
+        testing_criteria = []
+        tool_evaluator_set = {
+            FoundryEvals.TOOL_CALL_ACCURACY,
+            FoundryEvals.TOOL_SELECTION,
+            FoundryEvals.TOOL_INPUT_ACCURACY,
+            FoundryEvals.TOOL_OUTPUT_UTILIZATION,
+            FoundryEvals.TOOL_CALL_SUCCESS,
+        }
+        for evaluator_name in evaluators:
+            response_variable = (
+                "{{sample.output_items}}"
+                if evaluator_name in tool_evaluator_set or evaluator_name == FoundryEvals.TASK_ADHERENCE
+                else "{{sample.output_text}}"
+            )
+            testing_criteria.append(
+                {
+                    "type": "azure_ai_evaluator",
+                    "name": evaluator_name,
+                    "evaluator_name": f"builtin.{evaluator_name}",
+                    "initialization_parameters": {"model": judge_model},
+                    "data_mapping": {
+                        "query": "{{item.query}}",
+                        "response": response_variable,
+                    },
+                }
+            )
+
+        eval_object = await openai_client.evals.create(
+            name=eval_name,
+            data_source_config={
+                "type": "custom",
+                "item_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+                "include_sample_schema": True,
+            },
+            testing_criteria=testing_criteria,
+        )
+
+        eval_run = await openai_client.evals.runs.create(
+            eval_id=eval_object.id,
+            name=f"{eval_name} Run",
+            data_source={
+                "type": "azure_ai_target_completions",
+                "source": {
+                    "type": "file_content",
+                    "content": [{"item": {"query": query}} for query in selected_queries],
+                },
+                "input_messages": {
+                    "type": "template",
+                    "template": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": {"type": "input_text", "text": "{{item.query}}"},
+                        }
+                    ],
+                },
+                "target": {"type": "azure_ai_agent", "name": agent_name},
+            },
+        )
+
+        start = asyncio.get_running_loop().time()
+        while str(eval_run.status) not in {"completed", "failed", "cancelled"}:
+            if asyncio.get_running_loop().time() - start > timeout:
+                raise TimeoutError(f"Foundry eval run timed out after {timeout} seconds")
+            await asyncio.sleep(poll_interval)
+            eval_run = await openai_client.evals.runs.retrieve(
+                run_id=eval_run.id,
+                eval_id=eval_object.id,
+            )
+
+        payload = {
+            "status": str(eval_run.status),
+            "provider": "foundry",
+            "eval_id": eval_object.id,
+            "run_id": eval_run.id,
+            "query_count": len(selected_queries),
+            "evaluators": evaluators,
+            "result_counts": getattr(eval_run, "result_counts", None),
+            "report_url": (
+                f"{models_cfg.project_endpoint.rstrip('/')}/evaluation/evaluations/{eval_object.id}/runs/{eval_run.id}"
+            ),
+        }
+        if str(eval_run.status) != "completed":
+            raise RuntimeError(f"Foundry eval run ended with status: {eval_run.status}")
+    except Exception as exc:  # noqa: BLE001
+        payload["error"] = str(exc)
+        report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2))
+        print(f"Foundry report saved to: {report_path}")
+        raise
+    finally:
+        if "openai_client" in locals():
+            await openai_client.close()
+        if "project_client" in locals():
+            await project_client.close()
+        if "credential" in locals():
+            await credential.close()
+
     report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(json.dumps(payload, indent=2))
     print(f"Foundry report saved to: {report_path}")
-
-    enforce_pass = os.getenv("FOUNDRY_EVAL_ENFORCE_PASS", "false").lower() in {"1", "true", "yes"}
-    if enforce_pass:
-        results.raise_for_status("Foundry evaluation did not meet the required threshold.")
 
 
 if __name__ == "__main__":

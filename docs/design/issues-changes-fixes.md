@@ -118,6 +118,12 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - `traces`, `requests`, `dependencies`, `exceptions`
 - for the private v2 App Insights app id (`f3bf2e8e-9ca7-433c-ab54-0a886618d564`).
 
+### Follow-up correction
+
+- Private profile now **prefers deterministic IaC App Insights connection string**
+  over environment secret value to prevent stale secret drift to old/deleted apps.
+- Secret/variable/generic-list lookups remain as fallback for non-private paths.
+
 ### What changed
 
 1. Removed unsupported post-creation network-injection ARM patching from workflows.

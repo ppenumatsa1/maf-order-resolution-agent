@@ -252,6 +252,14 @@ jobs:
           fi
           otlp_traces_endpoint="${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || '' }}"
           appinsights_connection_string="${APPLICATIONINSIGHTS_CONNECTION_STRING_SECRET:-}"
+          if [[ "$profile" == "private" ]]; then
+            inferred_suffix="$(echo "$account_name" | sed -E 's/^.*ai([a-z0-9]+)$/\1/')"
+            appi_name="maffnd-mon-${inferred_suffix}-appi"
+            inferred_appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
+            if [[ -n "$inferred_appinsights_connection_string" ]]; then
+              appinsights_connection_string="$inferred_appinsights_connection_string"
+            fi
+          fi
           if [[ -z "$appinsights_connection_string" ]]; then
             appinsights_connection_string="${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
           fi

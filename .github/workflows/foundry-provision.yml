@@ -95,6 +95,10 @@ jobs:
         run: azd ext install azure.ai.agents --no-prompt
 
       - name: Select and configure azd environment
+        env:
+          FOUNDRY_DATABASE_URL_SECRET: ${{ secrets.FOUNDRY_DATABASE_URL }}
+          POSTGRES_ADMIN_PASSWORD_SECRET: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          APPLICATIONINSIGHTS_CONNECTION_STRING_SECRET: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
         run: |
           set -euo pipefail
           profile="${{ inputs.deployment_profile || github.event.inputs.deployment_profile || 'private' }}"
@@ -187,7 +191,7 @@ jobs:
           fi
           echo "FOUNDRY_RESOURCE_GROUP=$resource_group" >> "$GITHUB_ENV"
 
-          runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
+          runtime_db_url="${FOUNDRY_DATABASE_URL_SECRET:-}"
           if [[ -n "$runtime_db_url" ]]; then
             runtime_db_url="$(echo "$runtime_db_url" | tr -d '[:space:]')"
           fi
@@ -195,7 +199,7 @@ jobs:
             runtime_db_url=""
           fi
 
-          postgres_password="${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}"
+          postgres_password="${POSTGRES_ADMIN_PASSWORD_SECRET:-}"
           postgres_server_name="$(azd env get-value POSTGRES_SERVER_NAME | tr -d '\"[:space:]')"
           postgres_admin_username="$(azd env get-value POSTGRES_ADMIN_USERNAME | tr -d '\"[:space:]')"
           postgres_database_name="$(azd env get-value POSTGRES_DATABASE_NAME | tr -d '\"[:space:]')"
@@ -247,7 +251,10 @@ jobs:
             otel_service_name="maf-order-resolution-foundry-${profile}"
           fi
           otlp_traces_endpoint="${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || '' }}"
-          appinsights_connection_string="${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING || vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
+          appinsights_connection_string="${APPLICATIONINSIGHTS_CONNECTION_STRING_SECRET:-}"
+          if [[ -z "$appinsights_connection_string" ]]; then
+            appinsights_connection_string="${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
+          fi
           if [[ -z "$appinsights_connection_string" ]]; then
             appi_name="$(az resource list --resource-group "$resource_group" --resource-type Microsoft.Insights/components --query "[0].name" -o tsv)"
             if [[ -n "$appi_name" ]]; then

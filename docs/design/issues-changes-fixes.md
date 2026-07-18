@@ -63,6 +63,31 @@ On newly created/re-hydrated AZD envs, `azd env get-value POSTGRES_*` may return
 
 Re-dispatch private deploy with `runner_label=foundry-private-v2`, then continue through smoke + hosted E2E + telemetry checks.
 
+## Latest execution update (2026-07-18, shell unbound-variable fix in private env bootstrap)
+
+### What failed
+
+Run `29647939305` still failed in `Select and configure azd environment`, but root cause changed:
+
+- shell error: `line 99: fMk3Cq58Itu4ALjqXMs: unbound variable`
+
+### Root cause
+
+The step used inline `${{ secrets.* }}` interpolation inside a `set -euo pipefail` bash block. A secret value containing `$...` was expanded as a shell variable reference, triggering `set -u` unbound-variable failure before deploy/smoke.
+
+### Fixes applied
+
+1. Moved secret ingestion to step-level `env` in both workflows:
+   - `FOUNDRY_DATABASE_URL_SECRET`
+   - `POSTGRES_ADMIN_PASSWORD_SECRET`
+   - `APPLICATIONINSIGHTS_CONNECTION_STRING_SECRET`
+2. Updated script reads to use `${ENV_VAR:-}` values instead of direct `${{ secrets.* }}` interpolation.
+3. Kept existing deterministic PostgreSQL fallback seeding and persisted resolved `POSTGRES_*` values back into AZD env.
+
+### Verification next step
+
+Re-run private deploy from `feature/foundry-private-network-vnet` on `foundry-private-v2` and validate progression beyond env bootstrap into deploy/smoke/e2e.
+
 ### What changed
 
 1. Removed unsupported post-creation network-injection ARM patching from workflows.

@@ -78,6 +78,22 @@ assert_contains "$E2E_SPEC_FILE" "not valid JSON" "HTML-as-JSON UI regression gu
 echo "[PASS] Rubric and required flow coverage checks succeeded"
 
 step "Playwright E2E"
+if [[ ! -f backend/.env && -f backend/.env.example ]]; then
+  cp backend/.env.example backend/.env
+fi
+
+if [[ ! -d scripts/playwright/node_modules ]]; then
+  (cd scripts/playwright && npm ci)
+fi
+
+if [[ ! -x scripts/playwright/node_modules/.bin/playwright ]]; then
+  (cd scripts/playwright && npm ci)
+fi
+
+if [[ ! -d "${HOME}/.cache/ms-playwright" ]]; then
+  (cd scripts/playwright && npx playwright install --with-deps chromium)
+fi
+
 if ! make test-e2e; then
   echo "[FAIL] E2E validation failed."
   echo "If this is an environment/runtime blocker, run:"

@@ -3,6 +3,29 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
+
+### What failed
+
+1. CI `Deterministic design-review gate` failed in Playwright stage due missing local prereqs in job context:
+   - missing `backend/.env` for docker-backed local bootstrap
+   - missing Playwright npm/binary setup.
+2. Private trace topology remained flatter than public because private lane lacked explicit `FOUNDRY_MODEL_DEPLOYMENT_NAME` env seeding.
+
+### Fixes applied
+
+1. Updated `scripts/skills/design-review-skill.sh` to bootstrap E2E prerequisites before running `make test-e2e`:
+   - copy `backend/.env.example` -> `backend/.env` when absent,
+   - install Playwright npm dependencies when absent,
+   - install Chromium runtime when Playwright cache is absent.
+2. Updated Foundry workflows to seed canonical model/project env for private/public parity:
+   - `.github/workflows/foundry-deploy.yml`
+     - set `FOUNDRY_PROJECTS_ENDPOINT` from resolved project endpoint
+     - set `FOUNDRY_MODEL_DEPLOYMENT_NAME` (default `gpt-4o-mini` when variable is unset)
+   - `.github/workflows/foundry-provision.yml`
+     - set `FOUNDRY_MODEL_DEPLOYMENT_NAME` (default `gpt-4o-mini`)
+     - seed `FOUNDRY_PROJECTS_ENDPOINT` from workflow environment variables when available.
+
 ## Latest execution update (2026-07-17, private smoke/e2e restored from GH runner)
 
 ### What failed

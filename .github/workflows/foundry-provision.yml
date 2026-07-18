@@ -106,6 +106,12 @@ jobs:
           azd env set AZURE_RESOURCE_GROUP "$resource_group"
           azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
           azd env set NETWORK_MODE "$network_mode"
+          azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || 'gpt-4o-mini' }}"
+
+          seeded_project_endpoint="${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT || '' }}"
+          if [[ -n "$seeded_project_endpoint" ]]; then
+            azd env set FOUNDRY_PROJECTS_ENDPOINT "$seeded_project_endpoint"
+          fi
 
           runtime_db_url="${{ secrets.FOUNDRY_DATABASE_URL || '' }}"
           if [[ -n "$runtime_db_url" ]]; then

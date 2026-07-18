@@ -42,6 +42,17 @@ Run private `foundry-provision` + `foundry-deploy` with the new preflight active
   - auto-disable capability-host RBAC toggles when the deployment principal lacks `User Access Administrator`/`Owner` at resource-group scope,
   - keep private preflight authorization acceptance as `Foundry User` **or** `Contributor/Owner` at resource-group scope,
   - emit explicit warnings when `Foundry User` cannot be auto-assigned because elevated RBAC is missing.
+- Rerun results after those changes:
+  - private provision rerun `29625774875`: **success**,
+  - private deploy rerun `29625850910`: **failed at new private preflight** before deploy.
+- Preflight evidence from `29625850910`:
+  - runner has no proxy env values (`http_proxy/https_proxy/NO_PROXY` empty),
+  - DNS resolves Foundry endpoint to private IP (`10.90.2.8`, `*.privatelink.services.ai.azure.com`),
+  - account private endpoint connection validation passes,
+  - authenticated data-plane call still returns:
+    - HTTP `403`
+    - `{"error":{"code":"403","message":"Traffic is not from an approved private endpoint."}}`
+- This confirms the original deploy blocker remains, but is now deterministically surfaced before `azd deploy` instead of failing later in deploy internals.
 
 ## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
 

@@ -58,6 +58,17 @@ Given RBAC was present but eval still failed with `temporaryDataReference/create
    - private mode `networkAcls.bypass: AzureServices`
 2. This preserves deny-by-default network ACLs for public clients and allows trusted Azure service ingress required by Foundry cloud-eval assetstore staging.
 
+### Re-test result after ingress correction
+
+1. Deploy rerun `29662436805` completed deploy + smoke + hosted E2E.
+2. Foundry report-only eval no longer returned `ResourceMsiTokenDoesntHavePermissionsOnStorage` 403.
+3. New eval outcome switched to timeout (`Foundry eval run timed out after 300.0 seconds`), indicating storage-auth blocker is resolved and remaining issue is runtime duration.
+4. Updated eval timeout contract:
+   - `backend/eval.yaml` `foundry.timeout` increased to `900`
+   - `backend/evals/foundry_eval_runner.py` now supports env overrides:
+     - `FOUNDRY_EVAL_TIMEOUT`
+     - `FOUNDRY_EVAL_POLL_INTERVAL`
+
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
 
 ### What changed

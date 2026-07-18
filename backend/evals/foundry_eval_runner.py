@@ -126,8 +126,8 @@ async def run_foundry_eval() -> None:
             "FOUNDRY_MODEL_DEPLOYMENT_NAME."
         )
     judge_model = os.getenv("FOUNDRY_EVAL_MODEL", models_cfg.model)
-    poll_interval = float(foundry_cfg.get("poll_interval", 5.0))
-    timeout = float(foundry_cfg.get("timeout", 300.0))
+    poll_interval = float(os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0)))
+    timeout = float(os.getenv("FOUNDRY_EVAL_TIMEOUT", foundry_cfg.get("timeout", 300.0)))
 
     report_path = foundry_root / "results" / "foundry-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)

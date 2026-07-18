@@ -35,6 +35,14 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 Run private `foundry-provision` + `foundry-deploy` with the new preflight active to capture whether deploy-path `403 Traffic is not from an approved private endpoint` is now eliminated (or blocked with precise preflight evidence before deploy).
 
+### Follow-up after first rerun
+
+- Private reprovision run `29625658341` failed during ARM apply with role-assignment authorization errors on Search/Storage/Cosmos scopes (`Microsoft.Authorization/roleAssignments/write`) for the OIDC deployment principal.
+- To prevent repeated mid-deployment failures, workflows were hardened to:
+  - auto-disable capability-host RBAC toggles when the deployment principal lacks `User Access Administrator`/`Owner` at resource-group scope,
+  - keep private preflight authorization acceptance as `Foundry User` **or** `Contributor/Owner` at resource-group scope,
+  - emit explicit warnings when `Foundry User` cannot be auto-assigned because elevated RBAC is missing.
+
 ## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
 
 ### What failed

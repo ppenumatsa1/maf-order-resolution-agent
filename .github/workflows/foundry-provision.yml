@@ -120,6 +120,18 @@ jobs:
 
           cd infra/foundry-hosted
           azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
+          if [[ "$profile" == "private" ]]; then
+            principal_id="$(az ad sp show --id "${{ vars.AZURE_CLIENT_ID }}" --query id -o tsv)"
+            rg_scope="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${resource_group}"
+            uaa_or_owner_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='User Access Administrator' || roleDefinitionName=='Owner'])" -o tsv)"
+            if [[ "$uaa_or_owner_count" == "0" ]]; then
+              echo "Deployment principal lacks UAA/Owner at ${rg_scope}; disabling capability-host RBAC provisioning toggles."
+              create_account_capability_host="false"
+              create_project_capability_host="false"
+              assign_pre_caphost_rbac="false"
+              assign_post_caphost_rbac="false"
+            fi
+          fi
           azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
           azd env set AZURE_RESOURCE_GROUP "$resource_group"
           azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
@@ -208,16 +220,17 @@ jobs:
             exit 1
           fi
           if [[ "$uaa_count" == "0" ]]; then
-            echo "Missing User Access Administrator at scope $rg_scope for deployment principal."
-            exit 1
+            echo "Warning: missing User Access Administrator at scope $rg_scope; skipping Foundry User auto-assignment bootstrap."
           fi
 
           foundry_user_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$account_scope" --query "length([?roleDefinitionName=='Foundry User'])" -o tsv)"
-          if [[ "$foundry_user_count" == "0" ]]; then
+          if [[ "$foundry_user_count" == "0" && "$uaa_count" != "0" ]]; then
             az role assignment create \
               --assignee-object-id "$principal_id" \
               --assignee-principal-type ServicePrincipal \
               --role "Foundry User" \
               --scope "$account_scope" \
               --output none
+          elif [[ "$foundry_user_count" == "0" ]]; then
+            echo "Warning: Foundry User role is not assigned at $account_scope and cannot be auto-assigned without UAA/Owner."
           fi

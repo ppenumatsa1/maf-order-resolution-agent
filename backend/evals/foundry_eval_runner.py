@@ -230,11 +230,21 @@ async def run_foundry_eval() -> None:
             "error": _to_jsonable(getattr(eval_run, "error", None)),
         }
     except Exception as exc:  # noqa: BLE001
+        payload["status"] = "timeout" if isinstance(exc, TimeoutError) else str(payload.get("status") or "failed")
         payload["error"] = str(exc)
+        if "eval_object" in locals():
+            payload["eval_id"] = getattr(eval_object, "id", None)
+        if "eval_run" in locals():
+            payload["run_id"] = getattr(eval_run, "id", None)
+            payload["run_status"] = str(getattr(eval_run, "status", "unknown"))
+        if payload.get("eval_id") and payload.get("run_id"):
+            payload["report_url"] = (
+                f"{models_cfg.project_endpoint.rstrip('/')}/evaluation/evaluations/"
+                f"{payload['eval_id']}/runs/{payload['run_id']}"
+            )
         report_path.write_text(json.dumps(_to_jsonable(payload), indent=2), encoding="utf-8")
         print(json.dumps(payload, indent=2))
         print(f"Foundry report saved to: {report_path}")
-        raise
     finally:
         if "openai_client" in locals():
             await openai_client.close()

@@ -69,6 +69,14 @@ Given RBAC was present but eval still failed with `temporaryDataReference/create
      - `FOUNDRY_EVAL_TIMEOUT`
      - `FOUNDRY_EVAL_POLL_INTERVAL`
 
+### Report-only gate behavior hardening
+
+To keep deploy gates non-blocking while still publishing Foundry eval evidence:
+
+1. `backend/evals/foundry_eval_runner.py` now always writes a report and exits successfully in report-only mode, including when cloud eval status is delayed/timeout.
+2. Timeout now records structured payload (`status: timeout`, `eval_id`, `run_id`, `report_url`, `run_status`) instead of failing the workflow step.
+3. Strict failure remains available via `FOUNDRY_EVAL_ENFORCE_PASS=true`.
+
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
 
 ### What changed

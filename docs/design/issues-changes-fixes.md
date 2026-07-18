@@ -162,6 +162,20 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   - This directly addresses AgentServer b7 behavior, which reads only
     `APPLICATIONINSIGHTS_CONNECTION_STRING` during startup and throws
     `Invalid connection string` when it is empty.
+
+### Validation after runtime alias promotion
+
+- Branch commit: `e2074cb`
+- Validation run: `29652488288` (private deploy + smoke + hosted E2E)
+- Hosted runtime diagnostics now show:
+  - `APPLICATIONINSIGHTS_CONNECTION_STRING` present (`InstrumentationKey=<uuid>`)
+  - `APPINSIGHTS_CONNECTION_STRING` also present (platform-provided extended string)
+  - `appinsights_configured=True`
+  - `Invalid connection string` no longer appears in hosted runtime logs.
+- Functional checks remain green in same run:
+  - ORD-1001 no HITL path completed
+  - ORD-1009 emitted `hitl.request`
+  - hosted E2E passed
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

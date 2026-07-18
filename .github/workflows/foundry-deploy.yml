@@ -334,22 +334,19 @@ jobs:
           azd env set APPINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
           azd env set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "$otlp_traces_endpoint"
 
-          runtime_env_payload=$(
-            cat <<EOF
-APP_ENV=$app_env
-STORE_PROVIDER=postgres
-MEMORY_PROVIDER=postgres
-RAG_PROVIDER=pgvector
-ENABLE_TELEMETRY=$enable_telemetry
-ENABLE_INSTRUMENTATION=$enable_instrumentation
-OTEL_SERVICE_NAME=$otel_service_name
-OTEL_SERVICE_NAMESPACE=$otel_service_namespace
-OTEL_RECORD_CONTENT=$otel_record_content
-APPLICATIONINSIGHTS_CONNECTION_STRING=$appinsights_connection_string
-APPINSIGHTS_CONNECTION_STRING=$appinsights_connection_string
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$otlp_traces_endpoint
-EOF
-          )
+          runtime_env_payload="$(printf '%s\n' \
+            "APP_ENV=$app_env" \
+            "STORE_PROVIDER=postgres" \
+            "MEMORY_PROVIDER=postgres" \
+            "RAG_PROVIDER=pgvector" \
+            "ENABLE_TELEMETRY=$enable_telemetry" \
+            "ENABLE_INSTRUMENTATION=$enable_instrumentation" \
+            "OTEL_SERVICE_NAME=$otel_service_name" \
+            "OTEL_SERVICE_NAMESPACE=$otel_service_namespace" \
+            "OTEL_RECORD_CONTENT=$otel_record_content" \
+            "APPLICATIONINSIGHTS_CONNECTION_STRING=$appinsights_connection_string" \
+            "APPINSIGHTS_CONNECTION_STRING=$appinsights_connection_string" \
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$otlp_traces_endpoint")"
           azd env set FOUNDRY_RUNTIME_ENV "$runtime_env_payload"
 
       - name: Private runner path preflight

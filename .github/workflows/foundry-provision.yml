@@ -285,6 +285,11 @@ jobs:
           if [[ -n "$appinsights_connection_string" ]]; then
             appinsights_connection_string="$(echo "$appinsights_connection_string" | tr -d '\r\n' | sed -E 's/[;[:space:]]+$//')"
           fi
+          appinsights_instrumentation_key="$(echo "$appinsights_connection_string" | sed -n 's/.*InstrumentationKey=\\([^;]*\\).*/\\1/p')"
+          if [[ "$profile" == "private" && -n "$appinsights_instrumentation_key" ]]; then
+            # AgentServer hosted runtime is strict about connection-string shape.
+            appinsights_connection_string="InstrumentationKey=${appinsights_instrumentation_key}"
+          fi
           if [[ -n "$appinsights_connection_string" && "$appinsights_connection_string" != *"InstrumentationKey="* ]]; then
             echo "Resolved Application Insights connection string is invalid."
             if [[ "$profile" == "private" ]]; then

@@ -146,6 +146,14 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
 - Runtime now canonicalizes App Insights input to `InstrumentationKey=<key>` when
   an instrumentation key is present, avoiding parser incompatibilities with
   extended connection-string variants emitted by hosted runtime surfaces.
+- Direct ingestion probe to `maffnd-mon-4aiw7fw5gjdo4-appi` succeeded:
+  - HTTP `200`
+  - `itemsReceived=1`, `itemsAccepted=1`
+  confirming target App Insights key/ingestion endpoint is valid.
+- Private workflow now seeds compact App Insights format for hosted runtime:
+  - `APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=<key>`
+  - `APPINSIGHTS_CONNECTION_STRING=InstrumentationKey=<key>`
+  to avoid AgentServer parser failures on extended connection-string variants.
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

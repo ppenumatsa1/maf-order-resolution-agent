@@ -238,6 +238,8 @@ var foundryNetworkInjectionProperties = enableAgentNetworkInjection ? {
       scenario: 'agent'
       #disable-next-line BCP037
       subnetArmId: agentSubnetResourceId
+      #disable-next-line BCP037
+      useMicrosoftManagedNetwork: false
     }
   ]
 } : {}
@@ -346,7 +348,7 @@ resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' = {
   }
 }
 
-resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   name: effectiveFoundryAccountName
   location: location
   kind: 'AIServices'
@@ -772,6 +774,7 @@ var isCrossRegionAiSearch = toLower(effectiveAiSearchLocation) != toLower(locati
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryProjectEndpoint string = foundryProjectEndpoint
+output foundryNetworkInjectionCount int = enableAgentNetworkInjection ? length(foundryAccount.properties.networkInjections) : 0
 output natGatewayId string = enableNat ? natGateway.id : ''
 output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName

@@ -3,6 +3,38 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
+
+### What changed
+
+1. Removed unsupported post-creation network-injection ARM patching from workflows.
+2. Added deterministic private deploy preflight in `.github/workflows/foundry-deploy.yml` that now:
+   - validates OIDC deployment principal has `Foundry User` on account scope,
+   - verifies Foundry private endpoint connection approval state,
+   - captures runner proxy/no_proxy context,
+   - probes `FOUNDRY_PROJECTS_ENDPOINT` via `curl --noproxy '*'` using the same OIDC login token,
+   - exports hardened `NO_PROXY/no_proxy` for downstream deploy/smoke steps.
+3. Stopped forcing `--no-state` on all provisions:
+   - `.github/workflows/foundry-provision.yml` now exposes `provision_no_state` input (default `false`).
+4. Wired canonical private/public control parameters into AZD/Bicep:
+   - `infra/foundry-hosted/iac/main.parameters.json` now maps capability-host, RBAC, private endpoint/DNS/NAT/runner, and injection parameters.
+   - workflow env seeding now uses canonical uppercase keys (`CREATE_*`, `ASSIGN_*`, `MANAGE_*`).
+   - `scripts/foundry/ensure_foundry_azd_defaults.sh` now seeds these canonical keys (and keeps legacy lowercase aliases for transitional compatibility).
+5. Updated Foundry account injection shape in IaC:
+   - `infra/foundry-hosted/iac/main.bicep` now uses `Microsoft.CognitiveServices/accounts@2025-04-01-preview`,
+   - includes `useMicrosoftManagedNetwork: false` in `networkInjections`,
+   - outputs `foundryNetworkInjectionCount` for deploy-time validation evidence.
+
+### Validation executed
+
+- `bash -n scripts/foundry/ensure_foundry_azd_defaults.sh`
+- `jq empty infra/foundry-hosted/iac/main.parameters.json`
+- `az bicep build --file infra/foundry-hosted/iac/main.bicep`
+
+### Next execution step
+
+Run private `foundry-provision` + `foundry-deploy` with the new preflight active to capture whether deploy-path `403 Traffic is not from an approved private endpoint` is now eliminated (or blocked with precise preflight evidence before deploy).
+
 ## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
 
 ### What failed
@@ -71,6 +103,14 @@ The private Foundry account had `publicNetworkAccess=Disabled` and private DNS/e
    This indicates private runner traffic still fails Foundry private-endpoint admission for
    project data-plane calls even after account/project recreation and successful infra
    reprovision.
+9. VM identity check:
+   - `vm-maffnd-runner` currently has **system-assigned MI only** (`f8aa29aa-b0df-4693-9012-172273b03145`);
+     no user-assigned identity is attached.
+   - no RBAC role assignments were found for that VM system-assigned principal on the new
+     Foundry account/project scopes.
+   - deploy workflow is using federated `azure/login` service principals, so this does not
+     fully explain the current `Traffic is not from an approved private endpoint` denial, but
+     confirms VM MI/UAMI is not provisioned for direct Foundry access.
 
 ## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
 

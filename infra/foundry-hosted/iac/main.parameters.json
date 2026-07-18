@@ -14,6 +14,42 @@
     "networkMode": {
       "value": "${NETWORK_MODE}"
     },
+    "createPrivateDnsVnetLinks": {
+      "value": "${CREATE_PRIVATE_DNS_VNET_LINKS}"
+    },
+    "createPrivateEndpoints": {
+      "value": "${CREATE_PRIVATE_ENDPOINTS}"
+    },
+    "createNatGateway": {
+      "value": "${CREATE_NAT_GATEWAY}"
+    },
+    "createPrivateRunnerAccess": {
+      "value": "${CREATE_PRIVATE_RUNNER_ACCESS}"
+    },
+    "createBastionHost": {
+      "value": "${CREATE_BASTION_HOST}"
+    },
+    "createRunnerVm": {
+      "value": "${CREATE_RUNNER_VM}"
+    },
+    "enableStandardAgentNetworkInjection": {
+      "value": "${ENABLE_STANDARD_AGENT_NETWORK_INJECTION}"
+    },
+    "assignPreCaphostRbac": {
+      "value": "${ASSIGN_PRE_CAPHOST_RBAC}"
+    },
+    "assignPostCaphostRbac": {
+      "value": "${ASSIGN_POST_CAPHOST_RBAC}"
+    },
+    "createAccountCapabilityHost": {
+      "value": "${CREATE_ACCOUNT_CAPABILITY_HOST}"
+    },
+    "createProjectCapabilityHost": {
+      "value": "${CREATE_PROJECT_CAPABILITY_HOST}"
+    },
+    "manageProjectConnections": {
+      "value": "${MANAGE_PROJECT_CONNECTIONS}"
+    },
     "runtimeConnectionName": {
       "value": "orderresolutionruntimesecrets"
     },

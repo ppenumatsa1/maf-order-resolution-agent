@@ -19,6 +19,10 @@ on:
         description: Optional GitHub environment override
         required: false
         default: ""
+      provision_no_state:
+        description: Run azd provision with --no-state (recovery only)
+        required: false
+        default: "false"
   workflow_call:
     inputs:
       deployment_profile:
@@ -33,6 +37,10 @@ on:
         required: false
         type: string
         default: ""
+      provision_no_state:
+        required: false
+        type: string
+        default: "false"
 
 permissions:
   id-token: write
@@ -98,14 +106,16 @@ jobs:
             create_project_capability_host="false"
             assign_pre_caphost_rbac="false"
             assign_post_caphost_rbac="false"
+            manage_project_connections="true"
           else
             azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
             resource_group="${{ vars.FOUNDRY_RESOURCE_GROUP || 'rg-maf-ora-foundry' }}"
             network_mode="private"
-            create_account_capability_host="true"
+            create_account_capability_host="false"
             create_project_capability_host="true"
             assign_pre_caphost_rbac="true"
             assign_post_caphost_rbac="true"
+            manage_project_connections="true"
           fi
 
           cd infra/foundry-hosted
@@ -115,10 +125,11 @@ jobs:
           azd env set AZURE_LOCATION "${{ vars.FOUNDRY_LOCATION || 'eastus2' }}"
           azd env set NETWORK_MODE "$network_mode"
           azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${{ vars.FOUNDRY_MODEL_DEPLOYMENT_NAME || 'gpt-4o-mini' }}"
-          azd env set createAccountCapabilityHost "$create_account_capability_host"
-          azd env set createProjectCapabilityHost "$create_project_capability_host"
-          azd env set assignPreCaphostRbac "$assign_pre_caphost_rbac"
-          azd env set assignPostCaphostRbac "$assign_post_caphost_rbac"
+          azd env set CREATE_ACCOUNT_CAPABILITY_HOST "$create_account_capability_host"
+          azd env set CREATE_PROJECT_CAPABILITY_HOST "$create_project_capability_host"
+          azd env set ASSIGN_PRE_CAPHOST_RBAC "$assign_pre_caphost_rbac"
+          azd env set ASSIGN_POST_CAPHOST_RBAC "$assign_post_caphost_rbac"
+          azd env set MANAGE_PROJECT_CONNECTIONS "$manage_project_connections"
 
           seeded_project_endpoint="${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT || '' }}"
           if [[ -n "$seeded_project_endpoint" ]]; then
@@ -164,38 +175,49 @@ jobs:
           azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
 
       - name: Provision infrastructure
-        run: FOUNDRY_PROVISION_NO_STATE=1 make foundry-provision
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.provision_no_state || github.event.inputs.provision_no_state || 'false' }}" == "true" ]]; then
+            FOUNDRY_PROVISION_NO_STATE=1 make foundry-provision
+          else
+            make foundry-provision
+          fi
 
-      - name: Ensure private Foundry network injection
+      - name: Verify OIDC RBAC baseline
         if: ${{ (inputs.deployment_profile || github.event.inputs.deployment_profile || 'private') == 'private' }}
         run: |
           set -euo pipefail
           resource_group="${FOUNDRY_RESOURCE_GROUP}"
           account_name="${FOUNDRY_ACCOUNT_NAME:-}"
-          if [[ -z "$resource_group" ]]; then
-            echo "Missing private resource group context."
-            exit 1
-          fi
           if [[ -z "$account_name" ]]; then
             account_name="$(az cognitiveservices account list --resource-group "$resource_group" --query "[0].name" -o tsv)"
           fi
-          if [[ -z "$account_name" ]]; then
-            echo "Unable to resolve private Foundry account."
+          if [[ -z "$resource_group" || -z "$account_name" ]]; then
+            echo "Unable to resolve Foundry account scope for RBAC verification."
             exit 1
           fi
-          account_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query id -o tsv)"
-          subnet_id="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'properties.networkAcls.virtualNetworkRules[0].id' -o tsv)"
-          if [[ -z "$subnet_id" ]]; then
-            echo "Unable to resolve private subnet for Foundry network injection."
+
+          principal_id="$(az ad sp show --id "${{ vars.AZURE_CLIENT_ID }}" --query id -o tsv)"
+          rg_scope="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${resource_group}"
+          account_scope="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query id -o tsv)"
+
+          contributor_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='Contributor'])" -o tsv)"
+          uaa_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$rg_scope" --query "length([?roleDefinitionName=='User Access Administrator'])" -o tsv)"
+          if [[ "$contributor_count" == "0" ]]; then
+            echo "Missing Contributor at scope $rg_scope for deployment principal."
             exit 1
           fi
-          az resource update \
-            --ids "$account_id" \
-            --api-version 2025-06-01 \
-            --set properties.networkInjections="[{\"scenario\":\"agent\",\"subnetArmId\":\"$subnet_id\"}]" \
-            --output none
-          injection_count="$(az cognitiveservices account show -g "$resource_group" -n "$account_name" --query 'length(properties.networkInjections)' -o tsv)"
-          if [[ "$injection_count" == "0" ]]; then
-            echo "Failed to persist private Foundry network injection."
+          if [[ "$uaa_count" == "0" ]]; then
+            echo "Missing User Access Administrator at scope $rg_scope for deployment principal."
             exit 1
+          fi
+
+          foundry_user_count="$(az role assignment list --assignee-object-id "$principal_id" --scope "$account_scope" --query "length([?roleDefinitionName=='Foundry User'])" -o tsv)"
+          if [[ "$foundry_user_count" == "0" ]]; then
+            az role assignment create \
+              --assignee-object-id "$principal_id" \
+              --assignee-principal-type ServicePrincipal \
+              --role "Foundry User" \
+              --scope "$account_scope" \
+              --output none
           fi

@@ -1959,3 +1959,71 @@ Action:
 - update GitHub `foundry-private-env` variables to the new RG/account/project,
 - dispatch `foundry-deploy.yml` on `foundry-private` runner with smoke (+ e2e),
 - continue validation from that in-VNet execution path.
+
+### 2026-07-17T22:48Z — First in-VNet deploy workflow run failed preflight on data-plane RBAC
+
+Dispatched `foundry-deploy.yml` from branch `feature/foundry-private-network-vnet` against
+`foundry-private-env` (new RG/account values). Run:
+
+- `29629446157`
+
+Failure details:
+
+- step: `Private runner path preflight`
+- message:
+  `Missing account data-plane authorization. Expected Foundry User on .../accounts/maffndai4aiw7fw5gjdo4 or Contributor/Owner on .../resourceGroups/rg-maf-ora-foundry-v2`
+
+RCA:
+
+- OIDC deployment SP had Contributor+UAA at RG (control-plane sufficient), but lacked
+  Foundry data-plane role at the new account scope.
+
+Fix applied:
+
+- assigned `Foundry User` to SP `7fcd23e4-...` on account
+  `/subscriptions/4f18d577-.../resourceGroups/rg-maf-ora-foundry-v2/providers/Microsoft.CognitiveServices/accounts/maffndai4aiw7fw5gjdo4`
+
+Re-dispatched deploy workflow:
+
+- `29629465681` (queued/in-progress after fix)
+
+### 2026-07-17T22:52Z — Second in-VNet deploy run failed on DNS resolution path
+
+Run `29629465681` progressed past RBAC checks but failed preflight at DNS resolution:
+
+- `curl: (6) Could not resolve host: maffndai4aiw7fw5gjdo4.services.ai.azure.com`
+
+RCA:
+
+- private runner remains in old VNet (`rg-maf-ora-foundry`),
+- clean recreated account is in new RG/VNet (`rg-maf-ora-foundry-v2`),
+- runner VNet has no DNS/network path to the new account private endpoint.
+
+Attempted VNet peering old<->new failed because both VNets use overlapping CIDR `10.90.0.0/16`
+(`VnetAddressSpacesOverlap`).
+
+Recovery pivot:
+
+- keep the clean recreated account,
+- bridge connectivity by creating an additional Foundry account private endpoint in the old
+  runner VNet + attach old private DNS zones,
+- then rerun deploy workflow.
+
+### 2026-07-17T22:56Z — User decision: no cross-VNet sharing; runner must be in new VNet
+
+User directive:
+
+- **do not cross-share across VNets**
+- create a **new VM later in the new VNet** and use that runner path for private validation
+
+Actions taken immediately:
+
+- stopped cross-VNet recovery path (no VNet peering / no bridge endpoint rollout continuation)
+- marked private deploy/smoke/e2e validation as blocked until new in-VNet runner is created in
+  `rg-maf-ora-foundry-v2`
+
+Current state preserved:
+
+- workflow hardening + fail-fast guards are committed/pushed (`06e1d96`)
+- clean private stack provision in new RG succeeded (`maffndai4aiw7fw5gjdo4`)
+- deploy from old runner remains intentionally blocked by policy until runner relocation

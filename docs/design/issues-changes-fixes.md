@@ -59,6 +59,15 @@ Run private `foundry-provision` + `foundry-deploy` with the new preflight active
 - Applied parity fix in `infra/foundry-hosted/iac/main.bicep`:
   - private mode now sets `networkAcls` to `defaultAction: 'Deny'`, `virtualNetworkRules: []`, `ipRules: []`, `bypass: 'AzureServices'`.
   - network isolation remains enforced by private endpoints + network injection, matching the sample design.
+- Validation after parity fix:
+  - private provision `29626207072`: **success**,
+  - private deploy `29626295212`: still **fails preflight** with authenticated `403 Traffic is not from an approved private endpoint`.
+- Latest preflight evidence (`29626295212`) still shows:
+  - `maffndaiktbblpk7mli2a.services.ai.azure.com -> 10.90.2.8` via private DNS,
+  - private endpoint connection state approved,
+  - no proxy env variables in runner process,
+  - direct `curl --noproxy '*'` with OIDC token returns `403` from Foundry data plane.
+- Conclusion: Foundry account networking template parity improved, but private endpoint admission rejection persists and remains the gating blocker before deploy/smoke/e2e.
 
 ## Latest execution update (2026-07-18, private smoke 500 RCA and network injection repair)
 

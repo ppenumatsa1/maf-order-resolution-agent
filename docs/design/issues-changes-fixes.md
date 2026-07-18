@@ -5,6 +5,35 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, deploy env bootstrap failure + deterministic Postgres name parsing fix)
+
+### What failed
+
+Private deploy-only run `29647407543` failed in `Select and configure azd environment` before deploy/smoke:
+
+- `ERROR: environment 'foundry-private-env' does not exist: environment not found` (expected first-select miss before `azd env new`)
+- immediate follow-on failure while resolving PostgreSQL FQDN:
+  - `Unable to resolve PostgreSQL server '$postgres_server_name' in resource group rg-maf-ora-foundry-v2`
+
+### Root cause
+
+The workflow pulled PostgreSQL identifiers from AZD env values without sanitizing quoted/whitespace output. On new/rehydrated env bootstrap, this can produce invalid server-name input for `az postgres flexible-server show`, causing deterministic pre-deploy failure even though the server exists (`maffndpg7930`).
+
+### Fixes applied
+
+1. Hardened PostgreSQL env-value parsing in both workflows:
+   - `.github/workflows/foundry-deploy.yml`
+   - `.github/workflows/foundry-provision.yml`
+2. Workflow now strips quotes and whitespace when reading:
+   - `POSTGRES_SERVER_NAME`
+   - `POSTGRES_ADMIN_USERNAME`
+   - `POSTGRES_DATABASE_NAME`
+3. This keeps env bootstrap deterministic and prevents false not-found failures on private lane reruns.
+
+### Verification next step
+
+Re-dispatch private `foundry-deploy.yml` (same branch, private profile) and confirm deploy progresses past env bootstrap into smoke + hosted E2E.
+
 ### What changed
 
 1. Removed unsupported post-creation network-injection ARM patching from workflows.

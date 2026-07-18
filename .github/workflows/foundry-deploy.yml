@@ -284,9 +284,9 @@ jobs:
           fi
 
           postgres_password="${{ secrets.POSTGRES_ADMIN_PASSWORD || '' }}"
-          postgres_server_name="$(azd env get-value POSTGRES_SERVER_NAME)"
-          postgres_admin_username="$(azd env get-value POSTGRES_ADMIN_USERNAME)"
-          postgres_database_name="$(azd env get-value POSTGRES_DATABASE_NAME)"
+          postgres_server_name="$(azd env get-value POSTGRES_SERVER_NAME | tr -d '\"[:space:]')"
+          postgres_admin_username="$(azd env get-value POSTGRES_ADMIN_USERNAME | tr -d '\"[:space:]')"
+          postgres_database_name="$(azd env get-value POSTGRES_DATABASE_NAME | tr -d '\"[:space:]')"
           if [[ -n "$postgres_password" ]]; then
             azd env set POSTGRES_ADMIN_PASSWORD "$postgres_password"
           fi

@@ -32,6 +32,11 @@ Updated `infra/foundry-hosted/iac/main.bicep` to assign storage-account RBAC thr
 1. existing: project identity -> Storage Blob Data Contributor
 2. added: Foundry account identity -> Storage Blob Data Contributor
 
+Also expanded `infra/foundry-hosted/iac/modules/azure-storage-account-role-assignment.bicep` so each assigned identity gets both:
+
+- `Storage Blob Data Contributor`
+- `Storage Account Contributor`
+
 The new module dependency is wired into project capability-host creation ordering so provisioning remains deterministic.
 
 ## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)

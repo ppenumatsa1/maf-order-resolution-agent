@@ -11,12 +11,27 @@ resource storageBlobDataContributor 'Microsoft.Authorization/roleDefinitions@202
   scope: resourceGroup()
 }
 
+resource storageAccountContributor 'Microsoft.Authorization/roleDefinitions@2022-05-01-preview' existing = {
+  name: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
+  scope: resourceGroup()
+}
+
 resource storageBlobDataContributorRoleAssignmentProject 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: storageAccount
   name: guid(projectPrincipalId, storageBlobDataContributor.id, storageAccount.id)
   properties: {
     principalId: projectPrincipalId
     roleDefinitionId: storageBlobDataContributor.id
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource storageAccountContributorRoleAssignmentProject 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: storageAccount
+  name: guid(projectPrincipalId, storageAccountContributor.id, storageAccount.id)
+  properties: {
+    principalId: projectPrincipalId
+    roleDefinitionId: storageAccountContributor.id
     principalType: 'ServicePrincipal'
   }
 }

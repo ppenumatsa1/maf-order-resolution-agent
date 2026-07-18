@@ -5,6 +5,44 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, private deploy + smoke + hosted E2E + telemetry confirmation)
+
+### Run executed
+
+- Workflow: `.github/workflows/foundry-deploy.yml`
+- Run: `29653898864`
+- Job: `88104766075`
+- Result: `success`
+
+### Use-case validation
+
+Smoke step passed both baseline scenarios:
+
+1. `Resolve delayed order ORD-1001` -> completed, no HITL
+2. `Resolve delayed order ORD-1009` -> `waiting_approval` with `hitl.request` and checkpoint creation
+
+Hosted E2E step also passed in the same run.
+
+### App Insights telemetry confirmation
+
+Verified against private component `maffnd-mon-4aiw7fw5gjdo4-appi` (`appId=f3bf2e8e-9ca7-433c-ab54-0a886618d564`):
+
+1. Post-run volume since `2026-07-18T17:25:00Z`:
+   - `traces`: `429`
+   - `dependencies`: `140`
+2. Smoke trace IDs from workflow logs are query-visible:
+   - `f235b65a6398e7b9bc597ae7af5b0759` (ORD-1001)
+   - `4f302f64f02f2b4459e5d20873f8b204` (ORD-1009)
+3. End-to-end dependency graph entries present for those traces, including:
+   - `foundry.responses.invoke`
+   - `workflow.run`
+   - `workflow.stage.triage.*`
+   - `workflow.stage.policy_retrieval.*`
+   - `invoke_agent PolicyAgent`
+   - `invoke_agent ResolutionAgent`
+   - outbound HTTP dependencies to `...services.ai.azure.com`
+4. No exceptions for those smoke trace IDs in the same window.
+
 ## Latest execution update (2026-07-18, App Insights connection-string shape parity vs hosted-agent docs/samples)
 
 ### What was checked

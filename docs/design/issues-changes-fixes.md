@@ -88,6 +88,36 @@ The step used inline `${{ secrets.* }}` interpolation inside a `set -euo pipefai
 
 Re-run private deploy from `feature/foundry-private-network-vnet` on `foundry-private-v2` and validate progression beyond env bootstrap into deploy/smoke/e2e.
 
+## Latest execution update (2026-07-18, private telemetry bootstrap hardening)
+
+### What failed
+
+Deploy/smoke/e2e recovered in run `29648027673`, but telemetry verification remained empty when queried by the private v2 App Insights app.
+
+### Root cause
+
+Workflow fallback for `APPLICATIONINSIGHTS_CONNECTION_STRING` depended on:
+
+- `az resource list --resource-type Microsoft.Insights/components --query [0]`
+
+In this lane, that generic list path can return empty, leaving runtime telemetry connection string unset even though deterministic IaC-created App Insights exists in the RG.
+
+### Fixes applied
+
+1. Added deterministic private App Insights name resolution in deploy/provision workflows:
+   - infer suffix from Foundry account name (`...ai<suffix>`)
+   - resolve `maffnd-mon-<suffix>-appi` directly via:
+     - `az monitor app-insights component show --app <name> --query connectionString`
+2. Kept legacy generic `az resource list` fallback as secondary path.
+3. This ensures runtime telemetry env seeding reliably binds to the IaC-created App Insights component for private lane runs.
+
+### Verification next step
+
+Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
+
+- `traces`, `requests`, `dependencies`, `exceptions`
+- for the private v2 App Insights app id (`f3bf2e8e-9ca7-433c-ab54-0a886618d564`).
+
 ### What changed
 
 1. Removed unsupported post-creation network-injection ARM patching from workflows.

@@ -256,6 +256,11 @@ jobs:
             appinsights_connection_string="${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
           fi
           if [[ -z "$appinsights_connection_string" ]]; then
+            inferred_suffix="$(echo "$account_name" | sed -E 's/^.*ai([a-z0-9]+)$/\1/')"
+            appi_name="maffnd-mon-${inferred_suffix}-appi"
+            appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv 2>/dev/null || true)"
+          fi
+          if [[ -z "$appinsights_connection_string" ]]; then
             appi_name="$(az resource list --resource-group "$resource_group" --resource-type Microsoft.Insights/components --query "[0].name" -o tsv)"
             if [[ -n "$appi_name" ]]; then
               appinsights_connection_string="$(az resource show --resource-group "$resource_group" --name "$appi_name" --resource-type Microsoft.Insights/components --query properties.ConnectionString -o tsv)"

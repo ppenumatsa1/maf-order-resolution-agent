@@ -19,7 +19,6 @@ foundry:
     - task_adherence
     - intent_resolution
     - relevance
-    - task_navigation_efficiency
   optional_groundedness_evaluator: groundedness
   optional_tool_evaluators:
     - tool_call_accuracy

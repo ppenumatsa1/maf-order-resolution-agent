@@ -2065,3 +2065,30 @@ To make smoke resilient to this transient startup behavior, updated workflow ret
 - `timed out`
 
 This keeps non-retryable failures hard-failing while allowing startup/network transient retries.
+## Latest execution update (2026-07-18, private-v2 runner evidence after successful deploy run `29630486149`)
+
+### What was validated
+
+1. Re-checked private-v2 state from the in-VNet runner `vm-maffnd-runner-v2` after successful deploy/smoke/E2E run `29630486149`.
+2. Verified PostgreSQL runtime target from runner AZD env context:
+   - host: `maffndpg7930.postgres.database.azure.com`
+   - database: `maf_workflow`
+3. Queried workflow persistence tables from the runner path and confirmed fresh write activity:
+   - `workflow_runs=105`
+   - `workflow_events=819`
+   - `RECENT_WORKFLOW_RUNS=5` (last 2 hours at query time)
+4. Collected recent correlation evidence:
+   - run rows include private conversations in `completed` and `waiting_approval` states,
+   - `workflow_events` include expected `hitl.request`, `hitl.response`, and `workflow.output` patterns,
+   - `checkpoints`/`approvals` show pending and approved HITL transitions for recent `ord-1009`/`ord-1001` activity.
+
+### New finding (remaining gap)
+
+Private-v2 telemetry parity is still open:
+
+- App Insights component `maffnd-mon-4aiw7fw5gjdo4-appi` and workspace `maffnd-mon-4aiw7fw5gjdo4-law` currently return zero rows for `AppRequests/AppDependencies/AppTraces` in the recent window.
+- Runner AZD env snapshot shows `FOUNDRY_RUNTIME_ENV` currently unset in the checked-out private env file, so telemetry env payload propagation remains the prime suspect for missing App Insights evidence.
+
+### Next focused action
+
+Patch private deploy/provision env seeding so `FOUNDRY_RUNTIME_ENV` is always set (including App Insights/OTEL keys), then rerun private deploy workflow and re-check App Insights KQL for run-correlated request/dependency/trace rows.

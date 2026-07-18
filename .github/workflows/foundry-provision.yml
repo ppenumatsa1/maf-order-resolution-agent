@@ -214,6 +214,55 @@ jobs:
           azd env set FOUNDRY_RUNTIME_DATABASE_URL "$runtime_db_url"
           azd env set DATABASE_URL "$runtime_db_url"
           azd env set RUNTIME_DATABASE_URL "$runtime_db_url"
+          app_env="foundry-${profile}-env"
+          azd env set APP_ENV "$app_env"
+          azd env set STORE_PROVIDER "postgres"
+          azd env set MEMORY_PROVIDER "postgres"
+          azd env set RAG_PROVIDER "pgvector"
+
+          enable_telemetry="${{ vars.ENABLE_TELEMETRY || 'true' }}"
+          enable_instrumentation="${{ vars.ENABLE_INSTRUMENTATION || 'true' }}"
+          otel_record_content="${{ vars.OTEL_RECORD_CONTENT || 'false' }}"
+          otel_service_namespace="${{ vars.OTEL_SERVICE_NAMESPACE || 'maf-order-resolution' }}"
+          otel_service_name="${{ vars.OTEL_SERVICE_NAME || '' }}"
+          if [[ -z "$otel_service_name" ]]; then
+            otel_service_name="maf-order-resolution-foundry-${profile}"
+          fi
+          otlp_traces_endpoint="${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || '' }}"
+          appinsights_connection_string="${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING || vars.APPLICATIONINSIGHTS_CONNECTION_STRING || '' }}"
+          if [[ -z "$appinsights_connection_string" ]]; then
+            appi_name="$(az monitor app-insights component list --resource-group "$resource_group" --query "[0].name" -o tsv)"
+            if [[ -n "$appi_name" ]]; then
+              appinsights_connection_string="$(az monitor app-insights component show --resource-group "$resource_group" --app "$appi_name" --query connectionString -o tsv)"
+            fi
+          fi
+
+          azd env set ENABLE_TELEMETRY "$enable_telemetry"
+          azd env set ENABLE_INSTRUMENTATION "$enable_instrumentation"
+          azd env set OTEL_SERVICE_NAME "$otel_service_name"
+          azd env set OTEL_SERVICE_NAMESPACE "$otel_service_namespace"
+          azd env set OTEL_RECORD_CONTENT "$otel_record_content"
+          azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
+          azd env set APPINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
+          azd env set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "$otlp_traces_endpoint"
+
+          runtime_env_payload=$(
+            cat <<EOF
+APP_ENV=$app_env
+STORE_PROVIDER=postgres
+MEMORY_PROVIDER=postgres
+RAG_PROVIDER=pgvector
+ENABLE_TELEMETRY=$enable_telemetry
+ENABLE_INSTRUMENTATION=$enable_instrumentation
+OTEL_SERVICE_NAME=$otel_service_name
+OTEL_SERVICE_NAMESPACE=$otel_service_namespace
+OTEL_RECORD_CONTENT=$otel_record_content
+APPLICATIONINSIGHTS_CONNECTION_STRING=$appinsights_connection_string
+APPINSIGHTS_CONNECTION_STRING=$appinsights_connection_string
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$otlp_traces_endpoint
+EOF
+          )
+          azd env set FOUNDRY_RUNTIME_ENV "$runtime_env_payload"
 
       - name: Provision infrastructure
         run: |

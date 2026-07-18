@@ -143,6 +143,9 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   string (`strip().rstrip(';')`) before calling Azure Monitor OpenTelemetry setup,
   covering APPINSIGHTS-only hosted environments where the value still includes a
   trailing semicolon.
+- Runtime now canonicalizes App Insights input to `InstrumentationKey=<key>` when
+  an instrumentation key is present, avoiding parser incompatibilities with
+  extended connection-string variants emitted by hosted runtime surfaces.
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -132,6 +133,13 @@ def setup_observability() -> ObservabilityStatus:
             app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
     if app_insights_connection_string:
         app_insights_connection_string = app_insights_connection_string.strip().rstrip(";")
+        instrumentation_key_match = re.search(
+            r"InstrumentationKey=([^;\s]+)", app_insights_connection_string
+        )
+        if instrumentation_key_match:
+            app_insights_connection_string = (
+                f"InstrumentationKey={instrumentation_key_match.group(1)}"
+            )
 
     resource = _create_observability_resource(service_name)
 

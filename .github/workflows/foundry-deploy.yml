@@ -287,6 +287,18 @@ jobs:
           postgres_server_name="$(azd env get-value POSTGRES_SERVER_NAME | tr -d '\"[:space:]')"
           postgres_admin_username="$(azd env get-value POSTGRES_ADMIN_USERNAME | tr -d '\"[:space:]')"
           postgres_database_name="$(azd env get-value POSTGRES_DATABASE_NAME | tr -d '\"[:space:]')"
+          if [[ -z "$postgres_server_name" ]]; then
+            postgres_server_name="${{ vars.POSTGRES_SERVER_NAME || 'maffndpg7930' }}"
+          fi
+          if [[ -z "$postgres_admin_username" ]]; then
+            postgres_admin_username="${{ vars.POSTGRES_ADMIN_USERNAME || 'pgadmin' }}"
+          fi
+          if [[ -z "$postgres_database_name" ]]; then
+            postgres_database_name="${{ vars.POSTGRES_DATABASE_NAME || 'maf_workflow' }}"
+          fi
+          azd env set POSTGRES_SERVER_NAME "$postgres_server_name"
+          azd env set POSTGRES_ADMIN_USERNAME "$postgres_admin_username"
+          azd env set POSTGRES_DATABASE_NAME "$postgres_database_name"
           if [[ -n "$postgres_password" ]]; then
             azd env set POSTGRES_ADMIN_PASSWORD "$postgres_password"
           fi

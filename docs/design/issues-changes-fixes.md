@@ -34,6 +34,35 @@ The workflow pulled PostgreSQL identifiers from AZD env values without sanitizin
 
 Re-dispatch private `foundry-deploy.yml` (same branch, private profile) and confirm deploy progresses past env bootstrap into smoke + hosted E2E.
 
+## Latest execution update (2026-07-18, empty env bootstrap on new AZD env + hard fallback seeding)
+
+### What failed
+
+Rerun `29647821492` still failed in `Select and configure azd environment`:
+
+- `ERROR: environment 'foundry-private-env' does not exist: environment not found` (expected before `azd env new`)
+- then immediate failure resolving DB server in the same step:
+  - `Unable to resolve PostgreSQL server '$postgres_server_name' in resource group rg-maf-ora-foundry-v2`
+
+### Root cause
+
+On newly created/re-hydrated AZD envs, `azd env get-value POSTGRES_*` may return empty at first read even after initial env set operations. The workflow still depended on those reads to derive runtime DB URL, so it could fail with an empty `postgres_server_name`.
+
+### Fixes applied
+
+1. Added hard fallback defaults when any `POSTGRES_*` AZD lookup is empty:
+   - `POSTGRES_SERVER_NAME` -> `maffndpg7930`
+   - `POSTGRES_ADMIN_USERNAME` -> `pgadmin`
+   - `POSTGRES_DATABASE_NAME` -> `maf_workflow`
+2. Persisted fallback-resolved values back into AZD env immediately in both:
+   - `.github/workflows/foundry-deploy.yml`
+   - `.github/workflows/foundry-provision.yml`
+3. This removes first-run AZD env race/drift and makes DB URL derivation deterministic on private reruns.
+
+### Verification next step
+
+Re-dispatch private deploy with `runner_label=foundry-private-v2`, then continue through smoke + hosted E2E + telemetry checks.
+
 ### What changed
 
 1. Removed unsupported post-creation network-injection ARM patching from workflows.

@@ -5,6 +5,27 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, private deploy gate green + Foundry eval run completed and populated)
+
+### Final validation run
+
+1. Workflow: `.github/workflows/foundry-deploy.yml`
+2. Run: `29663475651`
+3. Result: success (deploy + smoke + hosted E2E + report-only eval + artifact upload)
+4. Artifact: `foundry-eval-29663475651-1`
+
+### Foundry eval evidence
+
+Report emitted by `backend/evals/foundry_eval_runner.py` in the run:
+
+- `status`: `completed`
+- `eval_id`: `eval_c545af3ae3764260b7fe4217a2541d8e`
+- `run_id`: `evalrun_ec39c2c140b746959e6a3621205c87a0`
+- `report_url`: `https://maffndai4aiw7fw5gjdo4.services.ai.azure.com/api/projects/order-resolution/evaluation/evaluations/eval_c545af3ae3764260b7fe4217a2541d8e/runs/evalrun_ec39c2c140b746959e6a3621205c87a0`
+- `result_counts`: `total=10`, `errored=10`, `passed=0`, `failed=0`, `skipped=0`
+
+This confirms Foundry eval runs are now being created and reaching completed state in private-lane CI; remaining quality work is evaluator-item diagnostics (errors inside completed eval run), not deploy-gate execution wiring.
+
 ## Latest execution update (2026-07-18, Foundry eval population verified + storage-permission RBAC closure via IaC)
 
 ### What was verified

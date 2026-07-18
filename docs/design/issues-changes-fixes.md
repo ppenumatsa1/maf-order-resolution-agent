@@ -135,6 +135,9 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   which indicates stale/invalid private connection string injection. Private profile
   workflow now hard-fails when resolved App Insights connection string is missing or
   malformed (must contain `InstrumentationKey=`) rather than silently deploying.
+- Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
+  placeholder detection, no secret values) for App Insights and DB env keys so
+  future runs can prove whether runtime placeholder substitution is occurring.
 
 ### What changed
 

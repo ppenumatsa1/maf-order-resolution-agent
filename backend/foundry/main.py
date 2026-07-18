@@ -473,6 +473,14 @@ def _build_app() -> Any:
 
 
 def _initialize_app() -> Any:
+    def _env_state(name: str) -> dict[str, Any]:
+        value = os.getenv(name, "")
+        return {
+            "present": bool(value),
+            "placeholder": value.startswith("${"),
+            "has_instrumentation_key": "InstrumentationKey=" in value,
+        }
+
     # AgentServerHost must configure the provider first so its Foundry
     # enrichment processors can emit portal-indexable GenAI transaction spans.
     telemetry_status = _telemetry.setup_observability()
@@ -482,6 +490,13 @@ def _initialize_app() -> Any:
         telemetry_status.instrumentation_enabled,
         telemetry_status.azure_monitor_configured,
         telemetry_status.otlp_configured,
+    )
+    logger.info(
+        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s database_url=%s runtime_database_url=%s",
+        _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+        _env_state("APPINSIGHTS_CONNECTION_STRING"),
+        _env_state("DATABASE_URL"),
+        _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
     return _build_app()
 

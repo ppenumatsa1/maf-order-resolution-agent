@@ -48,6 +48,20 @@ The private Foundry account had `publicNetworkAccess=Disabled` and private DNS/e
      `azd provision --no-state`.
    - `.github/workflows/foundry-provision.yml` now runs private reprovision with
      `FOUNDRY_PROVISION_NO_STATE=1` to force missing-resource recreation.
+4. Next reprovision attempt (`29623747234`) failed during ARM validation because the deleted
+   Foundry account name was still soft-deleted and blocking redeploy:
+   - `ERROR: A soft-deleted resource with this name exists and is blocking deployment.`
+   - executed explicit purge with location:
+     `az cognitiveservices account purge -g rg-maf-ora-foundry -n maffndaiktbblpk7mli2a -l eastus2`
+   - private reprovision rerun is now in progress.
+5. Reprovision rerun (`29623827564`) recreated Foundry account/project/deployments but failed on
+   stale disconnected Foundry private endpoint:
+   - `PrivateEndpointCannotBeUpdatedInDisconnectedState` on
+     `maffnd-foundry-pe-ktbblpk7mli2a`
+   - remediation executed: deleted disconnected private endpoint to allow clean recreate.
+6. Provision config now explicitly enables capability-host path in private reprovision
+   (account + project capability hosts and pre/post caphost RBAC) to align private hosted
+   model access with network-secured routing expectations.
 
 ## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
 

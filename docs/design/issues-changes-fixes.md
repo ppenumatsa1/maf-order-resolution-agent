@@ -62,6 +62,15 @@ The private Foundry account had `publicNetworkAccess=Disabled` and private DNS/e
 6. Provision config now explicitly enables capability-host path in private reprovision
    (account + project capability hosts and pre/post caphost RBAC) to align private hosted
    model access with network-secured routing expectations.
+7. Private reprovision with capability-host settings succeeded (`29624207214`); private
+   deploy + smoke + hosted E2E run has been dispatched for validation.
+8. Private deploy validation runs `29624319214` and `29624435798` both failed before smoke at
+   `azd deploy` agent existence check with the same data-plane denial:
+   - `403 Forbidden`
+   - `Traffic is not from an approved private endpoint.`
+   This indicates private runner traffic still fails Foundry private-endpoint admission for
+   project data-plane calls even after account/project recreation and successful infra
+   reprovision.
 
 ## Latest execution update (2026-07-17, design-review bootstrap + private/public trace parity alignment)
 

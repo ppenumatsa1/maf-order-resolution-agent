@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE_ENV_FILE ?= backend/.env
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env ensure-test-postgres \
-	run-backend run-frontend format lint test test-backend eval-backend test-e2e manual-matrix \
+	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-all test-e2e manual-matrix \
 	parity-all run-mock-mcp up down logs ps docker-test \
 	validate-quick validate-full deploy-app deploy-full clean \
 	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path
@@ -20,7 +20,9 @@ help:
 	@echo "  lint            - Lint Python files (ruff check)"
 	@echo "  test            - Run lint + backend tests"
 	@echo "  test-backend    - Run backend pytest suite"
-	@echo "  eval-backend    - Run workflow eval harness"
+	@echo "  eval-backend    - Run deterministic workflow contract eval harness"
+	@echo "  eval-foundry    - Run report-only Foundry evaluator run"
+	@echo "  eval-all        - Run deterministic and Foundry evals"
 	@echo "  test-e2e        - Run Playwright tests locally"
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
 	@echo "  parity-all      - Run fast parity gate across local + Azure + Foundry"
@@ -76,6 +78,11 @@ test-backend: ensure-backend-env ensure-test-postgres
 
 eval-backend: ensure-backend-env ensure-test-postgres
 	cd backend && . .venv/bin/activate && python -m evals.eval_runner
+
+eval-foundry: ensure-backend-env
+	cd backend && . .venv/bin/activate && python -m evals.foundry_eval_runner
+
+eval-all: eval-backend eval-foundry
 
 test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \

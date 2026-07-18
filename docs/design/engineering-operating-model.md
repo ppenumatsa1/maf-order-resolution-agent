@@ -13,6 +13,13 @@ It formalizes the split:
 
 This model is Pareto-first: start with the minimum enforceable contract and expand gates only when risk increases.
 
+## Current lane policy
+
+Hosted validation and deployment are private-lane-first in the current operating posture:
+
+- **Default hosted lane:** private Foundry (`foundry-private-env` / private runner path).
+- Public Foundry is not part of the required hosted gate path unless explicitly re-enabled by a documented decision update.
+
 ## Inputs and authority
 
 ### 1) Product and architecture inputs (user/team authority)
@@ -57,8 +64,9 @@ A change is done only when all applicable items are true:
 2. Required tests/gates pass for the change type.
 3. Recovery behavior remains correct for stateful/HITL flows.
 4. Telemetry remains correlated and free of new unhandled workflow exceptions.
-5. Required docs are updated in the same change set.
-6. Evidence is recorded in `docs/design/issues-changes-fixes.md` when deploy/runtime behavior is involved.
+5. Evaluation evidence is present: deterministic eval is green; Foundry evaluator run is published for hosted/runtime-impacting changes.
+6. Required docs are updated in the same change set.
+7. Evidence is recorded in `docs/design/issues-changes-fixes.md` when deploy/runtime behavior is involved.
 
 ## Change-to-gate matrix (Phase 1)
 
@@ -66,7 +74,7 @@ A change is done only when all applicable items are true:
 | --- | --- | --- |
 | App-only behavior (no hosting/IaC change) | `make test`, `make eval-backend`, `make test-e2e`, `./scripts/skills/design-review-skill.sh` | None |
 | HITL/business-rule change | local gates + targeted HITL rule assertions | Hosted smoke for `ORD-1001`, `ORD-1009` (+ approve/reject when applicable) |
-| MAF/Foundry runtime change | local gates + focused hosted-entry tests | Public Foundry deploy + smoke + E2E + telemetry verification |
+| MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E + telemetry verification + report-only `make eval-foundry` artifact |
 | IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
 | Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
 

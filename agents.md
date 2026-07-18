@@ -6,6 +6,7 @@ This file describes expected behavior for coding agents working in this reposito
 
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
 - Foundry hosted entrypoint: `backend/foundry/main.py` (Responses protocol via `backend/agent.yaml`).
+- Current hosted gate posture is private-lane-first; use private Foundry for hosted validation/deployment unless the canonical operating model is explicitly revised.
 - Frontend: React + Vite, consumes SSE workflow events.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
@@ -49,6 +50,7 @@ Run and report:
 
 - `make test`
 - `make eval-backend`
+- `make eval-foundry` (report-only for hosted/runtime changes)
 - `make test-e2e`
 - `./scripts/skills/design-review-skill.sh` (consolidated deterministic review/test gate)
 

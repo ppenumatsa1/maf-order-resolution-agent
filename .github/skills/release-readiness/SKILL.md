@@ -20,7 +20,8 @@ Compose focused skills instead of doing one broad review. Run only the skills re
 5. Azure readiness or deployed endpoint checks -> run `azure-validation`.
 6. Already validated Azure deployment execution -> run `azure-deployment`.
 7. Hosted App Insights proof after deployment -> run `azure-telemetry-validation`.
-8. Final local gate -> run `design-review`.
+8. Workflow/runtime/HITL quality evidence -> run `foundry-agent-evaluation`.
+9. Final local gate -> run `design-review`.
 
 ## Recommended sequence
 

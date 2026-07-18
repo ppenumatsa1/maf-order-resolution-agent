@@ -5,6 +5,64 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
+## Latest execution update (2026-07-18, eval architecture execution: deterministic + Foundry report gate)
+
+### What changed
+
+Implemented the eval plan end-to-end on the canonical `.foundry` surfaces (no duplicate eval tree):
+
+1. Expanded canonical dataset:
+   - `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`
+   - added explicit expectations for order/policy/action/amount, terminal status, approve/reject decisions, explanation follow-up, and duplicate HITL idempotency checks.
+2. Refactored deterministic eval harness:
+   - `backend/evals/eval_runner.py`
+   - now executes contract assertions across low-risk, high-risk approve/reject, explanation follow-up, and duplicate HITL response paths.
+   - writes both deterministic verdicts and generated capture artifacts.
+3. Added report-only Foundry eval runner:
+   - `backend/evals/foundry_eval_runner.py`
+   - reads `backend/eval.yaml`, runs Foundry evaluators against hosted target, and writes `backend/.foundry/results/foundry-report.json`.
+4. Updated eval configuration and gate wiring:
+   - `backend/eval.yaml` expanded to include deterministic + Foundry report settings.
+   - `Makefile` adds `eval-foundry` and `eval-all`.
+   - `.github/workflows/foundry-deploy.yml` adds optional post-E2E report-only eval step + artifact upload (`foundry-report.json`, `report.json`, `contract_capture.json`).
+5. Added repository skill and contract docs sync:
+   - `.github/skills/foundry-agent-evaluation/SKILL.md`
+   - `docs/design/engineering-operating-model.md`, `README.md`, `backend/README.md`,
+     `.github/copilot-instructions.md`, `agents.md`, and
+     `docs/design/hitl-approval-conditions.md`.
+
+### Local validation evidence
+
+1. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test` -> passed (`89 passed`).
+2. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make eval-backend` -> passed (`10/10` cases, `100%`).
+3. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test-e2e` -> passed (`7 passed`).
+4. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable ./scripts/skills/design-review-skill.sh` -> passed.
+
+### Notes
+
+- Foundry eval remains report-only by default; blocking behavior is opt-in via `FOUNDRY_EVAL_ENFORCE_PASS=true`.
+- Workflow now publishes eval artifacts on deploy runs when `run_eval=true`.
+
+## Latest execution update (2026-07-18, operating-model private-lane contract alignment)
+
+### What changed
+
+Aligned operating-model contract wording to the current execution policy: hosted gates are private-lane-first.
+
+Updated:
+
+1. `docs/design/engineering-operating-model.md`
+   - added explicit **Current lane policy** section
+   - changed MAF/Foundry runtime hosted gate row from public lane wording to private lane wording
+2. `.github/copilot-instructions.md`
+   - added private-lane-first hosted gate posture note
+3. `agents.md`
+   - added matching private-lane-first hosted gate posture note
+
+### Why
+
+Current validated release evidence and workflow execution are on the private Foundry path. The contract now reflects actual required gate behavior and avoids ambiguity between public/private hosted lanes.
+
 ## Latest execution update (2026-07-18, private deploy + smoke + hosted E2E + telemetry confirmation)
 
 ### Run executed

@@ -10,27 +10,49 @@ Build a verifiable customer-support workflow that:
 
 Primary scenarios include delayed delivery, damaged item, and policy-driven compensation decisions.
 
+## Start Here (Self-Serve Onboarding Path)
+
+If someone starts from this README, this path should let them understand and run the system end-to-end:
+
+1. **Product + business intent**
+   - PRD: [docs/design/prd.md](docs/design/prd.md)
+   - User flow: [docs/design/userflow.md](docs/design/userflow.md)
+2. **Architecture + contracts**
+   - Architecture: [docs/design/architecture.md](docs/design/architecture.md)
+   - HITL decision rules: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)
+   - API/event/telemetry schema: [docs/design/schema-io-telemetry.md](docs/design/schema-io-telemetry.md)
+3. **Delivery model (how work is governed)**
+   - Canonical contract: [docs/design/engineering-operating-model.md](docs/design/engineering-operating-model.md)
+   - Repo instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md), [agents.md](agents.md)
+4. **Implementation + repo shape**
+   - Backend runtime details: [backend/README.md](backend/README.md)
+   - Project structure: [docs/design/projectstructure.md](docs/design/projectstructure.md)
+   - Tech stack: [docs/design/techstack.md](docs/design/techstack.md)
+5. **IaC + deployment lanes**
+   - Infra overview: [infra/README.md](infra/README.md)
+   - Foundry-hosted lane (private-first): [infra/foundry-hosted/README.md](infra/foundry-hosted/README.md)
+   - Azure app-hosted lane: [infra/azure-apphosted/README.md](infra/azure-apphosted/README.md)
+6. **Validation + operations/SRE**
+   - Scripts and validation commands: [scripts/README.md](scripts/README.md)
+   - Operational run history and RCA log: [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)
+
 ## Journey Status
 
 | Stage                | Status      | Runtime path                                                                                                 |
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
 | Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Azure app-hosted     | Implemented | Same workflow behavior on ACA + Postgres + App Insights                                                      |
-| Foundry hosted agent | Implemented (public) / Investigating (private) | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
+| Foundry hosted agent | Implemented (public/private) | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
 
 MAF internals are split for maintainability into `backend/app/maf/prompts`,
 `agents`, `tools`, `executors`, `runner`, and `workflows`.
 
-## Latest Foundry trace status (2026-07-15)
+## Latest Foundry trace status (2026-07-18)
 
-- **Public Foundry is fixed and verified**: Conversations/Traces are visible again for `order-resolution-hosted` (v32).
-- Root cause was a hosted tracing compatibility issue plus missing canonical model wiring in earlier deploys.
-- Effective fix was:
-  1. keep host-owned OpenTelemetry setup in `backend/foundry/main.py`,
-  2. ensure canonical model env values are populated for hosted runtime,
-  3. remove `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING` from `backend/agent.yaml` (this wrapper conflicted with `FoundryChatClient` streaming),
-  4. require semantic trace evidence in telemetry gates.
-- **Private Foundry remains under investigation**: deploy activates, then smoke/probe intermittently returns upstream `HTTP 500 server_error`.
+- **Private Foundry is validated end-to-end**: deploy + smoke (`ORD-1001`, `ORD-1009`) + hosted E2E + App Insights trace/dependency evidence.
+- **Public Foundry remains implemented and available** for parity and comparison scenarios.
+- Recent private telemetry confirmation and run evidence are tracked in:
+  - [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)
 
 ## Quick Start (Local)
 
@@ -76,6 +98,7 @@ Run these before considering a change complete:
 ```bash
 make test
 make eval-backend
+make eval-foundry   # report-only Foundry evaluator run for hosted/runtime changes
 make test-e2e
 ./scripts/skills/design-review-skill.sh
 ```
@@ -160,11 +183,27 @@ The hosted agent package is rooted at `backend/` and uses:
 
 ## Documentation Map
 
+### Product and design
+
+- PRD: [docs/design/prd.md](docs/design/prd.md)
+- User flow: [docs/design/userflow.md](docs/design/userflow.md)
 - System architecture: [docs/design/architecture.md](docs/design/architecture.md)
+- HITL rules and baseline scenarios: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)
+- API/event/telemetry schema: [docs/design/schema-io-telemetry.md](docs/design/schema-io-telemetry.md)
+
+### Delivery, implementation, and decisions
+
 - Engineering operating model (intent -> skills -> implementation -> evidence): [docs/design/engineering-operating-model.md](docs/design/engineering-operating-model.md)
-- Project phases and milestone history: [docs/design/implementation-phases.md](docs/design/implementation-phases.md)
 - Runtime decisions (Local -> Azure -> Foundry): [docs/design/local-azure-foundry-decisions.md](docs/design/local-azure-foundry-decisions.md)
-- HITL rules and test baseline: [docs/design/hitl-approval-conditions.md](docs/design/hitl-approval-conditions.md)
-- IO and telemetry schema: [docs/design/schema-io-telemetry.md](docs/design/schema-io-telemetry.md)
+- Project phases and milestone history: [docs/design/implementation-phases.md](docs/design/implementation-phases.md)
+- Repo structure: [docs/design/projectstructure.md](docs/design/projectstructure.md)
+- Tech stack: [docs/design/techstack.md](docs/design/techstack.md)
 - Backend operational details: [backend/README.md](backend/README.md)
-- Scripts and parity/e2e usage: [scripts/README.md](scripts/README.md)
+
+### IaC, deployment, and SRE operations
+
+- Infra overview: [infra/README.md](infra/README.md)
+- Foundry-hosted IaC/deployment: [infra/foundry-hosted/README.md](infra/foundry-hosted/README.md)
+- Azure app-hosted IaC/deployment: [infra/azure-apphosted/README.md](infra/azure-apphosted/README.md)
+- Scripts, parity, and E2E usage: [scripts/README.md](scripts/README.md)
+- Incident/RCA and execution log: [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)

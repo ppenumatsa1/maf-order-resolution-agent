@@ -64,6 +64,11 @@ Telemetry:
 - `ENABLE_INSTRUMENTATION` controls MAF/OpenTelemetry instrumentation when telemetry is enabled.
 - `OTEL_RECORD_CONTENT=false` keeps prompt/payload content out of span attributes.
 
+Evaluation:
+
+- `make eval-backend` runs deterministic contract assertions against `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
+- `make eval-foundry` runs report-only Foundry evaluators and writes `backend/.foundry/results/foundry-report.json`.
+
 ## APIs
 
 - `POST /api/chat/run`

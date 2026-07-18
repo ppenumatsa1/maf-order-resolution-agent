@@ -27,6 +27,10 @@ on:
         description: Run hosted E2E script after deploy
         required: false
         default: "false"
+      run_eval:
+        description: Run report-only Foundry eval after smoke/E2E
+        required: false
+        default: "true"
       probe_only:
         description: Run a lightweight invoke probe only
         required: false
@@ -61,6 +65,10 @@ on:
         required: false
         type: string
         default: "false"
+      run_eval:
+        required: false
+        type: string
+        default: "true"
       probe_only:
         required: false
         type: string
@@ -539,6 +547,23 @@ jobs:
       - name: Hosted E2E validation
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
         run: ./scripts/github/foundry_hosted_e2e.sh
+
+      - name: Foundry report-only evaluation
+        id: foundry_eval
+        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        continue-on-error: true
+        run: make eval-foundry
+
+      - name: Upload Foundry evaluation artifacts
+        if: ${{ always() && (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-eval-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            backend/.foundry/results/foundry-report.json
+            backend/.foundry/results/report.json
+            backend/.foundry/results/contract_capture.json
+          if-no-files-found: warn
 
       - name: Collect hosted runtime logs
         if: ${{ always() }}

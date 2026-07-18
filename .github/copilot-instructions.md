@@ -22,6 +22,8 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 
 Canonical contract: `docs/design/engineering-operating-model.md`.
 
+Current hosted gate posture is private-lane-first. Use private Foundry as the default hosted validation/deployment lane unless a documented contract update explicitly re-enables public-lane hosted gates.
+
 ## Workflow Guardrails
 
 - Keep API, application service, MAF runtime, and infrastructure concerns separated:
@@ -66,6 +68,7 @@ Canonical contract: `docs/design/engineering-operating-model.md`.
 
 - Backend lint + tests: `make test`
 - Eval harness: `make eval-backend`
+- Foundry evaluator report (hosted/runtime changes): `make eval-foundry`
 - Playwright E2E: `make test-e2e`
 - Docker E2E profile: `make docker-test`
 - Deterministic review/test gate: `./scripts/skills/design-review-skill.sh`

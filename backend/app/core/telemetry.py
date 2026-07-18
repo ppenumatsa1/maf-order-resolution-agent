@@ -130,6 +130,8 @@ def setup_observability() -> ObservabilityStatus:
         )
         if instrumentation_key:
             app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
+    if app_insights_connection_string:
+        app_insights_connection_string = app_insights_connection_string.strip().rstrip(";")
 
     resource = _create_observability_resource(service_name)
 

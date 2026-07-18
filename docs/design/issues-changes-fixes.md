@@ -139,6 +139,10 @@ Re-run private deploy/smoke/e2e and verify recent telemetry rows in:
   with trailing semicolon; Azure AgentServer parser treats empty trailing segment as
   invalid (`dictionary update sequence element #0 has length 1`). Workflows now trim
   trailing semicolons/whitespace before seeding runtime env.
+- Runtime telemetry setup now also normalizes the resolved App Insights connection
+  string (`strip().rstrip(';')`) before calling Azure Monitor OpenTelemetry setup,
+  covering APPINSIGHTS-only hosted environments where the value still includes a
+  trailing semicolon.
 - Added hosted startup env diagnostics in `backend/foundry/main.py` (presence +
   placeholder detection, no secret values) for App Insights and DB env keys so
   future runs can prove whether runtime placeholder substitution is occurring.

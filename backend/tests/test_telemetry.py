@@ -107,7 +107,7 @@ def test_setup_observability_uses_appinsights_alias(
     monkeypatch.setitem(sys.modules, "azure.monitor", monitor)
     monkeypatch.setitem(sys.modules, "azure.monitor.opentelemetry", opentelemetry)
     monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
-    monkeypatch.setenv("APPINSIGHTS_CONNECTION_STRING", "InstrumentationKey=alias-test")
+    monkeypatch.setenv("APPINSIGHTS_CONNECTION_STRING", "InstrumentationKey=alias-test;")
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
     monkeypatch.setattr(telemetry.trace, "get_tracer_provider", lambda: provider)
     monkeypatch.setattr(

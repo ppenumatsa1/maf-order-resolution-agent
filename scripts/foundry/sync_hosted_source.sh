@@ -2,15 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SRC_DIR="${ROOT_DIR}/backend"
-DST_DIR="${ROOT_DIR}/infra/foundry-hosted/agent"
+SOURCE_DIR="${ROOT_DIR}/backend"
+TARGET_DIR="${ROOT_DIR}/infra/foundry-hosted/agent"
 
-if [[ ! -f "${SRC_DIR}/agent.yaml" || ! -f "${SRC_DIR}/foundry/main.py" ]]; then
-  echo "Hosted source validation failed: backend/agent.yaml and backend/foundry/main.py are required."
+if [[ ! -f "${SOURCE_DIR}/agent.yaml" || ! -f "${SOURCE_DIR}/foundry/main.py" ]]; then
+  echo "backend/agent.yaml and backend/foundry/main.py are required."
   exit 1
 fi
 
-rm -rf "${DST_DIR}"
-mkdir -p "${DST_DIR}"
-cp -a "${SRC_DIR}/." "${DST_DIR}/"
-rm -rf "${DST_DIR}/.venv" "${DST_DIR}/tests" "${DST_DIR}/.pytest_cache"
+rm -rf "${TARGET_DIR}"
+mkdir -p "${TARGET_DIR}"
+tar --exclude='.venv' --exclude='tests' --exclude='.pytest_cache' --exclude='__pycache__' \
+  --exclude='.foundry/results' --exclude='tmp-foundry-sample' \
+  -C "${SOURCE_DIR}" -cf - . | tar -C "${TARGET_DIR}" -xf -

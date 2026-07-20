@@ -6,13 +6,10 @@ services:
         project: ./agent
         host: azure.ai.agent
         language: python
-        docker:
-            remoteBuild: true
-        config:
-            container:
-                resources:
-                    cpu: "0.5"
-                    memory: 1Gi
+        container:
+            resources:
+                cpu: "0.5"
+                memory: 1Gi
 infra:
     provider: bicep
     path: ./iac

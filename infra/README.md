@@ -1,8 +1,5 @@
-# Infrastructure Scaffolding
+# Infrastructure
 
-This directory contains deployment scaffolding for Azure hosting paths.
-
-- `azure-apphosted/`: Azure app-hosted runtime path using the current deterministic/MAF SDK backend mode.
-- `foundry-hosted/`: Active Foundry-hosted runtime path (`WORKFLOW_MODE=foundry_hosted`).
-
-Both paths remain additive to local Docker/Make workflows.
+The only Azure infrastructure path is
+[Foundry hosted](foundry-hosted/README.md). Local Docker remains the API/SSE/UI
+development environment.

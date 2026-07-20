@@ -20,7 +20,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 - operationally transparent (SSE timeline, workflow history),
 - business-safe (deterministic HITL triggers and approvals),
 - durable (Postgres-backed persistence for runs/events/messages/checkpoints),
-- extensible (single MAF workflow path, Azure app-hosted deployed, Foundry-hosted Responses-native entrypoint).
+- extensible (single MAF workflow path, local API/SSE UI, and Foundry-hosted Responses-native entrypoint).
 
 ## High-Level Runtime Architecture
 
@@ -171,14 +171,14 @@ Required commands:
 - `make eval-backend`
 - `make test-e2e`
 
-## Future Hosting Evolution
+## Execution surfaces
 
 The same business flow runs across:
 
-1. local MAF runtime (implemented),
-2. Azure app-hosted runtime (deployed),
-3. Foundry-hosted Responses-native runtime (deployed).
+1. local FastAPI/SSE/UI runtime (implemented),
+2. public Foundry-hosted Responses-native runtime (deployed through `azd up`).
 
-Architecture keeps API and event contracts stable to simplify this progression while maintaining business traceability.
+FastAPI/SSE remains a local contract surface. Foundry Responses is a distinct
+hosted protocol wrapper, not a public replacement for those HTTP routes.
 
 Process/governance authority for delivery and verification is documented in `docs/design/engineering-operating-model.md`.

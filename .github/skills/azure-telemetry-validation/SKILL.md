@@ -1,41 +1,29 @@
 ---
 name: azure-telemetry-validation
-description: Validate hosted Azure Container Apps workflow telemetry in Application Insights after deployment.
+description: Validate public Foundry hosted-agent telemetry in Application Insights after deployment.
 ---
 
 # Azure Telemetry Validation Skill
 
-Use this skill after Azure deployment or hosted parity checks to prove workflow, HITL, request, dependency, trace, and exception telemetry is flowing into Application Insights.
+Use this skill after public Foundry deployment to prove workflow, HITL,
+dependency, trace, and exception telemetry is flowing into Application Insights.
 
 ## Required inputs
 
-- Hosted backend URL: `API_URL`
-- Hosted frontend URL when E2E parity is in scope: `WEB_URL`
-- Log Analytics workspace id: `AZURE_LOG_ANALYTICS_WORKSPACE_ID`
-- Azure subscription/resource group context for the deployed Container Apps environment
+- Azure subscription/resource group context for the public Foundry project
+- Application Insights component name
+- `backend/.foundry/results/hosted-e2e-evidence.json`
 
 ## Hosted workflow stimulus
 
 Run the hosted workflow cases before querying telemetry:
 
 ```bash
-EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+./scripts/foundry/hosted_e2e.sh
 ```
 
-Then run one HITL approval flow against the hosted backend:
-
-1. Start an `ORD-1009` delayed-order request and capture the emitted `checkpoint_id`.
-2. POST an approval to the HITL response endpoint.
-3. Confirm the stream emits `hitl.response` followed by `workflow.output`.
-4. Wait for Application Insights ingestion before querying.
-
-Also run hosted Playwright against the deployed frontend when `WEB_URL` is available:
-
-```bash
-PLAYWRIGHT_BASE_URL="$WEB_URL" make test-e2e
-```
-
-This is part of telemetry stimulus and hosted parity. Do not pass telemetry validation if the UI shows Workflow History JSON errors such as `Unexpected token`, `not valid JSON`, or `<!doctype`, because that indicates the frontend is receiving HTML instead of API JSON and the hosted user path was not validated.
+The hosted E2E covers low-risk, approval, rejection, and duplicate HITL
+responses. Wait for Application Insights ingestion before querying.
 
 ## KQL checks
 
@@ -133,6 +121,9 @@ AppExceptions
 
 ## Pass/fail behavior
 
-- Pass when hosted Playwright UI parity succeeds, request rows exist for hosted API calls, dependencies include workflow/MAF/Foundry/HITL business spans, HITL wait/resume/response spans share `workflow.thread_id` and the same trace operation after persisted trace-context restore, no new `NoneType` attribute warnings are present, and no new workflow exceptions appear.
-- If `AppRequests` is empty, verify FastAPI instrumentation is installed and `instrument_fastapi_app(app)` ran after FastAPI app creation.
+- Pass when Foundry E2E evidence exists, dependencies include
+  workflow/MAF/Foundry/HITL business spans, HITL wait/resume/response spans share
+  `workflow.thread_id` and the same trace operation after persisted trace-context
+  restore, no new `NoneType` attribute warnings are present, and no new workflow
+  exceptions appear.
 - If HITL spans are split across operations, inspect checkpoint state persistence for `telemetry_trace_context` and confirm the approval path uses it as parent trace context.

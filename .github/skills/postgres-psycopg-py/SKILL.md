@@ -16,8 +16,8 @@ events, conversation messages, checkpoints, approvals, sessions, and evaluation 
   runtime, and persistence responsibilities separated.
 - The Azure app-hosted path still uses `STORE_PROVIDER=postgres`; Azure Database for PostgreSQL
   is selected through `DATABASE_URL`.
-- Keep `RAG_PROVIDER=pgvector` as the local PostgreSQL vector path unless the task explicitly
-  changes the RAG provider contract.
+- PostgreSQL is limited to workflow audit/control-plane persistence; do not add
+  vector, document, or retrieval stores to it.
 
 ## Safe persistence patterns
 
@@ -53,4 +53,3 @@ Use first-party documentation for service configuration that changes over time:
 | Python connection and Entra authentication | `microsoft_docs_search(query="Azure Database for PostgreSQL Flexible Server Python psycopg Microsoft Entra authentication")` |
 | Networking, TLS, and private access | `microsoft_docs_search(query="Azure Database for PostgreSQL Flexible Server networking TLS private access")` |
 | Azure PostgreSQL limits and maintenance | `microsoft_docs_search(query="Azure Database for PostgreSQL Flexible Server limits maintenance")` |
-

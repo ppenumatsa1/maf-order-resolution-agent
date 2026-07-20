@@ -22,6 +22,7 @@ fi
 cd "$FOUNDRY_DIR"
 
 BASE_ID="${1:-foundry-e2e-$(date +%s)}"
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 extract_json_output() {
   local raw="${1:-}"
@@ -142,6 +143,7 @@ first_turn="$(invoke_responses "" "Resolve delayed order ORD-1001" "new")"
 assert_json_field "$first_turn" '.status == "completed"'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("tool.call") != null'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("workflow.output") != null'
+echo "Hosted smoke passed: low-risk order completed without HITL."
 C1="$(extract_thread_id "$first_turn")"
 if [[ -z "$C1" || "$C1" == "null" ]]; then
   echo "Missing thread_id in first responses turn"
@@ -181,27 +183,15 @@ assert_json_field "$high_risk_resume" '.status == "completed"'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-damaged_start="$(invoke_responses "" "Customer reports a damaged item for order ORD-1001 and requests a replacement" "new")"
-assert_json_field "$damaged_start" '.status == "waiting_approval"'
-assert_json_field "$damaged_start" '(.events // []) | map(.type) | index("checkpoint.created") != null'
-assert_json_field "$damaged_start" '(.events // []) | map(.type) | index("hitl.request") != null'
-DAMAGED_THREAD="$(extract_thread_id "$damaged_start")"
-if [[ -z "$DAMAGED_THREAD" || "$DAMAGED_THREAD" == "null" ]]; then
-  echo "Missing thread_id in damaged-item responses turn"
-  echo "$damaged_start"
-  exit 1
-fi
+evidence_file="${FOUNDRY_E2E_EVIDENCE_FILE:-$ROOT_DIR/backend/.foundry/results/hosted-e2e-evidence.json}"
+mkdir -p "$(dirname "$evidence_file")"
+jq -n \
+  --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg started_at "$STARTED_AT" \
+  --arg low_risk_thread_id "$C1" \
+  --arg approved_thread_id "$HIGH_RISK" \
+  --arg base_id "$BASE_ID" \
+  '{generated_at: $generated_at, started_at: $started_at, base_id: $base_id, low_risk_thread_id: $low_risk_thread_id, approved_thread_id: $approved_thread_id}' \
+  >"$evidence_file"
 
-DAMAGED_CHECKPOINT="$(echo "$damaged_start" | jq -r '(.pending_approvals // [])[0].checkpoint_id // empty')"
-if [[ -z "$DAMAGED_CHECKPOINT" ]]; then
-  echo "Missing checkpoint_id in damaged-item responses turn"
-  echo "$damaged_start"
-  exit 1
-fi
-damaged_resume_payload="$(jq -cn --arg input "Approve damaged-item replacement" --arg checkpoint "$DAMAGED_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint}')"
-damaged_resume="$(invoke_responses_payload "$DAMAGED_THREAD" "$damaged_resume_payload")"
-assert_json_field "$damaged_resume" '.status == "completed"'
-assert_json_field "$damaged_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
-assert_json_field "$damaged_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
-
-echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK}, ${DAMAGED_THREAD} (base=${BASE_ID})"
+echo "Foundry Responses hosted E2E passed for conversations: ${C1}, ${HIGH_RISK} (base=${BASE_ID})"

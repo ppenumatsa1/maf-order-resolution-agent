@@ -2,11 +2,10 @@
 
 This document defines the exact conditions that trigger human approval (`hitl.request`) in the MAF SDK workflow, with test-ready examples.
 
-## Journey Context (Local MAF -> Azure app-hosted -> Foundry-hosted)
+## Journey Context (Local MAF -> Public Foundry-hosted)
 
 - Local FastAPI host runs the shared MAF workflow.
-- Azure app-hosted keeps the same behavior.
-- Foundry-hosted Responses entrypoint runs the same workflow.
+- Public Foundry-hosted Responses entrypoint runs the same workflow.
 - Therefore, the trigger behavior below is the shared production contract across hosts.
 
 ## Scope
@@ -24,7 +23,7 @@ HITL is triggered if any of these are true:
 
 If none of the above are true, the workflow completes directly without human approval.
 
-Policy retrieval through local pgvector-compatible RAG is now performed before resolution, but it is non-blocking and does not alter the trigger rules above.
+Policy retrieval records the static workflow policy decision before resolution. It does not use an application-owned vector store and does not alter the trigger rules above.
 
 ## MAF SDK Workflow Rules
 

@@ -11,4 +11,6 @@ agent-framework-orchestrations==1.0.0
 agent-framework-foundry==1.8.0
 azure-ai-agentserver-core==2.0.0b7
 azure-ai-agentserver-responses==1.0.0b8
+azure-ai-projects==2.2.0
 azure-identity==1.25.0
+azure-monitor-query==1.4.0

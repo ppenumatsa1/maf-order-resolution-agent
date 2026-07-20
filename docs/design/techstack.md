@@ -39,7 +39,7 @@ The curated baseline contains five vendored Microsoft skills and two local
 | `azure-monitor-opentelemetry-py` | Application Insights and Azure Monitor OpenTelemetry work | Microsoft `skills` |
 | `fastapi-router-py` | FastAPI HTTP route work | Microsoft `skills` |
 | `pydantic-models-py` | Pydantic v2 API contract work | Microsoft `skills` |
-| `postgres-psycopg-py` | PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence | Repository-owned |
+| `postgres-psycopg-py` | PostgreSQL, Psycopg, and Azure PostgreSQL workflow-audit persistence | Repository-owned |
 
 The five Microsoft skills are vendored from
 [`microsoft/skills`](https://github.com/microsoft/skills) commit

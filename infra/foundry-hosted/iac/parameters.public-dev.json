@@ -5,38 +5,20 @@
     "location": {
       "value": "eastus2"
     },
-    "namePrefix": {
-      "value": "maforanipub"
-    },
     "foundryProjectName": {
-      "value": "order-resolution-public-dev"
+      "value": "order-resolution-public-managed-dev"
     },
     "hostedAgentName": {
       "value": "order-resolution-hosted"
     },
-    "networkMode": {
-      "value": "public"
+    "foundryEvaluationDeploymentName": {
+      "value": "gpt-4o-mini-evaluation"
     },
-    "enableStandardAgentNetworkInjection": {
-      "value": false
+    "foundryEvaluationDeploymentCapacity": {
+      "value": 10
     },
-    "createPrivateDnsVnetLinks": {
-      "value": false
-    },
-    "createPrivateEndpoints": {
-      "value": false
-    },
-    "createNatGateway": {
-      "value": false
-    },
-    "createPrivateRunnerAccess": {
-      "value": false
-    },
-    "createBastionHost": {
-      "value": false
-    },
-    "createRunnerVm": {
-      "value": false
+    "postgresServerName": {
+      "value": "maffndpgbfscpfhjr7sp4cu"
     }
   }
 }

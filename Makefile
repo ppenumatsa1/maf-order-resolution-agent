@@ -3,9 +3,9 @@ COMPOSE_ENV_FILE ?= backend/.env
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env ensure-test-postgres \
 	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-all test-e2e manual-matrix \
-	parity-all run-mock-mcp up down logs ps docker-test \
-	validate-quick validate-full deploy-app deploy-full clean \
-	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path
+	run-mock-mcp up down logs ps docker-test \
+	validate-quick validate-full clean \
+	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-release foundry-postgres-readiness
 
 help:
 	@echo "Available targets:"
@@ -25,18 +25,15 @@ help:
 	@echo "  eval-all        - Run deterministic and Foundry evals"
 	@echo "  test-e2e        - Run Playwright tests locally"
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
-	@echo "  parity-all      - Run fast parity gate across local + Azure + Foundry"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
 	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
 	@echo "  validate-full   - Full validation (test + eval + e2e + design-review)"
-	@echo "  deploy-app      - App-only Azure deploy (azd deploy)"
-	@echo "  deploy-full     - Infra + app Azure deploy (azd provision && azd deploy)"
-	@echo "  foundry-up      - Self-contained Foundry hosted-agent azd up (BYO VNET + private deps)"
-	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
-	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
+	@echo "  foundry-up      - Provision and deploy the public Foundry hosted agent"
+	@echo "  foundry-provision - Provision public Foundry infrastructure only"
+	@echo "  foundry-deploy  - Deploy hosted agent to public Foundry"
 	@echo "  foundry-smoke   - Invoke hosted agent health check via responses protocol"
-	@echo "  foundry-access-path - Deploy private runner/Bastion access path via Bicep"
+	@echo "  foundry-release - Run authenticated local public release gates and deployment"
 	@echo "  clean           - Remove caches and test artifacts"
 
 bootstrap: install-backend install-frontend
@@ -88,11 +85,8 @@ test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
 		cd scripts/playwright && npm run test:e2e; \
 	else \
-		health_json="$$(curl -fsS http://localhost:8000/api/health 2>/dev/null || true)"; \
-		if [[ -z "$$health_json" || "$$health_json" != *'"workflow_mode":"maf_sdk"'* ]]; then \
-			echo "Ensuring deterministic local backend for E2E (WORKFLOW_MODE=maf_sdk)."; \
-			$(MAKE) COMPOSE_ENV_FILE=backend/.env up; \
-		fi; \
+		echo "Recreating deterministic local backend and mock MCP for E2E."; \
+		$(MAKE) COMPOSE_ENV_FILE=backend/.env up; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
 		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
@@ -107,9 +101,6 @@ test-e2e:
 
 manual-matrix:
 	scripts/manual/run-manual-matrix.sh "$${API_URL:-http://localhost:8000}" $${MANUAL_MATRIX_ARGS:-}
-
-parity-all:
-	scripts/parity/run-parity-matrix.sh --targets local azure foundry --profile fast
 
 run-mock-mcp: ensure-backend-env
 	. backend/.venv/bin/activate && uvicorn scripts.mcp.mock_mcp_server:app --reload --port 8011
@@ -158,25 +149,15 @@ validate-quick:
 	else \
 		$(MAKE) test-e2e; \
 	fi
-	@if [[ -n "$${API_URL:-}" ]]; then \
-		infra/azure-apphosted/runtime/smoke-test.sh "$${API_URL}" "$${WEB_URL:-}"; \
-	fi
-
 validate-full:
 	$(MAKE) test
 	$(MAKE) eval-backend
 	$(MAKE) test-e2e
 	./scripts/skills/design-review-skill.sh
 
-deploy-app:
-	azd deploy
-
-deploy-full:
-	azd provision
-	azd deploy
-
 foundry-up:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
+	./scripts/foundry/sync_hosted_source.sh
 	cd infra/foundry-hosted && azd up --no-prompt
 
 foundry-provision:
@@ -198,17 +179,10 @@ foundry-smoke:
 		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --new-conversation --new-session --no-prompt; \
 	fi
 
-foundry-access-path:
-	cd infra/foundry-hosted && az deployment group create \
-		--resource-group "$${FOUNDRY_ACCESS_RG:-rg-maf-ora-ni-eus-07080910}" \
-		--template-file iac/access-path.bicep \
-		--parameters @iac/access-path.parameters.json \
-		--parameters runnerVmSshPublicKey="$$(cat "$${RUNNER_SSH_PUBKEY_PATH:-$$HOME/.ssh/id_rsa.pub}")"
-
 foundry-postgres-readiness:
 	./scripts/foundry/check_public_postgres_readiness.sh
 
-foundry-deploy-public:
+foundry-release:
 	./scripts/foundry/deploy_public_dev.sh
 
 clean:

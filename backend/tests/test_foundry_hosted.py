@@ -98,10 +98,6 @@ class _FakeResponsesHost:
         self.handler = handler
 
 
-class _FakeInMemoryResponseProvider:
-    pass
-
-
 def _details(
     *,
     thread_id: str,
@@ -151,15 +147,14 @@ def _fake_responses_types() -> tuple[
         object,
         object,
         _FakeTextResponse,
-        _FakeInMemoryResponseProvider,
+        object,
     )
 
 
-def test_hosted_manifest_propagates_deployment_profile() -> None:
+def test_hosted_manifest_configures_responses_and_model_settings() -> None:
     manifest = Path(__file__).parents[1] / "agent.yaml"
     manifest_text = manifest.read_text()
 
-    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest_text
     assert "AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING" not in manifest_text
     assert (
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
@@ -202,36 +197,16 @@ def test_foundry_model_env_aliases_preserve_canonical_values(
     assert os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME") == "canonical-model"
 
 
-def test_build_app_uses_platform_store_for_public_profile(
+def test_build_app_uses_foundry_managed_response_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _FakeResponsesHost.instances.clear()
-    monkeypatch.setenv("FOUNDRY_DEPLOYMENT_PROFILE", "public")
     monkeypatch.setattr(foundry_main, "_load_responses_types", _fake_responses_types)
 
     app = foundry_main._build_app()
 
     assert app is _FakeResponsesHost.instances[-1]
     assert app.store_supplied is False
-
-
-@pytest.mark.parametrize("profile", ["private", ""])
-def test_build_app_uses_in_memory_store_for_private_safe_profiles(
-    monkeypatch: pytest.MonkeyPatch,
-    profile: str,
-) -> None:
-    _FakeResponsesHost.instances.clear()
-    if profile:
-        monkeypatch.setenv("FOUNDRY_DEPLOYMENT_PROFILE", profile)
-    else:
-        monkeypatch.delenv("FOUNDRY_DEPLOYMENT_PROFILE", raising=False)
-    monkeypatch.setattr(foundry_main, "_load_responses_types", _fake_responses_types)
-
-    app = foundry_main._build_app()
-
-    assert app is _FakeResponsesHost.instances[-1]
-    assert app.store_supplied is True
-    assert isinstance(app.store, _FakeInMemoryResponseProvider)
 
 
 def test_runtime_database_url_override_sets_database_url_when_missing(
@@ -555,6 +530,8 @@ async def test_run_from_responses_resumes_pending_approval(
     assert span.attributes["workflow.checkpoint_id"] == "cp-123"
     assert span.attributes["workflow.status"] == "waiting_approval"
     assert span.attributes["workflow.event_count"] == 2
+    assert span.attributes["gen_ai.operation.name"] == "invoke_agent"
+    assert span.attributes["gen_ai.conversation.id"] == "C1"
 
 
 @pytest.mark.asyncio
@@ -580,3 +557,42 @@ async def test_run_from_responses_records_exception_on_root_span(
     assert span.name == "foundry.responses.invoke"
     assert len(span.recorded_exceptions) == 1
     assert isinstance(span.recorded_exceptions[0], RuntimeError)
+
+
+@pytest.mark.asyncio
+async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _FakeRepository()
+    service = _FakeService()
+    tracer = _FakeTracer()
+    repo.details_by_thread["C1"] = _details(
+        thread_id="C1",
+        status="completed",
+        output_message="Resolution complete.",
+    )
+    monkeypatch.setenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "true")
+    monkeypatch.setattr(foundry_main, "workflow_run_repository", repo)
+    monkeypatch.setattr(foundry_main, "order_resolution_service", service)
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
+
+    await foundry_main._run_from_responses(
+        {"conversation": {"id": "C1"}, "input": "Resolve delayed order ORD-1001"},
+        None,
+        _FakeTextResponse,
+    )
+
+    span = tracer.spans[0]
+    assert json.loads(str(span.attributes["gen_ai.input.messages"])) == [
+        {
+            "role": "user",
+            "parts": [{"type": "text", "content": "Resolve delayed order ORD-1001"}],
+        }
+    ]
+    assert json.loads(str(span.attributes["gen_ai.output.messages"])) == [
+        {
+            "role": "assistant",
+            "parts": [{"type": "text", "content": "Resolution complete."}],
+            "finish_reason": "stop",
+        }
+    ]

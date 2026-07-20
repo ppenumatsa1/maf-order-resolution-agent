@@ -15,30 +15,48 @@ require_bin make
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-FOUNDRY_AZD_ENV_NAME="${FOUNDRY_AZD_ENV_NAME:-foundry-public-dev}"
+FOUNDRY_AZD_ENV_NAME="${FOUNDRY_AZD_ENV_NAME:-foundry-public-dev2}"
 AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
-AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-maf-ora-foundry-public-dev}"
+AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-maf-ora-foundry-public-dev2}"
 AZURE_LOCATION="${AZURE_LOCATION:-eastus2}"
-FOUNDRY_AI_SEARCH_LOCATION="${FOUNDRY_AI_SEARCH_LOCATION:-eastus}"
-FOUNDRY_PROJECT_NAME="${FOUNDRY_PROJECT_NAME:-order-resolution-public-dev}"
+FOUNDRY_ACCOUNT_NAME="${FOUNDRY_ACCOUNT_NAME:-maffndaibfscpfhjr7sp4}"
+FOUNDRY_PROJECT_NAME="${FOUNDRY_PROJECT_NAME:-order-resolution-public-managed-dev}"
 FOUNDRY_HOSTED_AGENT_NAME="${FOUNDRY_HOSTED_AGENT_NAME:-order-resolution-hosted}"
+FOUNDRY_TRACE_READER_PRINCIPAL_ID="${FOUNDRY_TRACE_READER_PRINCIPAL_ID:-$(az ad signed-in-user show --query id -o tsv)}"
+POSTGRES_SERVER_NAME="${POSTGRES_SERVER_NAME:-maffndpgbfscpfhjr7sp4cu}"
+POSTGRES_ADMIN_USERNAME="${POSTGRES_ADMIN_USERNAME:-pgadmin}"
+POSTGRES_LOCATION="${POSTGRES_LOCATION:-centralus}"
 RUNTIME_DATABASE_URL="${RUNTIME_DATABASE_URL:-${DATABASE_URL:-}}"
 
 if [[ -z "$AZURE_SUBSCRIPTION_ID" ]]; then
   echo "AZURE_SUBSCRIPTION_ID is required."
   exit 1
 fi
-AZURE_TENANT_ID="${AZURE_TENANT_ID:-$(az account show --subscription "$AZURE_SUBSCRIPTION_ID" --query tenantId -o tsv)}"
-
-if [[ -z "$RUNTIME_DATABASE_URL" ]]; then
-  echo "RUNTIME_DATABASE_URL or DATABASE_URL is required."
+if [[ -z "$RUNTIME_DATABASE_URL" || -z "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+  echo "RUNTIME_DATABASE_URL (or DATABASE_URL) and POSTGRES_ADMIN_PASSWORD are required."
   exit 1
 fi
-
+if [[ "$POSTGRES_ADMIN_PASSWORD" == *$'\n'* || "$POSTGRES_ADMIN_PASSWORD" == *$'\r'* ]]; then
+  echo "POSTGRES_ADMIN_PASSWORD must be a single-line value."
+  exit 1
+fi
+if [[ "$RUNTIME_DATABASE_URL" != *"sslmode=require"* ]]; then
+  echo "RUNTIME_DATABASE_URL must include sslmode=require."
+  exit 1
+fi
+if [[ "$RUNTIME_DATABASE_URL" != *"${POSTGRES_SERVER_NAME}.postgres.database.azure.com"* ]]; then
+  echo "RUNTIME_DATABASE_URL must target ${POSTGRES_SERVER_NAME}.postgres.database.azure.com."
+  exit 1
+fi
 if [[ ! -f backend/agent.yaml || ! -f backend/foundry/main.py ]]; then
   echo "Hosted source validation failed: backend/agent.yaml and backend/foundry/main.py are required."
   exit 1
 fi
+
+AZURE_TENANT_ID="${AZURE_TENANT_ID:-$(az account show --subscription "$AZURE_SUBSCRIPTION_ID" --query tenantId -o tsv)}"
+az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+az account show --query id -o tsv | grep -qx "$AZURE_SUBSCRIPTION_ID"
+azd auth login --check-status >/dev/null
 
 echo "Selecting AZD environment: ${FOUNDRY_AZD_ENV_NAME}"
 (
@@ -48,77 +66,51 @@ echo "Selecting AZD environment: ${FOUNDRY_AZD_ENV_NAME}"
   azd env set AZURE_RESOURCE_GROUP "$AZURE_RESOURCE_GROUP"
   azd env set AZURE_LOCATION "$AZURE_LOCATION"
   azd env set AZURE_TENANT_ID "$AZURE_TENANT_ID"
-  azd env set AI_SEARCH_LOCATION "$FOUNDRY_AI_SEARCH_LOCATION"
+  azd env set FOUNDRY_ACCOUNT_NAME "$FOUNDRY_ACCOUNT_NAME"
   azd env set FOUNDRY_PROJECT_NAME "$FOUNDRY_PROJECT_NAME"
   azd env set HOSTED_AGENT_NAME "$FOUNDRY_HOSTED_AGENT_NAME"
   azd env set FOUNDRY_RUNTIME_DATABASE_URL "$RUNTIME_DATABASE_URL"
   azd env set DATABASE_URL "$RUNTIME_DATABASE_URL"
   azd env set RUNTIME_DATABASE_URL "$RUNTIME_DATABASE_URL"
-  azd env set APP_ENV "${APP_ENV:-foundry-public-dev}"
+  azd env set POSTGRES_SERVER_NAME "$POSTGRES_SERVER_NAME"
+  azd env set POSTGRES_ADMIN_USERNAME "$POSTGRES_ADMIN_USERNAME"
+  azd env set POSTGRES_ADMIN_PASSWORD "$POSTGRES_ADMIN_PASSWORD"
+  azd env set POSTGRES_LOCATION "$POSTGRES_LOCATION"
+  azd env set APP_ENV "${APP_ENV:-foundry-public-dev2}"
   azd env set STORE_PROVIDER "${STORE_PROVIDER:-postgres}"
-  azd env set MEMORY_PROVIDER "${MEMORY_PROVIDER:-postgres}"
-  azd env set RAG_PROVIDER "${RAG_PROVIDER:-pgvector}"
   azd env set ENABLE_TELEMETRY "${ENABLE_TELEMETRY:-true}"
   azd env set ENABLE_INSTRUMENTATION "${ENABLE_INSTRUMENTATION:-true}"
-  azd env set OTEL_SERVICE_NAME "${OTEL_SERVICE_NAME:-maf-order-resolution-foundry-dev}"
+  azd env set OTEL_SERVICE_NAME "${OTEL_SERVICE_NAME:-maf-order-resolution-foundry-public}"
   azd env set OTEL_RECORD_CONTENT "${OTEL_RECORD_CONTENT:-false}"
-  azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "${AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING:-true}"
-  azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "${AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED:-false}"
-  azd env set FOUNDRY_PROJECTS_ENDPOINT "${FOUNDRY_PROJECTS_ENDPOINT:-}"
-  azd env set FOUNDRY_MODEL_DEPLOYMENT_NAME "${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}"
-  azd env set NETWORK_MODE "public"
-  azd env set CREATE_PRIVATE_DNS_VNET_LINKS "false"
-  azd env set CREATE_PRIVATE_ENDPOINTS "false"
-  azd env set CREATE_NAT_GATEWAY "false"
-  azd env set CREATE_PRIVATE_RUNNER_ACCESS "false"
-  azd env set CREATE_BASTION_HOST "false"
-  azd env set CREATE_RUNNER_VM "false"
-  azd env set ENABLE_STANDARD_AGENT_NETWORK_INJECTION "false"
-  # Legacy lowercase keys are retained for compatibility with existing scripts/docs.
-  azd env set aiSearchLocation "$FOUNDRY_AI_SEARCH_LOCATION"
-  azd env set foundryProjectName "$FOUNDRY_PROJECT_NAME"
-  azd env set hostedAgentName "$FOUNDRY_HOSTED_AGENT_NAME"
-  azd env set networkMode "public"
-  azd env set createPrivateDnsVnetLinks "false"
-  azd env set createPrivateEndpoints "false"
-  azd env set createNatGateway "false"
-  azd env set createPrivateRunnerAccess "false"
-  azd env set createBastionHost "false"
-  azd env set createRunnerVm "false"
-  azd env set enableStandardAgentNetworkInjection "false"
+  azd env set FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT:-true}"
 )
 
-echo "Ensuring AZD infrastructure parameters for public mode"
-NETWORK_MODE=public \
-AI_SEARCH_LOCATION="$FOUNDRY_AI_SEARCH_LOCATION" \
 FOUNDRY_PROJECT_NAME="$FOUNDRY_PROJECT_NAME" \
 HOSTED_AGENT_NAME="$FOUNDRY_HOSTED_AGENT_NAME" \
 ./scripts/foundry/ensure_foundry_azd_defaults.sh
 
-echo "Provisioning public Foundry environment"
-make foundry-provision
+echo "Running local release gates"
+LOCAL_DATABASE_URL="${LOCAL_DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable}"
+DATABASE_URL="$LOCAL_DATABASE_URL" make test
+DATABASE_URL="$LOCAL_DATABASE_URL" make eval-backend
+DATABASE_URL="$LOCAL_DATABASE_URL" make test-e2e
 
-echo "Resolving Foundry project resource ID for deploy target"
-account_name="$(az cognitiveservices account list --resource-group "$AZURE_RESOURCE_GROUP" --query "[0].name" -o tsv)"
-if [[ -z "$account_name" ]]; then
-  echo "Unable to resolve Foundry account name in ${AZURE_RESOURCE_GROUP}"
-  exit 1
-fi
-project_resource_id="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${account_name}/projects/${FOUNDRY_PROJECT_NAME}"
-if ! az resource show --ids "$project_resource_id" --query id -o tsv >/dev/null; then
-  echo "Unable to resolve Foundry project resource ID for ${FOUNDRY_PROJECT_NAME} in ${AZURE_RESOURCE_GROUP}"
-  exit 1
-fi
-project_endpoint="https://${account_name}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}"
-(
-  cd infra/foundry-hosted
-  azd env set AZURE_AI_PROJECT_ID "$project_resource_id"
-  azd env set FOUNDRY_PROJECT_ID "$project_resource_id"
-  azd env set FOUNDRY_PROJECT_ENDPOINT "$project_endpoint"
-  azd env set AZURE_AI_PROJECT_ENDPOINT "$project_endpoint"
-)
+echo "Provisioning and deploying public Foundry agent"
+make foundry-up
 
-echo "Deploying hosted agent"
-make foundry-deploy
+echo "Running combined hosted smoke and E2E"
+./scripts/foundry/hosted_e2e.sh
 
-echo "Public Foundry deploy completed for AZD environment: ${FOUNDRY_AZD_ENV_NAME}"
+echo "Publishing enforced Foundry evaluation"
+FOUNDRY_PROJECTS_ENDPOINT="$(cd infra/foundry-hosted && azd env get-value FOUNDRY_PROJECTS_ENDPOINT)" \
+FOUNDRY_MODEL_DEPLOYMENT_NAME="$(cd infra/foundry-hosted && azd env get-value FOUNDRY_MODEL_DEPLOYMENT_NAME)" \
+FOUNDRY_EVAL_MODEL="$(cd infra/foundry-hosted && azd env get-value FOUNDRY_EVAL_MODEL)" \
+FOUNDRY_HOSTED_AGENT_NAME="$FOUNDRY_HOSTED_AGENT_NAME" \
+FOUNDRY_EVAL_ENFORCE_PASS=true \
+FOUNDRY_EVAL_MAX_ERRORED=0 \
+make eval-foundry
+
+echo "Verifying Application Insights telemetry"
+./scripts/foundry/verify_telemetry.sh
+
+echo "Public Foundry release completed for AZD environment: ${FOUNDRY_AZD_ENV_NAME}"

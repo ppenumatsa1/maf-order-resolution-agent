@@ -29,7 +29,6 @@ backend/.foundry/results/*.json
 # Test artifacts
 playwright-report/
 test-results/
-scripts/parity/reports/
 
 # Local runtime config
 local.ini

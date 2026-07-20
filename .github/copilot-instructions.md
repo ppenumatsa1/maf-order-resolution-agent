@@ -22,7 +22,10 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 
 Canonical contract: `docs/design/engineering-operating-model.md`.
 
-Current hosted gate posture is private-lane-first. Use private Foundry as the default hosted validation/deployment lane unless a documented contract update explicitly re-enables public-lane hosted gates.
+The hosted deployment lane is public Foundry in `rg-maf-ora-foundry-public-dev2`.
+GitHub Actions is credential-free CI only; use the local authenticated
+`make foundry-release` flow for Azure provision, deployment, smoke, hosted E2E,
+evaluation, and telemetry verification.
 
 ## Workflow Guardrails
 
@@ -101,7 +104,7 @@ local (repository-owned) skills:
 - `azure-monitor-opentelemetry-py`: Application Insights and Azure Monitor telemetry.
 - `fastapi-router-py`: FastAPI HTTP routes.
 - `pydantic-models-py`: Pydantic v2 schemas.
-- `postgres-psycopg-py`: PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence.
+- `postgres-psycopg-py`: PostgreSQL, Psycopg, and Azure PostgreSQL workflow-audit persistence.
 
 ## Baseline Test Inputs
 

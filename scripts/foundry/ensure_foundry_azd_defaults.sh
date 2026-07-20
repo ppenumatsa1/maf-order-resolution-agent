@@ -6,7 +6,11 @@ cd "${ROOT_DIR}/infra/foundry-hosted"
 
 get_env_value() {
   local key="$1"
-  azd env get-value "$key" 2>/dev/null || true
+  local value
+  if ! value="$(azd env get-value "$key" 2>/dev/null)"; then
+    return 0
+  fi
+  printf '%s\n' "$value"
 }
 
 set_if_missing() {
@@ -20,81 +24,37 @@ set_if_missing() {
   fi
 }
 
-mode="${NETWORK_MODE:-$(get_env_value NETWORK_MODE)}"
-if [[ -z "$mode" ]]; then
-  mode="private"
-fi
-if [[ "$mode" != "private" && "$mode" != "public" ]]; then
-  echo "NETWORK_MODE must be 'public' or 'private'. Found: $mode"
-  exit 1
-fi
-
-if [[ "$mode" == "private" ]]; then
-  private_dns_default="true"
-  private_endpoints_default="true"
-  nat_default="true"
-  runner_access_default="false"
-  bastion_default="true"
-  runner_vm_default="true"
-  network_injection_default="true"
-  assign_pre_caphost_default="true"
-  assign_post_caphost_default="true"
-  create_account_caphost_default="false"
-  create_project_caphost_default="true"
-  manage_project_connections_default="true"
-else
-  private_dns_default="false"
-  private_endpoints_default="false"
-  nat_default="false"
-  runner_access_default="false"
-  bastion_default="false"
-  runner_vm_default="false"
-  network_injection_default="false"
-  assign_pre_caphost_default="false"
-  assign_post_caphost_default="false"
-  create_account_caphost_default="false"
-  create_project_caphost_default="false"
-  manage_project_connections_default="true"
-fi
-
-set_if_missing NETWORK_MODE "$mode"
-set_if_missing AI_SEARCH_LOCATION "${AI_SEARCH_LOCATION:-eastus}"
-set_if_missing FOUNDRY_PROJECT_NAME "${FOUNDRY_PROJECT_NAME:-order-resolution}"
+set_if_missing FOUNDRY_ACCOUNT_NAME "${FOUNDRY_ACCOUNT_NAME:-maffndaibfscpfhjr7sp4}"
+set_if_missing FOUNDRY_TRACE_READER_PRINCIPAL_ID "${FOUNDRY_TRACE_READER_PRINCIPAL_ID:-$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)}"
+set_if_missing FOUNDRY_PROJECT_NAME "${FOUNDRY_PROJECT_NAME:-order-resolution-public-managed-dev}"
 set_if_missing HOSTED_AGENT_NAME "${HOSTED_AGENT_NAME:-order-resolution-hosted}"
+set_if_missing FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT:-true}"
 set_if_missing RUNTIME_DATABASE_URL "${RUNTIME_DATABASE_URL:-}"
-set_if_missing CREATE_POSTGRES_SERVER "${CREATE_POSTGRES_SERVER:-true}"
-set_if_missing POSTGRES_SERVER_NAME "${POSTGRES_SERVER_NAME:-maffndpg7930}"
+azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING false >/dev/null
+set_if_missing POSTGRES_SERVER_NAME "${POSTGRES_SERVER_NAME:-maffndpgbfscpfhjr7sp4cu}"
 set_if_missing POSTGRES_ADMIN_USERNAME "${POSTGRES_ADMIN_USERNAME:-pgadmin}"
 set_if_missing POSTGRES_ADMIN_PASSWORD "${POSTGRES_ADMIN_PASSWORD:-}"
 set_if_missing POSTGRES_DATABASE_NAME "${POSTGRES_DATABASE_NAME:-maf_workflow}"
 set_if_missing POSTGRES_LOCATION "${POSTGRES_LOCATION:-centralus}"
-set_if_missing CREATE_PRIVATE_DNS_VNET_LINKS "$private_dns_default"
-set_if_missing CREATE_PRIVATE_ENDPOINTS "$private_endpoints_default"
-set_if_missing CREATE_NAT_GATEWAY "$nat_default"
-set_if_missing CREATE_PRIVATE_RUNNER_ACCESS "$runner_access_default"
-set_if_missing CREATE_BASTION_HOST "$bastion_default"
-set_if_missing CREATE_RUNNER_VM "$runner_vm_default"
-set_if_missing ENABLE_STANDARD_AGENT_NETWORK_INJECTION "$network_injection_default"
-set_if_missing ASSIGN_PRE_CAPHOST_RBAC "$assign_pre_caphost_default"
-set_if_missing ASSIGN_POST_CAPHOST_RBAC "$assign_post_caphost_default"
-set_if_missing CREATE_ACCOUNT_CAPABILITY_HOST "$create_account_caphost_default"
-set_if_missing CREATE_PROJECT_CAPABILITY_HOST "$create_project_caphost_default"
-set_if_missing MANAGE_PROJECT_CONNECTIONS "$manage_project_connections_default"
 
-# Preserve lowercase env keys used by older scripts/workflows.
-set_if_missing aiSearchLocation "$(get_env_value AI_SEARCH_LOCATION)"
+postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"
+if az postgres flexible-server show \
+  --resource-group "$(get_env_value AZURE_RESOURCE_GROUP)" \
+  --name "$postgres_server_name" >/dev/null 2>&1; then
+  azd env set CREATE_POSTGRES_SERVER false >/dev/null
+  echo "preserved existing PostgreSQL server: $postgres_server_name"
+else
+  set_if_missing CREATE_POSTGRES_SERVER "${CREATE_POSTGRES_SERVER:-true}"
+fi
+
+foundry_project_name="$(get_env_value FOUNDRY_PROJECT_NAME)"
+agent_endpoint="$(get_env_value AGENT_ORDER_RESOLUTION_HOSTED_ENDPOINT)"
+if [[ -n "$agent_endpoint" && "$agent_endpoint" != *"/projects/${foundry_project_name}/"* ]]; then
+  azd env set AGENT_ORDER_RESOLUTION_HOSTED_ENDPOINT "" >/dev/null
+  azd env set AGENT_ORDER_RESOLUTION_HOSTED_RESPONSES_ENDPOINT "" >/dev/null
+  azd env set AGENT_ORDER_RESOLUTION_HOSTED_VERSION "" >/dev/null
+  echo "cleared stale hosted-agent deployment metadata"
+fi
+
 set_if_missing foundryProjectName "$(get_env_value FOUNDRY_PROJECT_NAME)"
 set_if_missing hostedAgentName "$(get_env_value HOSTED_AGENT_NAME)"
-set_if_missing networkMode "$(get_env_value NETWORK_MODE)"
-set_if_missing createPrivateDnsVnetLinks "$(get_env_value CREATE_PRIVATE_DNS_VNET_LINKS)"
-set_if_missing createPrivateEndpoints "$(get_env_value CREATE_PRIVATE_ENDPOINTS)"
-set_if_missing createNatGateway "$(get_env_value CREATE_NAT_GATEWAY)"
-set_if_missing createPrivateRunnerAccess "$(get_env_value CREATE_PRIVATE_RUNNER_ACCESS)"
-set_if_missing createBastionHost "$(get_env_value CREATE_BASTION_HOST)"
-set_if_missing createRunnerVm "$(get_env_value CREATE_RUNNER_VM)"
-set_if_missing enableStandardAgentNetworkInjection "$(get_env_value ENABLE_STANDARD_AGENT_NETWORK_INJECTION)"
-set_if_missing assignPreCaphostRbac "$(get_env_value ASSIGN_PRE_CAPHOST_RBAC)"
-set_if_missing assignPostCaphostRbac "$(get_env_value ASSIGN_POST_CAPHOST_RBAC)"
-set_if_missing createAccountCapabilityHost "$(get_env_value CREATE_ACCOUNT_CAPABILITY_HOST)"
-set_if_missing createProjectCapabilityHost "$(get_env_value CREATE_PROJECT_CAPABILITY_HOST)"
-set_if_missing manageProjectConnections "$(get_env_value MANAGE_PROJECT_CONNECTIONS)"

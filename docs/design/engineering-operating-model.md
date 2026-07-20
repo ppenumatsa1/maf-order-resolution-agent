@@ -2,104 +2,75 @@
 
 ## Purpose
 
-This is the canonical delivery contract for this repository.
+This is the canonical delivery contract. Architecture intent and business rules
+come from the team; skills provide current platform guidance; implementation
+includes code, IaC, tests, and documentation; gates provide evidence.
 
-It formalizes the split:
+## Runtime policy
 
-- **You provide** architecture intent, business rules, and acceptance criteria.
-- **Skills provide** current Microsoft platform and SDK guidance.
-- **Copilot provides** implementation, tests, and infra/doc updates.
-- **Gates provide** release evidence for correctness, recovery, telemetry, and Foundry parity.
+This branch has two supported execution surfaces:
 
-This model is Pareto-first: start with the minimum enforceable contract and expand gates only when risk increases.
+1. **Local full stack:** React, FastAPI, SSE, and PostgreSQL run through Docker
+   or Make targets. This is the authoritative UI/API/event-contract surface.
+2. **Public Foundry hosted agent:** `backend/foundry/main.py` exposes the same
+   MAF service through the Responses protocol. It is intentionally not an HTTP
+   replacement for the local FastAPI/SSE UI.
 
-## Current lane policy
+The public hosted target is `rg-maf-ora-foundry-public-dev2`, using project
+`order-resolution-public-managed-dev` and Microsoft-managed Foundry agent state.
+PostgreSQL remains the application-owned durable workflow/checkpoint store. No
+customer-managed Foundry state service, app-hosted Azure runtime, or GitHub
+deployment workflow is part of this branch.
 
-Hosted validation and deployment are private-lane-first in the current operating posture:
+## Non-negotiable contracts
 
-- **Default hosted lane:** private Foundry (`foundry-private-env` / private runner path).
-- Public Foundry is not part of the required hosted gate path unless explicitly re-enabled by a documented decision update.
+- One MAF business workflow; deterministic triage is allowed only when Foundry
+  model configuration is absent and never replaces orchestration.
+- Stable local API/SSE event types remain `workflow.stage`, `tool.call`,
+  `checkpoint.created`, `hitl.request`, `hitl.response`, and `workflow.output`.
+- HITL rules remain deterministic and resumable. Approval completes; rejection
+  escalates; duplicate responses are idempotent.
+- Infrastructure permissions are declarative Bicep role assignments.
+- Foundry hosting remains Responses-native through `backend/agent.yaml` and
+  `backend/foundry/main.py`.
 
-## Inputs and authority
+## Delivery and validation
 
-### 1) Product and architecture inputs (user/team authority)
-
-Required inputs before implementation:
-
-- Architecture boundaries and explicit non-goals
-- Business-rule truth conditions (including HITL triggers)
-- Acceptance criteria in observable terms (events, outputs, state)
-- Deployment lane scope (public/private, app-hosted/foundry-hosted)
-
-### 2) Skill authority (implementation constraints)
-
-Skills define current best-practice patterns for Microsoft services/SDKs and deployment guidance.
-
-Skills do **not** override business rules or public contracts on their own. If skill guidance conflicts with accepted behavior/contracts, capture the delta as a documented decision and apply the smallest approved change.
-
-### 3) Copilot delivery responsibilities
-
-For each approved change, Copilot must deliver:
-
-- Smallest complete code/IaC/script update that satisfies acceptance criteria
-- Matching tests and contract-safe updates (API, SSE, HITL, persistence)
-- Required documentation sync for changed behavior or operations
-- Evidence artifacts from required gates
-
-## Source-of-truth hierarchy
-
-When guidance conflicts, resolve in this order:
-
-1. `docs/design/engineering-operating-model.md` (this contract)
-2. Architecture and behavior docs (`architecture.md`, `userflow.md`, `hitl-approval-conditions.md`, `prd.md`)
-3. Repository instructions (`.github/copilot-instructions.md`, `agents.md`)
-4. Skill guidance (stack/repository skills)
-5. Inline comments/examples
-
-## Definition of Done (minimum)
-
-A change is done only when all applicable items are true:
-
-1. Acceptance criteria are met without breaking stable contracts.
-2. Required tests/gates pass for the change type.
-3. Recovery behavior remains correct for stateful/HITL flows.
-4. Telemetry remains correlated and free of new unhandled workflow exceptions.
-5. Evaluation evidence is present: deterministic eval is green; Foundry evaluator run is published for hosted/runtime-impacting changes.
-6. Required docs are updated in the same change set.
-7. Evidence is recorded in `docs/design/issues-changes-fixes.md` when deploy/runtime behavior is involved.
-
-## Change-to-gate matrix (Phase 1)
-
-| Change type | Required local gates | Required hosted gates |
+| Change | Required local gates | Required public hosted gates |
 | --- | --- | --- |
-| App-only behavior (no hosting/IaC change) | `make test`, `make eval-backend`, `make test-e2e`, `./scripts/skills/design-review-skill.sh` | None |
-| HITL/business-rule change | local gates + targeted HITL rule assertions | Hosted smoke for `ORD-1001`, `ORD-1009` (+ approve/reject when applicable) |
-| MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E + telemetry verification + report-only `make eval-foundry` artifact |
-| IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
-| Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
+| Application behavior | `make test`, `make eval-backend`, `make test-e2e` | None unless hosted behavior changes |
+| HITL or persistence | Local gates plus targeted resume/idempotency coverage | ORD-1001, ORD-1009, approval, rejection, duplicate-response E2E |
+| Foundry runtime, IaC, release script | Local gates plus Bicep/script validation | Azure validation, `azd up`, smoke, hosted E2E, Foundry eval, telemetry |
+| Documentation | Link and command accuracy checks | Update execution evidence when operations change |
 
-## Operationalization (automated)
+GitHub Actions is credential-free CI only. It runs repository checks on
+`ubuntu-latest` and never provisions or deploys Azure. The authenticated local
+release command is:
 
-The CI workflow (`.github/workflows/ci.yml`) enforces this model in two lightweight stages:
+```bash
+AZURE_SUBSCRIPTION_ID="<subscription>" \
+RUNTIME_DATABASE_URL="postgresql://...?...sslmode=require" \
+POSTGRES_ADMIN_PASSWORD="<password>" \
+make foundry-release
+```
 
-1. **Routing** via `scripts/skills/deployment-mode-router.sh` to select `validation_mode` (`quick` or `full`) from changed surfaces.
-2. **Guardrail enforcement** via `scripts/skills/operating-model-enforcement.sh`:
-   - HITL decision-surface changes require `docs/design/hitl-approval-conditions.md` updates plus workflow-test or hosted-eval updates.
-   - Hosted runtime/deploy surface changes require an update to `docs/design/issues-changes-fixes.md`.
+It runs local gates, `azd up --no-prompt`, combined hosted smoke/E2E, enforced Foundry
+evaluation, and Application Insights verification.
 
-## Evidence handoff template
+## Evidence handoff
 
-For each release-impacting change, capture:
+For every deployment-impacting change, record in
+`docs/design/issues-changes-fixes.md`:
 
-- Commit SHA and changed surfaces
-- Gate results (pass/fail + command or run ID)
-- Hosted version and conversation/thread identifiers
-- Foundry trace evidence (version-scoped)
-- App Insights correlation evidence (`workflow_run_id`, `thread_id`, exception status)
-- Deferred items (explicitly marked deferred, not implied complete)
+- commit and changed surfaces;
+- local gate results;
+- `azd up` result and hosted version/conversation IDs;
+- Foundry evaluation ID/run/result counts;
+- App Insights trace/dependency/exception evidence;
+- known deferrals.
 
-## Current baseline scenarios
+## Baseline scenarios
 
-- `ORD-1001`: low-risk path, no HITL expected.
-- `ORD-1009`: high-risk path, HITL expected and resumable.
-- Damaged item: HITL expected.
+- `ORD-1001`: low risk, completes without HITL.
+- `ORD-1009`: high amount (`185.0`), pauses for HITL and completes after approval.
+- damaged item: pauses for HITL and escalates after rejection.

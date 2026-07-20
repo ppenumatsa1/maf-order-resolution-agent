@@ -47,8 +47,6 @@ def test_create_workflow_uses_order_resolution_runner() -> None:
         config=AppConfig(
             workflow_mode="maf_sdk",
             store_provider="postgres",
-            rag_provider="pgvector",
-            memory_provider="postgres",
         ),
         event_bus=EventBus(),
         memory_store=_MemoryStore(),

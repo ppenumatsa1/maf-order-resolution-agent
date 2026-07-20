@@ -12,8 +12,8 @@ require_bin az
 require_bin jq
 
 SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
-RESOURCE_GROUP="${RESOURCE_GROUP:-rg-maf-ora-foundry}"
-SERVER_NAME="${SERVER_NAME:-maffndpg7930}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-rg-maf-ora-foundry-public-dev2}"
+SERVER_NAME="${SERVER_NAME:-maffndpgbfscpfhjr7sp4cu}"
 DATABASE_URL="${DATABASE_URL:-}"
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then

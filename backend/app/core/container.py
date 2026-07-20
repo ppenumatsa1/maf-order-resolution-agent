@@ -5,9 +5,12 @@ from app.core.database import postgres_db
 from app.core.telemetry import record_workflow_event
 from app.infrastructure.events import EventBus
 from app.infrastructure.mcp import MCPKnowledgeTool
-from app.infrastructure.persistence import CheckpointStore, WorkflowRunRepository
-from app.infrastructure.persistence.session_memory import create_memory_store
-from app.infrastructure.rag import create_rag_provider
+from app.infrastructure.persistence import (
+    CheckpointStore,
+    PostgresSessionMemoryStore,
+    WorkflowRunRepository,
+)
+from app.infrastructure.rag.providers.noop_provider import NoopRAGProvider
 from app.maf.factory import create_workflow
 from app.modules.order_resolution.projections import WorkflowRunEventProjector
 from app.modules.order_resolution.service import OrderResolutionService
@@ -21,10 +24,10 @@ if config.store_provider != "postgres":
 
 event_bus = EventBus()
 workflow_run_repository = WorkflowRunRepository()
-memory_store = create_memory_store(config.memory_provider)
+memory_store = PostgresSessionMemoryStore()
 checkpoint_store = CheckpointStore()
 mcp_tool = MCPKnowledgeTool()
-rag_provider = create_rag_provider(config.rag_provider)
+rag_provider = NoopRAGProvider()
 workflow_run_event_projector = WorkflowRunEventProjector(workflow_run_repository)
 
 event_bus.add_listener(workflow_run_event_projector.sync_event_to_run)

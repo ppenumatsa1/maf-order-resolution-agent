@@ -401,6 +401,53 @@ def _set_span_attribute(span: Any, key: str, value: Any) -> None:
         span.set_attribute(key, value)
 
 
+def _trace_evaluation_content_enabled() -> bool:
+    return os.getenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _set_trace_evaluation_input(span: Any, parsed: _ParsedInput) -> None:
+    if not _trace_evaluation_content_enabled():
+        return
+    input_text = parsed.message or parsed.decision
+    if not input_text:
+        return
+    span.set_attribute(
+        "gen_ai.input.messages",
+        json.dumps(
+            [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "content": input_text}],
+                }
+            ]
+        ),
+    )
+
+
+def _set_trace_evaluation_output(span: Any, payload: dict[str, Any]) -> None:
+    if not _trace_evaluation_content_enabled():
+        return
+    message = payload.get("message")
+    if not isinstance(message, str) or not message:
+        return
+    span.set_attribute(
+        "gen_ai.output.messages",
+        json.dumps(
+            [
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "content": message}],
+                    "finish_reason": "stop",
+                }
+            ]
+        ),
+    )
+
+
 async def _run_from_responses(
     create_response: Any, context: Any | None, text_response: type[Any]
 ) -> Any:
@@ -411,6 +458,19 @@ async def _run_from_responses(
         _set_span_attribute(span, "workflow.thread_id", parsed.conversation_id)
         _set_span_attribute(span, "workflow.session_id", parsed.conversation_id)
         _set_span_attribute(span, "foundry.protocol", "responses")
+        _set_span_attribute(span, "gen_ai.operation.name", "invoke_agent")
+        _set_span_attribute(
+            span,
+            "gen_ai.agent.name",
+            os.getenv("FOUNDRY_HOSTED_AGENT_NAME", "order-resolution-hosted"),
+        )
+        _set_span_attribute(
+            span,
+            "gen_ai.agent.id",
+            os.getenv("FOUNDRY_HOSTED_AGENT_ID", "order-resolution-hosted"),
+        )
+        _set_span_attribute(span, "gen_ai.conversation.id", parsed.conversation_id)
+        _set_trace_evaluation_input(span, parsed)
         checkpoint_id_for_span: str | None = None
         try:
             if parsed.decision:
@@ -460,6 +520,7 @@ async def _run_from_responses(
             events = payload.get("events")
             if isinstance(events, list):
                 _set_span_attribute(span, "workflow.event_count", len(events))
+            _set_trace_evaluation_output(span, payload)
             response_text = json.dumps(payload)
             return text_response(context, create_response, text=response_text)
         except Exception as exc:
@@ -468,18 +529,8 @@ async def _run_from_responses(
 
 
 def _build_app() -> Any:
-    ResponsesAgentServerHost, _, _, TextResponse, InMemoryResponseProvider = _load_responses_types()
-    deployment_profile = os.getenv("FOUNDRY_DEPLOYMENT_PROFILE", "").strip().lower()
-    use_platform_store = deployment_profile == "public"
-    # Public profile: allow hosted Foundry to auto-activate platform-backed storage
-    # so Conversations traces are persisted in Foundry Traces UI.
-    # Private profile: keep in-memory storage because the Foundry storage endpoint
-    # can require public access which is disabled in private-network deployments.
-    host = (
-        ResponsesAgentServerHost()
-        if use_platform_store
-        else ResponsesAgentServerHost(store=InMemoryResponseProvider())
-    )
+    ResponsesAgentServerHost, _, _, TextResponse, _ = _load_responses_types()
+    host = ResponsesAgentServerHost()
 
     async def handler(
         create_response: Any,

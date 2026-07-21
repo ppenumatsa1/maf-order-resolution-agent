@@ -27,7 +27,7 @@ const DEFAULT_MESSAGE =
 type RuntimeHealth = {
   status: "ok";
   service: string;
-  workflow_mode: "maf_sdk" | "foundry_hosted";
+  workflow_mode: "maf_sdk";
   runtime_provider: string;
   runtime_mode: string;
   environment: string;

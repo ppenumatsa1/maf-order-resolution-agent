@@ -12,7 +12,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
@@ -24,7 +24,7 @@ services:
       MOCK_MCP_API_KEY: demo-api-key
       MOCK_MCP_BEARER_TOKEN: demo-bearer-token
     ports:
-      - "8011:8011"
+      - "${MOCK_MCP_PORT:-8011}:8011"
     volumes:
       - ./:/app
 
@@ -38,31 +38,23 @@ services:
       mock-mcp:
         condition: service_started
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
       APP_ENV: docker
       OTEL_SERVICE_NAME: maf-customer-resolution
-      WORKFLOW_MODE: ${WORKFLOW_MODE:-maf_sdk}
-      FOUNDRY_HOSTED_INVOCATIONS_URL: ${FOUNDRY_HOSTED_INVOCATIONS_URL:-}
-      FOUNDRY_HOSTED_API_KEY: ${FOUNDRY_HOSTED_API_KEY:-}
-      FOUNDRY_HOSTED_TIMEOUT_SECONDS: ${FOUNDRY_HOSTED_TIMEOUT_SECONDS:-30}
-      FOUNDRY_EVENT_CALLBACK_TOKEN: ${FOUNDRY_EVENT_CALLBACK_TOKEN:-}
       FOUNDRY_PROJECTS_ENDPOINT: ${FOUNDRY_PROJECTS_ENDPOINT:-}
       FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}
       MCP_SERVER_URL: http://mock-mcp:8011/mcp
       MCP_API_KEY: demo-api-key
       MCP_BEARER_TOKEN: demo-bearer-token
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/maf_workflow
-    volumes:
-      - ./backend/.foundry:/app/.foundry
-
   frontend:
     build:
       context: ./frontend
     depends_on:
       - backend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
       API_BASE: ${API_URL:-}
       NGINX_API_UPSTREAM: http://backend:8000

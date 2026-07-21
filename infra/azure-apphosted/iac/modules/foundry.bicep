@@ -10,7 +10,7 @@ param disableLocalAuth bool = true
 param chatDeploymentName string
 param chatModelFormat string = 'OpenAI'
 param chatModelName string = 'gpt-4.1-mini'
-param chatModelVersion string = '2024-07-18'
+param chatModelVersion string = '2025-04-14'
 param chatDeploymentSkuName string = 'GlobalStandard'
 param chatDeploymentCapacity int = 1
 param embeddingsDeploymentName string
@@ -19,6 +19,12 @@ param embeddingsModelName string = 'text-embedding-3-small'
 param embeddingsModelVersion string = '1'
 param embeddingsDeploymentSkuName string = 'GlobalStandard'
 param embeddingsDeploymentCapacity int = 1
+param evaluatorDeploymentName string = 'gpt-4.1-mini-evaluator'
+param evaluatorModelFormat string = 'OpenAI'
+param evaluatorModelName string = 'gpt-4.1-mini'
+param evaluatorModelVersion string = '2025-04-14'
+param evaluatorDeploymentSkuName string = 'GlobalStandard'
+param evaluatorDeploymentCapacity int = 1
 param raiPolicyName string = 'Microsoft.Default'
 
 resource account 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
@@ -80,6 +86,7 @@ resource embeddingsDeployment 'Microsoft.CognitiveServices/accounts/deployments@
     name: embeddingsDeploymentSkuName
     capacity: embeddingsDeploymentCapacity
   }
+
   properties: {
     model: {
       format: embeddingsModelFormat
@@ -106,6 +113,27 @@ resource projectFoundryUserRoleAssignment 'Microsoft.Authorization/roleAssignmen
   }
 }
 
+resource evaluatorDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: account
+  name: evaluatorDeploymentName
+  tags: tags
+  sku: {
+    name: evaluatorDeploymentSkuName
+    capacity: evaluatorDeploymentCapacity
+  }
+  properties: {
+    model: {
+      format: evaluatorModelFormat
+      name: evaluatorModelName
+      version: evaluatorModelVersion
+    }
+    raiPolicyName: raiPolicyName
+  }
+  dependsOn: [
+    embeddingsDeployment
+  ]
+}
+
 var accountEndpoint = account.properties.endpoint
 var projectEndpoint = 'https://${customSubDomainName}.services.ai.azure.com/api/projects/${project.name}'
 
@@ -117,3 +145,4 @@ output projectName string = project.name
 output projectEndpoint string = projectEndpoint
 output chatDeploymentName string = chatDeployment.name
 output embeddingsDeploymentName string = embeddingsDeployment.name
+output evaluatorDeploymentName string = evaluatorDeployment.name

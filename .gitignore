@@ -36,7 +36,4 @@ local.ini
 *.local.ini
 
 # Generated Bicep build artifacts (keep parameters.dev.json tracked)
-infra/foundry-hosted/iac/main.json
-infra/foundry-hosted/iac/modules/*.json
-infra/foundry-hosted/agent
 backend/tmp-foundry-sample/

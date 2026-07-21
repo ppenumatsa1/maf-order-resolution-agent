@@ -5,8 +5,9 @@ This file describes expected behavior for coding agents working in this reposito
 ## Project Context
 
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
-- Foundry hosted entrypoint: `backend/foundry/main.py` (Responses protocol via `backend/agent.yaml`).
-- Current hosted gate posture is private-lane-first; use private Foundry for hosted validation/deployment unless the canonical operating model is explicitly revised.
+- Azure runtime: two public Container Apps (FastAPI/MAF backend and React/Nginx
+  frontend) in one resource group. Foundry is used only for models and
+  report-only evaluations, not as an application host.
 - Frontend: React + Vite, consumes SSE workflow events.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
@@ -87,7 +88,7 @@ local (repository-owned) skills:
 - `azure-monitor-opentelemetry-py`: Application Insights and Azure Monitor telemetry.
 - `fastapi-router-py`: FastAPI HTTP routes.
 - `pydantic-models-py`: Pydantic v2 schemas.
-- `postgres-psycopg-py`: PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence.
+- `postgres-psycopg-py`: PostgreSQL, Psycopg, and Azure PostgreSQL persistence.
 
 Legacy shim paths have been removed. Do not add code that imports or recreates `app/models.py`, `app/config.py`, `app/db.py`, `app/state.py`, `app/workflow_run_repository.py`, `app/rag_repository.py`, `workflows/*`, `tools/*`, or root `app/api/*` router shims.
 Also do not reintroduce removed Foundry adapter/proxy surfaces such as `/api/foundry*` or `backend/app/foundry/*`.

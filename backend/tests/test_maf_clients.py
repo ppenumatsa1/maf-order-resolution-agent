@@ -89,10 +89,9 @@ def test_foundry_models_config_prefers_canonical_env_over_aliases(
     assert config.model == "canonical-model"
 
 
-def test_foundry_models_config_ignores_legacy_endpoint_alias_in_foundry_hosted_env(
+def test_foundry_models_config_supports_legacy_endpoint_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("APP_ENV", "foundry-private-env")
     monkeypatch.setenv(
         "FOUNDRY_PROJECT_ENDPOINT",
         "https://legacy.services.ai.azure.com/api/projects/p",
@@ -101,11 +100,9 @@ def test_foundry_models_config_ignores_legacy_endpoint_alias_in_foundry_hosted_e
 
     config = clients.get_foundry_models_config()
 
-    assert config is None
-    assert clients.triage_mode_metadata() == {
-        "provider": "deterministic",
-        "mode": "local_fallback",
-    }
+    assert config is not None
+    assert config.project_endpoint == "https://legacy.services.ai.azure.com/api/projects/p"
+    assert config.model == "legacy-model"
 
 
 def test_foundry_models_config_supports_maf_model_fallback(

@@ -18,15 +18,10 @@ services:
         docker:
             path: Dockerfile
             context: .
-    order-resolution-hosted:
-        project: ./backend
-        host: azure.ai.agent
-        language: python
-        config:
-            container:
-                resources:
-                    cpu: "0.5"
-                    memory: 1Gi
 infra:
     provider: bicep
     path: ./infra/azure-apphosted/iac
+hooks:
+    postprovision:
+        shell: sh
+        run: ./scripts/azure/grant-postgres-identity.sh

@@ -4,7 +4,9 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
+import httpx
 import yaml
 from agent_framework.foundry import FoundryEvals
 from app.maf.clients import get_foundry_models_config
@@ -62,6 +64,62 @@ def _to_jsonable(value: object) -> object:
     return str(value)
 
 
+async def _capture_app_outputs(queries: list[str], api_url: str) -> list[dict[str, str]]:
+    captures: list[dict[str, str]] = []
+    async with httpx.AsyncClient(base_url=api_url.rstrip("/"), timeout=90.0) as client:
+        for query in queries:
+            run = (
+                (
+                    await client.post(
+                        "/api/chat/run",
+                        json={
+                            "message": query,
+                            "customer_id": "foundry-evaluation",
+                            "session_id": f"foundry-eval-{uuid4()}",
+                        },
+                    )
+                )
+                .raise_for_status()
+                .json()
+            )
+            thread_id = str(run["thread_id"])
+            for _ in range(90):
+                details = (
+                    (await client.get(f"/api/workflows/{thread_id}")).raise_for_status().json()
+                )
+                if details.get("status") == "waiting_approval":
+                    pending = details.get("pending_approvals") or []
+                    if not pending:
+                        raise RuntimeError(
+                            f"Workflow {thread_id} is waiting without an approval request."
+                        )
+                    (
+                        await client.post(
+                            "/api/hitl/respond",
+                            json={
+                                "checkpoint_id": pending[0]["checkpoint_id"],
+                                "decision": "approve",
+                                "reviewer": "foundry-evaluation",
+                                "comments": "Automated evaluation approval",
+                            },
+                        )
+                    ).raise_for_status()
+                elif details.get("status") in {"completed", "escalated"}:
+                    latest_output = details.get("latest_output") or {}
+                    captures.append(
+                        {"query": query, "response": str(latest_output.get("message", ""))}
+                    )
+                    break
+                elif details.get("status") == "failed":
+                    raise RuntimeError(f"Workflow {thread_id} failed during evaluation capture.")
+                await asyncio.sleep(1)
+            else:
+                raise TimeoutError(
+                    f"Workflow {thread_id} did not complete during evaluation capture."
+                )
+    return captures
+
+
 async def run_foundry_eval() -> None:
     root = Path(__file__).resolve().parents[1]
     foundry_root = root / ".foundry"
@@ -112,13 +170,6 @@ async def run_foundry_eval() -> None:
     if not selected_queries:
         raise ValueError("No queries selected for Foundry evaluation")
 
-    agent = config.get("agent")
-    if not isinstance(agent, dict):
-        raise ValueError("backend/eval.yaml is missing agent mapping")
-    agent_name = os.getenv("FOUNDRY_HOSTED_AGENT_NAME") or str(
-        agent.get("name", "order-resolution-hosted")
-    )
-
     models_cfg = get_foundry_models_config()
     if models_cfg is None:
         raise RuntimeError(
@@ -126,8 +177,11 @@ async def run_foundry_eval() -> None:
             "FOUNDRY_MODEL_DEPLOYMENT_NAME."
         )
     judge_model = os.getenv("FOUNDRY_EVAL_MODEL", models_cfg.model)
-    poll_interval = float(os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0)))
+    poll_interval = float(
+        os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0))
+    )
     timeout = float(os.getenv("FOUNDRY_EVAL_TIMEOUT", foundry_cfg.get("timeout", 300.0)))
+    api_url = os.getenv("FOUNDRY_EVAL_API_URL", "http://localhost:8000")
 
     report_path = foundry_root / "results" / "foundry-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,35 +190,26 @@ async def run_foundry_eval() -> None:
         "provider": "foundry",
         "query_count": len(selected_queries),
         "evaluators": evaluators,
+        "api_url": api_url,
     }
     try:
         credential = DefaultAzureCredential()
-        project_client = AIProjectClient(endpoint=models_cfg.project_endpoint, credential=credential)
+        project_client = AIProjectClient(
+            endpoint=models_cfg.project_endpoint, credential=credential
+        )
         openai_client = project_client.get_openai_client()
 
         testing_criteria = []
-        tool_evaluator_set = {
-            FoundryEvals.TOOL_CALL_ACCURACY,
-            FoundryEvals.TOOL_SELECTION,
-            FoundryEvals.TOOL_INPUT_ACCURACY,
-            FoundryEvals.TOOL_OUTPUT_UTILIZATION,
-            FoundryEvals.TOOL_CALL_SUCCESS,
-        }
         for evaluator_name in evaluators:
-            response_variable = (
-                "{{sample.output_items}}"
-                if evaluator_name in tool_evaluator_set or evaluator_name == FoundryEvals.TASK_ADHERENCE
-                else "{{sample.output_text}}"
-            )
             testing_criteria.append(
                 {
                     "type": "azure_ai_evaluator",
                     "name": evaluator_name,
                     "evaluator_name": f"builtin.{evaluator_name}",
-                    "initialization_parameters": {"model": judge_model},
+                    "initialization_parameters": {"deployment_name": judge_model},
                     "data_mapping": {
                         "query": "{{item.query}}",
-                        "response": response_variable,
+                        "response": "{{item.response}}",
                     },
                 }
             )
@@ -175,8 +220,11 @@ async def run_foundry_eval() -> None:
                 "type": "custom",
                 "item_schema": {
                     "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
+                    "properties": {
+                        "query": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["query", "response"],
                 },
                 "include_sample_schema": True,
             },
@@ -187,22 +235,14 @@ async def run_foundry_eval() -> None:
             eval_id=eval_object.id,
             name=f"{eval_name} Run",
             data_source={
-                "type": "azure_ai_target_completions",
+                "type": "jsonl",
                 "source": {
                     "type": "file_content",
-                    "content": [{"item": {"query": query}} for query in selected_queries],
-                },
-                "input_messages": {
-                    "type": "template",
-                    "template": [
-                        {
-                            "type": "message",
-                            "role": "user",
-                            "content": {"type": "input_text", "text": "{{item.query}}"},
-                        }
+                    "content": [
+                        {"item": item, "sample": {}}
+                        for item in await _capture_app_outputs(selected_queries, api_url)
                     ],
                 },
-                "target": {"type": "azure_ai_agent", "name": agent_name},
             },
         )
 
@@ -230,7 +270,9 @@ async def run_foundry_eval() -> None:
             "error": _to_jsonable(getattr(eval_run, "error", None)),
         }
     except Exception as exc:  # noqa: BLE001
-        payload["status"] = "timeout" if isinstance(exc, TimeoutError) else str(payload.get("status") or "failed")
+        payload["status"] = (
+            "timeout" if isinstance(exc, TimeoutError) else str(payload.get("status") or "failed")
+        )
         payload["error"] = str(exc)
         if "eval_object" in locals():
             payload["eval_id"] = getattr(eval_object, "id", None)

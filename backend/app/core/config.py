@@ -6,16 +6,14 @@ from functools import lru_cache
 from typing import Literal
 
 WorkflowMode = Literal["maf_sdk"]
-StoreProvider = Literal["postgres", "azure_postgres", "app_db"]
-RagProvider = Literal["pgvector", "azure_ai_search", "foundry_vector", "foundry_iq"]
-MemoryProvider = Literal["postgres", "foundry_memory"]
+StoreProvider = Literal["postgres"]
+MemoryProvider = Literal["postgres"]
 
 
 @dataclass(frozen=True)
 class AppConfig:
     workflow_mode: WorkflowMode
     store_provider: StoreProvider
-    rag_provider: RagProvider
     memory_provider: MemoryProvider
 
 
@@ -25,21 +23,14 @@ def _normalized(name: str, default: str) -> str:
 
 def _store_provider() -> StoreProvider:
     value = _normalized("STORE_PROVIDER", "postgres")
-    if value in {"postgres", "azure_postgres", "app_db"}:
+    if value == "postgres":
         return value
     raise ValueError(f"Unsupported STORE_PROVIDER: {value}")
 
 
-def _rag_provider() -> RagProvider:
-    value = _normalized("RAG_PROVIDER", "pgvector")
-    if value in {"pgvector", "azure_ai_search", "foundry_vector", "foundry_iq"}:
-        return value
-    raise ValueError(f"Unsupported RAG_PROVIDER: {value}")
-
-
 def _memory_provider() -> MemoryProvider:
     value = _normalized("MEMORY_PROVIDER", "postgres")
-    if value in {"postgres", "foundry_memory"}:
+    if value == "postgres":
         return value
     raise ValueError(f"Unsupported MEMORY_PROVIDER: {value}")
 
@@ -49,6 +40,5 @@ def get_config() -> AppConfig:
     return AppConfig(
         workflow_mode="maf_sdk",
         store_provider=_store_provider(),
-        rag_provider=_rag_provider(),
         memory_provider=_memory_provider(),
     )

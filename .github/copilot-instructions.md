@@ -7,8 +7,9 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Keep one MAF-based business workflow path (no deterministic fallback path).
 - Deterministic triage fallback is allowed only when Foundry Models env vars are
   absent; do not add a separate deterministic fallback orchestration path.
-- Keep Foundry hosting Responses-native through `backend/foundry/main.py` and
-  `backend/agent.yaml`; do not reintroduce legacy invocations adapter paths.
+- Keep the FastAPI-hosted MAF workflow as the only application runtime. Foundry
+  is limited to model calls and report-only evaluations; do not reintroduce
+  hosted agents, Responses endpoints, or invocation adapters.
 - Keep HITL behavior deterministic and testable.
 - Keep API response contracts stable for frontend and Playwright tests.
 - Keep the legacy SSE event stream stable; expose richer AG-UI-compatible events only as additive surfaces.
@@ -22,7 +23,8 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 
 Canonical contract: `docs/design/engineering-operating-model.md`.
 
-Current hosted gate posture is private-lane-first. Use private Foundry as the default hosted validation/deployment lane unless a documented contract update explicitly re-enables public-lane hosted gates.
+The Azure deployment lane is one public app-hosted package: two Container Apps
+in one resource group with Foundry limited to models and evaluations.
 
 ## Workflow Guardrails
 
@@ -101,7 +103,7 @@ local (repository-owned) skills:
 - `azure-monitor-opentelemetry-py`: Application Insights and Azure Monitor telemetry.
 - `fastapi-router-py`: FastAPI HTTP routes.
 - `pydantic-models-py`: Pydantic v2 schemas.
-- `postgres-psycopg-py`: PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence.
+- `postgres-psycopg-py`: PostgreSQL, Psycopg, and Azure PostgreSQL persistence.
 
 ## Baseline Test Inputs
 

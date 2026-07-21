@@ -18,9 +18,9 @@ The first Azure cutover keeps runtime behavior identical to the local MAF path:
 
 - `WORKFLOW_MODE=maf_sdk`
 - `STORE_PROVIDER=postgres`
-- `RAG_PROVIDER=pgvector`
 - `MEMORY_PROVIDER=postgres`
-- `DATABASE_URL=...postgres.database.azure.com...?sslmode=require`
+- `AZURE_POSTGRES_HOST`, `AZURE_POSTGRES_DATABASE`, and
+  `AZURE_POSTGRES_USER` for managed-identity Entra authentication
 - `FOUNDRY_PROJECTS_ENDPOINT`
 - `FOUNDRY_MODEL_DEPLOYMENT_NAME`
 - `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME`
@@ -51,22 +51,35 @@ original waiting operation.
 
 ## Prepare
 
-Create/select an AZD environment and set required values:
+Create/select an AZD environment and set required values. The PostgreSQL Entra
+administrator must be a principal that can run the idempotent post-provision
+grant hook:
 
 ```bash
 azd env new maf-order-resolution-dev
 azd env set AZURE_LOCATION eastus2
-azd env set POSTGRES_ADMIN_PASSWORD '<url-safe-strong-password>'
+azd env set POSTGRES_ENTRA_ADMIN_PRINCIPAL_NAME '<admin-upn-or-group-name>'
+azd env set POSTGRES_ENTRA_ADMIN_PRINCIPAL_ID '<admin-or-group-object-id>'
+azd env set POSTGRES_BOOTSTRAP_ALLOWED_IP '<azd-runner-public-ipv4>'
 azd env set MCP_SERVER_URL ''
 azd env set MCP_API_KEY ''
 azd env set MCP_BEARER_TOKEN ''
 ```
 
-Use a URL-safe PostgreSQL password because the current application receives a PostgreSQL URL. Avoid characters that require URL encoding until database URL construction is moved into application code.
+The Bicep template intentionally omits Container Apps liveness/readiness probes during first provisioning. AZD provisions each Container App with a public placeholder image before `azd deploy` swaps in the real backend/frontend images; app-specific probes against ports 8000/5173 would fail against that placeholder revision. Runtime health is still validated by the backend/frontend `/health` endpoints and the app-hosted smoke script after deployment.
 
-The Bicep template intentionally omits Container Apps liveness/readiness probes during first provisioning. AZD provisions each Container App with a public placeholder image before `azd deploy` swaps in the real backend/frontend images; app-specific probes against ports 8000/5173 would fail against that placeholder revision. Runtime health is still validated by the backend/frontend `/health` endpoints and the hosted smoke script after deployment.
+`POSTGRES_BOOTSTRAP_ALLOWED_IP` creates one narrowly scoped PostgreSQL firewall
+rule for the machine running `azd`. It is required because the post-provision
+grant hook runs from that machine using the configured Entra administrator; the
+Azure-services firewall rule does not permit arbitrary developer workstations.
+The post-provision hook applies the Entra administrator in a separate,
+idempotent deployment after the server is reachable, then grants the backend
+managed identity database access.
 
-Key Vault is provisioned with RBAC and soft delete enabled for future secret externalization. The first cutover passes `DATABASE_URL` as a secure AZD/Bicep parameter into a Container Apps secret to avoid a first-provision identity/Key Vault circular dependency. Purge protection is not explicitly set in the POC/dev template; enable purge protection and move ACA secrets to Key Vault references for long-lived production environments.
+Key Vault is provisioned with RBAC and soft delete enabled for future secret
+externalization. The backend does not receive a database password: its stable
+user-assigned managed identity obtains a fresh Entra token when Psycopg opens a
+physical connection.
 
 The backend Container App system-assigned managed identity receives the built-in `Cognitive Services OpenAI User` role scoped to the generated Foundry/Azure AI Services account and `Foundry User` scoped to the generated project. The project managed identity receives `Foundry User` on the account. Local key authentication is disabled on the account, so backend model access should use managed identity.
 

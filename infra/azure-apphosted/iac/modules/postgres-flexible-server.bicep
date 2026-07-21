@@ -3,12 +3,9 @@ targetScope = 'resourceGroup'
 param name string
 param location string = resourceGroup().location
 param tags object = {}
-param administratorLogin string
-
-@secure()
-param administratorPassword string
-
 param databaseName string = 'maf_workflow'
+@description('Optional public IPv4 address of the AZD runner that performs the Entra grant bootstrap.')
+param bootstrapAllowedIp string = ''
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
   name: name
@@ -19,9 +16,12 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' =
     tier: 'Burstable'
   }
   properties: {
-    administratorLogin: administratorLogin
-    administratorLoginPassword: administratorPassword
     version: '16'
+    authConfig: {
+      activeDirectoryAuth: 'Enabled'
+      passwordAuth: 'Disabled'
+      tenantId: subscription().tenantId
+    }
     storage: {
       storageSizeGB: 32
     }
@@ -34,6 +34,14 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' =
     }
     network: {
       publicNetworkAccess: 'Enabled'
+    }
+  }
+
+  resource allowBootstrapRunner 'firewallRules@2023-06-01-preview' = if (!empty(bootstrapAllowedIp)) {
+    name: 'allow-bootstrap-runner'
+    properties: {
+      startIpAddress: bootstrapAllowedIp
+      endIpAddress: bootstrapAllowedIp
     }
   }
 }
@@ -54,6 +62,8 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
     startIpAddress: '0.0.0.0'
     endIpAddress: '0.0.0.0'
   }
+
+
 }
 
 output id string = server.id

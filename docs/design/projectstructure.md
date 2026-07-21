@@ -12,7 +12,6 @@ maf-order-resolution-agent/
         events/
         mcp/
         persistence/
-        rag/
       maf/
         agents/
         executors/
@@ -25,20 +24,17 @@ maf-order-resolution-agent/
         runner.py
       modules/order_resolution/
       main.py
-    foundry/main.py
     tests/
     .foundry/
       datasets/
       evaluators/
       suites/
-    agent.yaml
     eval.yaml
   frontend/
     src/
     package.json
   infra/
     azure-apphosted/
-    foundry-hosted/
   scripts/
     github/
     parity/
@@ -53,4 +49,5 @@ maf-order-resolution-agent/
 - `backend/app/modules/order_resolution/*`: application service, domain models, ports, projections.
 - `backend/app/maf/*`: MAF runtime internals (prompts, agents, executors, workflow, runner).
 - `backend/app/infrastructure/*`: persistence and external adapters.
-- `backend/foundry/main.py`: Foundry-hosted Responses adapter that invokes the shared service/workflow path.
+- `infra/azure-apphosted/`: the single Azure deployment package for Container
+  Apps, PostgreSQL, observability, and Foundry model/evaluation resources.

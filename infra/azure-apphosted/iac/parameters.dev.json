@@ -11,8 +11,8 @@
     "environmentName": {
       "value": "dev"
     },
-    "postgresAdministratorPassword": {
-      "value": "REPLACE_WITH_AZD_ENV_POSTGRES_ADMIN_PASSWORD"
+    "postgresBootstrapAllowedIp": {
+      "value": "REPLACE_WITH_AZD_RUNNER_PUBLIC_IPV4"
     },
     "foundryProjectName": {
       "value": "order-resolution"
@@ -27,13 +27,13 @@
       "value": "gpt-4.1-mini"
     },
     "foundryChatModelVersion": {
-      "value": "2024-07-18"
+      "value": "2025-04-14"
     },
     "foundryChatDeploymentSkuName": {
       "value": "GlobalStandard"
     },
     "foundryChatDeploymentCapacity": {
-      "value": 1
+      "value": 50
     },
     "foundryEmbeddingsDeploymentName": {
       "value": "text-embedding-3-small"
@@ -52,6 +52,9 @@
     },
     "foundryEmbeddingsDeploymentCapacity": {
       "value": 1
+    },
+    "foundryEvaluatorDeploymentCapacity": {
+      "value": 50
     },
     "foundryRaiPolicyName": {
       "value": "Microsoft.Default"

@@ -8,7 +8,6 @@ from typing import Any
 from app.core.telemetry import (
     workflow_stage_span,
 )
-from app.infrastructure.rag import NoopRAGProvider, RAGProvider
 from app.maf.clients import (
     has_llm_configuration,
     triage_mode_metadata,
@@ -38,14 +37,12 @@ class OrderResolutionWorkflow:
         memory_store: SessionMemoryRepository,
         checkpoint_store: CheckpointRepository,
         mcp_tool: McpKnowledgePort,
-        rag_provider: RAGProvider | None = None,
         idempotency_store: IdempotencyRepository | None = None,
     ) -> None:
         self.event_bus = event_bus
         self.memory_store = memory_store
         self.checkpoint_store = checkpoint_store
         self.mcp_tool = mcp_tool
-        self.rag_provider = rag_provider or NoopRAGProvider()
         if idempotency_store is None:
             from app.infrastructure.persistence import IdempotencyStore
 
@@ -61,7 +58,7 @@ class OrderResolutionWorkflow:
 
         self._SequentialBuilder = SequentialBuilder
         self._triage_executor = TriageExecutor(self._SequentialBuilder, self._usage_tracker)
-        self._policy_executor = PolicyExecutor(self.rag_provider, self.mcp_tool)
+        self._policy_executor = PolicyExecutor(self.mcp_tool)
         self._resolution_executor = ResolutionExecutor(
             idempotency_store=self.idempotency_store,
             memory_store=self.memory_store,
@@ -150,13 +147,11 @@ class OrderResolutionWorkflow:
                 "mcp_tool": "search",
                 "order": policy_input.order.__dict__,
                 "policy": policy_input.policy,
-                "policy_evidence_ids": [
-                    evidence.evidence_id for evidence in policy_input.rag_result.evidence
-                ],
+                "policy_evidence_ids": [],
                 "policy_retrieval": {
-                    "provider": policy_input.rag_result.provider,
-                    "query_id": policy_input.rag_result.query_id,
-                    "count": len(policy_input.rag_result.evidence),
+                    "provider": "mcp",
+                    "query_id": policy_input.policy_query_id,
+                    "count": len(policy_input.mcp_result.get("results", [])),
                 },
                 "mcp_result": policy_input.mcp_result,
             },

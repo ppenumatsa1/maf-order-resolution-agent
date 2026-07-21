@@ -12,7 +12,6 @@ from app.infrastructure.events import EventBus
 from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore
 from app.infrastructure.persistence.session_memory import create_memory_store
-from app.infrastructure.rag import PolicyKnowledgeIngestion, create_rag_provider
 from app.maf.factory import create_workflow
 from app.modules.order_resolution.hitl import classify_issue
 from app.modules.order_resolution.models import WorkflowContext
@@ -368,16 +367,12 @@ async def run_eval() -> None:
     event_bus = EventBus()
     memory_store = create_memory_store(config.memory_provider, foundry_root / "memory")
     checkpoint_store = CheckpointStore(foundry_root / "checkpoints")
-    rag_provider = create_rag_provider(config.rag_provider)
-    if config.rag_provider == "pgvector":
-        await PolicyKnowledgeIngestion(rag_provider).ingest_defaults_safe()
     workflow = create_workflow(
         config=config,
         event_bus=event_bus,
         memory_store=memory_store,
         checkpoint_store=checkpoint_store,
         mcp_tool=MCPKnowledgeTool(endpoint=None),
-        rag_provider=rag_provider,
     )
 
     cases = _load_cases(cases_path)

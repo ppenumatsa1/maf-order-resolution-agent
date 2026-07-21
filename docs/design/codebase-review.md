@@ -2,7 +2,7 @@
 
 ## 1. Executive summary
 
-The repository already has strong workflow contract coverage (low-risk complete, high-risk HITL, reject/escalate) and a working Foundry-hosted Responses entrypoint, but maintainability debt is concentrated in composition and boundary seams. The MAF path is now modularized into prompts, agents, tools, and stage executors while preserving the existing `SequentialBuilder` orchestration (`backend/app/maf/workflows/order_resolution.py`, `backend/app/maf/executors/*`).
+The repository already has strong workflow contract coverage (low-risk complete, high-risk HITL, reject/escalate). The MAF path is modularized into prompts, agents, tools, and stage executors while preserving the existing `SequentialBuilder` orchestration (`backend/app/maf/workflows/order_resolution.py`, `backend/app/maf/executors/*`).
 
 Key risk areas remain API/auth hardening, import-time container initialization, and module boundary leakage from service/persistence into API schema types (`backend/app/modules/order_resolution/service.py:5-6`, `backend/app/infrastructure/persistence/workflow_run_repository.py:7-15`, `backend/app/core/container.py:15-46`).
 
@@ -38,7 +38,6 @@ Evidence: `backend/app/api/v1/routers/chat.py`, `backend/app/modules/order_resol
 | Executors | Stage logic split for triage, policy inputs, decisioning, HITL | `backend/app/maf/executors/triage.py`, `policy.py`, `resolution.py`, `hitl.py` |
 | Agent/prompt packages | Foundry agent creation and instruction definitions | `backend/app/maf/agents/order_resolution.py`, `backend/app/maf/prompts/order_resolution.py` |
 | Persistence | Workflow runs, events, approvals, session messages | `backend/app/infrastructure/persistence/workflow_run_repository.py` |
-| Foundry hosted adapter | Responses protocol parsing and hosted invocation bridge | `backend/foundry/main.py` |
 | Frontend workflow UX | Workflow timeline, approvals, manual cases | `frontend/src/App.tsx`, `scripts/playwright/tests/workflow.e2e.spec.ts` |
 
 ## 4. Data flow
@@ -47,7 +46,6 @@ Evidence: `backend/app/api/v1/routers/chat.py`, `backend/app/modules/order_resol
 2. Workflow emits stable event types (`workflow.stage`, `tool.call`, `checkpoint.created`, `hitl.request`, `hitl.response`, `workflow.output`) to EventBus (`backend/app/maf/workflows/order_resolution.py:95-311`).
 3. Event projector writes run/event/pending-approval projections to Postgres (`backend/app/core/container.py:30-31`, `backend/app/infrastructure/persistence/workflow_run_repository.py`).
 4. UI consumes SSE streams from `/api/chat/stream/{thread_id}` and `/rich` additive stream (`backend/app/api/v1/routers/chat.py:16-31`).
-5. Foundry hosted path receives Responses requests, translates to service calls, and returns output payloads (`backend/foundry/main.py`).
 
 ## 5. Authentication flow
 
@@ -67,7 +65,6 @@ Evidence: `backend/app/api/v1/routers/chat.py`, `backend/app/modules/order_resol
 1. Import-time composition + schema init can make startup side effects hard to isolate (`backend/app/core/container.py:15-46`).
 2. Service layer depends on API schema objects (`backend/app/modules/order_resolution/service.py:5-6`).
 3. Persistence repository returns API response schema objects directly (`backend/app/infrastructure/persistence/workflow_run_repository.py:7-15`).
-4. Foundry hosted adapter is large and combines parsing, protocol bridging, and workflow invocation (`backend/foundry/main.py`).
 5. Frontend orchestration remains concentrated in one large `App.tsx` component (`frontend/src/App.tsx`).
 
 ## 8. Security concerns

@@ -1,5 +1,178 @@
 # Issues, Changes, and Fixes (Foundry Private VM Path)
 
+## Latest execution update (2026-07-21, app-hosted Azure validation complete)
+
+### Completed evidence
+
+1. Local validation passed against the isolated app-hosted stack:
+   - `make test`: 60 tests passed.
+   - `make eval-backend`: 10/10 deterministic workflow/HITL contracts passed.
+   - local Playwright: 7/7 passed on the worktree's Docker backend/frontend
+     ports 8002/5174.
+   - `make docker-test`: 7/7 passed.
+2. Azure smoke passed against the active North Central US backend for the
+   low-risk completion and high-risk HITL/resume paths.
+3. Foundry report-only evaluation completed for public FastAPI captures:
+   - eval: `eval_6dd3b246c3a7410fa1cb758d67d77095`
+   - run: `evalrun_995fb058286348f492e23bd18e8d2fab`
+   - 10 captured workflows; 0 errored, 2 passed, 8 failed.
+   Scores are report-only and are not a deterministic release gate.
+4. Application Insights validation found post-recovery requests and
+   dependencies with no failed dependencies, no exceptions, and no
+   `NoneType` attribute warnings. HITL request/wait/response/resume spans
+   share the same operation ID for validated approval threads.
+
+### Fixes discovered during validation
+
+1. Async managed identity requires `aiohttp`; it was added to backend runtime
+   requirements after the first deployed workflow failed to construct
+   `DefaultAzureCredential`.
+2. An idle Azure PostgreSQL TLS connection can be closed server-side. Setting
+   the Psycopg pool `min_size` to zero prevents a permanently retained idle
+   connection from causing the next workflow write to fail with
+   `SSL SYSCALL error: EOF detected`.
+3. Capacity 1 on the chat deployment allowed only one request per minute, and
+   capacity 1 on the judge deployment delayed cloud evaluation. Both
+   `gpt-4.1-mini` deployments now use capacity 50 through Bicep parameters.
+
+## Latest execution update (2026-07-20, North Central US app-hosted deployment handoff)
+
+### Completed cloud recovery and validation
+
+1. Provisioned the isolated one-resource-group app-hosted package in
+   `rg-maf-order-resolution-agent-foundry-azure-ncus`, including ACR, backend
+   and frontend Container Apps, Entra-only PostgreSQL, Foundry
+   models/evaluations, Application Insights, Log Analytics, Key Vault, and
+   user-assigned identities.
+2. Resolved Container Apps first-provision ordering by assigning `AcrPull` to
+   stable user-assigned identities before applications start. Temporary
+   port-specific Python bootstrap commands enabled first provision before ACR
+   images existed.
+3. Removed those temporary commands from the durable Bicep template after image
+   publication. The real images now start using their Dockerfile defaults:
+   Uvicorn for the backend and `/docker-entrypoint.sh`/Nginx for the frontend.
+4. Added `aiohttp==3.11.18` to the backend requirements. The hosted workflow
+   initially failed because async `DefaultAzureCredential` requires that
+   transport package.
+5. Corrected PostgreSQL Entra role creation: direct ARM administrator setup,
+   then `pg_catalog.pgaadauth_create_principal_with_oid(...)` in `postgres`,
+   followed by grants in `maf_workflow`. The backend managed identity and
+   persistence grants are now configured.
+6. Increased the app chat deployment from capacity 1 (one request/minute) to
+   capacity 50. Capacity 1 produced Foundry rate-limit failures during the
+   multi-agent sequence despite ample regional quota.
+7. Deployed smoke tests passed for ORD-1001 completion and ORD-1009 HITL/resume.
+   Public Playwright E2E passed all 7 scenarios using live-model-aware
+   assertion/test timeouts of 60/120 seconds.
+
+### Pending continuation
+
+1. Complete the report-only Foundry evaluation against the public backend. The
+   evaluator runner was updated from the obsolete `custom` run data source to
+   the current `jsonl` data source and `deployment_name` initialization
+   parameter; it must now be rerun and its report recorded.
+2. Run Application Insights telemetry validation for requests, Foundry and
+   PostgreSQL dependencies, workflow/HITL trace correlation, exceptions, and
+   content-redaction behavior.
+3. Update final deployment/release evidence after those two gates pass.
+
+### Retained regional attempts
+
+- Keep `rg-maf-order-resolution-agent-foundry-azure` (Central US) because
+  Container Apps failed with `AKSCapacityHeavyUsage`.
+- Keep `rg-maf-order-resolution-agent-foundry-azure-eus2` (East US 2) because
+  PostgreSQL was offer-restricted.
+- Do not delete either resource group without explicit approval.
+
+## Latest execution update (2026-07-20, app-hosted readiness handoff)
+
+1. Completed the local app-hosted migration gates: `make test` (59 passed),
+   deterministic evaluation (10/10), Playwright E2E (7/7), Docker E2E, Bicep
+   compilation, and `scripts/skills/design-review-skill.sh`.
+2. IaC review corrected `gpt-4.1-mini` chat and evaluator defaults to model
+   version `2025-04-14`.
+3. The PostgreSQL Entra bootstrap now requires
+   `POSTGRES_BOOTSTRAP_ALLOWED_IP`, which creates a single-address firewall
+   rule for the authenticated AZD runner. The Azure-services firewall rule does
+   not permit a developer workstation to run the post-provision grant hook.
+4. Azure validation and deployment remain intentionally blocked pending explicit
+   subscription and region confirmation. The installed Azure validation skill
+   still targets the removed `infra/foundry-hosted` lane, so it must be updated
+   to validate `infra/azure-apphosted` before the cloud validation handoff.
+
+## Latest execution update (2026-07-20, `foundry-azure` app-hosted migration started)
+
+### Scope and workspace isolation
+
+1. Created the clean `foundry-azure` worktree from committed
+   `feature/foundry-private-network-vnet` baseline `0ee9e8c`.
+2. The existing dirty `feature/foundry-public` worktree is intentionally not
+   modified or used as a source of changes.
+3. The deployment source of truth is
+   `.azure/deployment-plan.md`, which supersedes the inherited historical
+   deployment record for this branch.
+
+### Approved target
+
+1. Provision one public POC resource group through a single AZD lifecycle.
+2. Build two images in one ACR and deploy them to separate public Container
+   Apps: React/Nginx frontend and FastAPI/MAF backend.
+3. Retain Foundry only for model calls and JSONL evaluations through a new,
+   isolated Foundry account/project in the same resource group.
+4. Remove the Foundry-hosted agent/Responses lane, including its manifest,
+   hosted runtime, hosted-agent IaC, and hosted-only execution contracts.
+5. Use Entra-only Azure PostgreSQL with managed identity, TLS, controlled
+   public firewall access, and durable workflow/HITL/audit persistence.
+
+### Current implementation evidence
+
+Initial inspection confirms that the inherited baseline still contains
+`host: azure.ai.agent`, `backend/foundry/`, `backend/agent.yaml`,
+`infra/foundry-hosted/`, hosted Compose/Make targets, and static
+Foundry-hosted runtime branches. These are the first removal workstream.
+No Azure provisioning or deployment has been performed for this branch.
+
+### Completed first implementation slice
+
+1. Removed the Foundry-hosted protocol lane from AZD, Docker Compose, Make
+   targets, package dependencies, tests, CI workflows, scripts, and
+   `infra/foundry-hosted/`.
+2. Removed placeholder Foundry memory/RAG provider branches and the persisted
+   document/chunk/query tables. Policy lookup now uses the existing MCP
+   knowledge port while preserving workflow stage and tool-call event names.
+3. Added Azure PostgreSQL managed-identity connection support. Every new
+   Psycopg physical connection obtains a new Entra token for
+   `https://ossrdbms-aad.database.windows.net/.default`; the pool limits
+   connection lifetime so it does not retain a static token in `conninfo`.
+4. Review feedback changed the IaC sequencing: the backend must use a stable
+   user-assigned identity and the idempotent PostgreSQL Entra grant bootstrap
+   must run for that identity before the backend deploys.
+
+### Local evidence
+
+1. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test`
+   passed: `84 passed`.
+2. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make eval-backend`
+   passed: `10/10`, `100.0%`.
+3. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maf_workflow?sslmode=disable make test-e2e`
+   passed: `7/7` Playwright scenarios, including ORD-1001 completion,
+   ORD-1009 approval, rejection escalation, and history rendering.
+4. `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`
+   passed after converting the package to user-assigned identities,
+   Entra-only PostgreSQL, and a dedicated evaluator deployment.
+5. `make docker-test` passed after the Docker E2E profile was made
+   collision-safe (`5433`, `8012`, `8002`, and `5174` by default for host
+   bindings); internal Docker service addresses and the Azure container
+   topology are unchanged.
+
+### Still pending
+
+The app-hosted Bicep conversion, PostgreSQL Entra administrator/bootstrap,
+Foundry models/evaluations module split, app-neutral cloud evaluation capture,
+documentation replacement, Docker/Playwright restart smoke, Azure validation,
+deployment, and telemetry verification remain in progress. No cloud resources
+were provisioned or changed.
+
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 

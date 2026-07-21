@@ -1,5 +1,237 @@
 # Azure Deployment Plan
 
+> **Superseded plan notice (2026-07-20):** The historical deployment record
+> below describes an earlier app-hosted/Foundry-hosted implementation and is
+> retained only as branch history. This section is the source of truth for the
+> `foundry-azure` branch.
+
+## Status
+
+Deployed and validated.
+
+## Final validation evidence (2026-07-21)
+
+- Local backend gate: `make test` passed with 60 tests using the isolated
+  PostgreSQL instance on port 5433.
+- Local deterministic contract evaluation: `make eval-backend` passed 10/10.
+- Local browser E2E: 7/7 Playwright scenarios passed against this worktree's
+  isolated Docker stack on ports 8002/5174.
+- Docker parity profile: `make docker-test` passed 7/7 Playwright scenarios.
+- Azure smoke passed against the active backend revision for ORD-1001
+  completion and ORD-1009 HITL/resume.
+- Foundry report-only evaluation completed against the public FastAPI backend:
+  `eval_6dd3b246c3a7410fa1cb758d67d77095` /
+  `evalrun_995fb058286348f492e23bd18e8d2fab`, 10 items, 0 errored, 2 passed,
+  and 8 failed. Evaluator scores remain non-blocking report evidence.
+- Application Insights validation confirmed requests and dependencies after the
+  healthy backend revision became ready (`2026-07-21T14:35:52Z`), with zero
+  failed dependencies and zero exceptions. The only failed request was the
+  expected FastAPI `GET /` 404 probe. HITL request/wait/response/resume spans
+  share an operation ID for each validated approval thread.
+
+### Runtime reliability fixes
+
+- Backend requirements include `aiohttp` for the async managed-identity
+  transport used by `DefaultAzureCredential`.
+- PostgreSQL pool `min_size` is zero so an idle managed-identity connection is
+  not retained indefinitely and later reused after Azure closes its TLS session.
+- Chat and evaluator `gpt-4.1-mini` deployments each use capacity 50; capacity
+  1 throttled workflow inference and caused Foundry evaluation queue delays.
+
+## Execution handoff (2026-07-20)
+
+### Completed
+
+- Provisioned the North Central US package in
+  `rg-maf-order-resolution-agent-foundry-azure-ncus`: ACR, two public Container
+  Apps, PostgreSQL Flexible Server, Foundry account/project and model
+  deployments, Application Insights, Log Analytics, Key Vault, and
+  user-assigned identities.
+- Deployed the native backend and frontend images to the two Container Apps:
+  - Backend: `https://maf-backend-omsizo.thankfulgrass-be8b87ae.northcentralus.azurecontainerapps.io`
+  - Frontend: `https://maf-frontend-omsizo.thankfulgrass-be8b87ae.northcentralus.azurecontainerapps.io`
+- Corrected Container App bootstrap behavior by removing the temporary Python
+  HTTP-server command from IaC. Bicep now leaves `command: []`, allowing
+  Dockerfile defaults to start Uvicorn and Nginx.
+- Added `aiohttp==3.11.18` to the backend image so async
+  `DefaultAzureCredential` can authenticate from the MAF Foundry client.
+- Corrected the PostgreSQL Entra bootstrap to create the managed-identity role
+  in the `postgres` database with
+  `pg_catalog.pgaadauth_create_principal_with_oid`, then grant application
+  schema privileges in `maf_workflow`.
+- Increased the application `gpt-4.1-mini` Global Standard allocation from 1
+  to 50 capacity units. The initial allocation allowed only one request per
+  minute and could not support the multi-agent workflow.
+- Ran successful deployed smoke coverage for low-risk completion and
+  high-risk HITL creation/resume.
+- Ran deployed Playwright coverage successfully: 7/7 scenarios passed with
+  `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000` and
+  `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`, required for live model inference.
+
+### Pending
+
+1. Rerun `make eval-foundry` against the public backend using
+   `FOUNDRY_EVAL_API_URL`, after the JSONL evaluator compatibility update. The
+   prior report failed because the service no longer accepts a `custom`
+   run-data-source discriminator; the runner now uses `jsonl` and
+   `deployment_name`.
+2. Run Application Insights telemetry validation after the smoke/E2E traffic:
+   verify request, Foundry dependency, PostgreSQL dependency, workflow/HITL
+   correlation, exceptions, and content redaction.
+3. Update the release status and final evidence only after evaluation and
+   telemetry complete.
+
+### Retained partial resources
+
+Do not delete either prior regional attempt without explicit approval:
+
+- `rg-maf-order-resolution-agent-foundry-azure` (Central US; Container Apps
+  capacity failure).
+- `rg-maf-order-resolution-agent-foundry-azure-eus2` (East US 2; PostgreSQL
+  offer restriction).
+
+## Scope
+
+Modernize the committed `feature/foundry-private-network-vnet` baseline in the
+`foundry-azure` worktree. Replace the Foundry-hosted agent/Responses runtime
+with one public Azure package in one resource group:
+
+- one ACR holding two images;
+- one public FastAPI + MAF backend Container App;
+- one public React/Nginx frontend Container App;
+- one public-network Azure Database for PostgreSQL Flexible Server;
+- one Log Analytics workspace and workspace-based Application Insights;
+- one new Foundry account/project used only for application models and
+  evaluation artifacts.
+
+The Foundry module is part of `infra/azure-apphosted/iac` and must not create a
+hosted agent, Responses endpoint, agent-specific ACR, or capability host.
+
+## Architecture decisions
+
+| Area | Decision |
+|---|---|
+| Source branch | Create `foundry-azure` from `feature/foundry-private-network-vnet` (`0ee9e8c`) in a separate worktree. |
+| Resource groups | One new resource group contains ACA, ACR, PostgreSQL, App Insights, Log Analytics, and Foundry models/evaluations. |
+| Containers | Build and deploy separate `backend` and `frontend` images to the same ACR and separate public Container Apps. |
+| Browser path | Frontend Nginx retains same-origin `/api` and SSE proxying to the public backend FQDN. |
+| MAF runtime | Retain one FastAPI-hosted MAF workflow. A deterministic triage summary is allowed only when model configuration is absent. |
+| Durable state | PostgreSQL persists runs, events, sessions, messages, checkpoints, approvals, and idempotency. Remove placeholder Foundry memory/RAG and pgvector document storage. |
+| Database auth | Local Docker uses `DATABASE_URL`; ACA uses a managed-identity Entra token with TLS and a token-refresh-safe Psycopg connection strategy. Password auth remains disabled for the Azure server. |
+| Public posture | ACA, ACR, PostgreSQL endpoint, and Foundry use public networking for this POC. PostgreSQL still requires Entra auth and controlled firewall rules. |
+| Foundry | Provision new chat, embeddings, and dedicated evaluator deployments. Retain Foundry only for model calls and JSONL evaluation of FastAPI-produced responses. |
+| Deployment | One AZD/Bicep package provisions all resources, then deploys both images after PostgreSQL grants and Foundry RBAC exist. |
+
+The PostgreSQL grant bootstrap runs from the authenticated AZD machine. Its
+public IPv4 address is supplied as `POSTGRES_BOOTSTRAP_ALLOWED_IP` and creates
+only a single-address firewall rule; the Azure-services rule alone is not
+sufficient for a developer workstation.
+
+## Implementation phases
+
+1. Create the branch worktree and remove the Foundry-hosted agent/Responses
+   path, hosted-only tests, dependencies, scripts, Make targets, environment
+   variables, and documentation.
+2. Simplify the backend to PostgreSQL durable state and local/MCP policy
+   retrieval; implement local and managed-identity Azure PostgreSQL modes.
+3. Make Docker Compose and the current FastAPI/frontend flow the parity source;
+   add smoke and backend-restart persistence tests for low-risk, high-risk,
+   damaged-item, approval, rejection, idempotency, SSE, and history behavior.
+4. Rebuild `infra/azure-apphosted/` as one public package with modular Bicep for
+   ACA, ACR, PostgreSQL, identity/RBAC, monitoring, and Foundry
+   models/evaluations. Add an AZD post-provision PostgreSQL grant hook.
+5. Capture FastAPI responses as app-neutral JSONL and replace hosted-agent
+   evaluations with Foundry dataset evaluation using the dedicated judge model.
+6. Run local parity gates, IaC review, Azure validation, deployment, public
+   smoke/E2E/restart-persistence validation, Foundry evaluation, and telemetry
+   verification. Update documentation only after evidence passes.
+
+## Required validation
+
+- `make test`
+- `make eval-backend`
+- local smoke and persistence-restart smoke
+- `make test-e2e`
+- `make docker-test`
+- `./scripts/skills/design-review-skill.sh`
+- `iac-review`, `azure-validation`, `azure-deployment`, and
+  `azure-telemetry-validation` in that order for the Azure package
+
+## Acceptance criteria
+
+- No Foundry-hosted agent/Responses path remains; model/evaluation references
+  remain only where required.
+- Two independently deployable ACR images run in two public Container Apps.
+- One resource group and one AZD lifecycle provision all POC resources.
+- PostgreSQL state survives backend restart and HITL resolution remains
+  idempotent.
+- Local and Azure flows have matching low-risk, HITL, event, persistence, and
+  browser E2E behavior.
+- Application Insights correlates FastAPI, MAF, Foundry model, PostgreSQL, and
+  HITL resume telemetry without recording sensitive content by default.
+
+## Preparation evidence
+
+- `make test`: 59 tests passed in the isolated worktree.
+- `make eval-backend`: 10 of 10 deterministic contract cases passed.
+- `make test-e2e`: 7 Playwright scenarios passed.
+- `make docker-test`: Docker Compose browser profile passed using isolated host
+  ports.
+- `./scripts/skills/design-review-skill.sh`: passed.
+- `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`:
+  passed.
+
+Azure target confirmation (2026-07-20):
+
+- subscription: `ME-MngEnvMCAP328033-ppenumatsa-1`
+  (`4f18d577-3506-4a11-85e5-a83b14727a84`);
+- region: `northcentralus`;
+- PostgreSQL Entra administrator: tenant-resolved UPN
+  `ppenumatsa_microsoft.com#EXT#@MngEnvMCAP328033.onmicrosoft.com`
+  (`ppenumatsa@microsoft.com` guest identity).
+
+Central US provisioning was attempted with the same approved subscription and
+identity. Azure returned `AKSCapacityHeavyUsage` while creating the Container
+Apps environment. East US 2 was then rejected for PostgreSQL offer
+restrictions. The approved final target is North Central US; the partial
+Central US and East US 2 resource groups are retained unchanged pending
+explicit deletion approval.
+
+### Validation Steps
+
+- [x] AZD installation and authentication
+- [x] AZD environment configuration
+- [x] Subscription, provider, quota, and Central US model availability checks
+- [x] `azd provision --preview --no-prompt`
+- [x] Bicep and package validation
+- [x] Static managed-identity and RBAC review
+
+### Validation Proof
+
+- `azd auth login --check-status` authenticated as
+  `ppenumatsa@microsoft.com`; active subscription
+  `ME-MngEnvMCAP328033-ppenumatsa-1`
+  (`4f18d577-3506-4a11-85e5-a83b14727a84`) is enabled.
+- Azure providers for Container Apps, PostgreSQL, Cognitive Services, and Log
+  Analytics are registered. `Microsoft.Quota` was registered to inspect East US
+  2 capacity; it reports a limit of 50 managed environments.
+- Microsoft regional availability documentation confirms East US 2 support for
+  Global Standard `gpt-4.1-mini` version `2025-04-14` and
+  `text-embedding-3-small` version `1`.
+- `azd provision --preview --no-prompt` succeeded for the one-resource-group,
+  two-Container-App package in North Central US after the PostgreSQL Entra
+  administrator resource was corrected to use the administrator object ID and
+  the Key Vault name was made suffix-preserving.
+- `az bicep build --file infra/azure-apphosted/iac/main.bicep --stdout`,
+  `azd package --no-prompt`, Docker prerequisites, and `git diff --check`
+  succeeded.
+- Static RBAC review confirms user-assigned identities receive ACR Pull,
+  Cognitive Services OpenAI User, and Foundry User assignments at their
+  least-privilege resource scopes. The signed-in administrator has
+  subscription Owner access.
+
+---
+
 > **Status:** Deployed and Telemetry Verified (shim removal, MAF middleware, rich events, and frontend API proxy update)
 
 Generated: 2026-06-10

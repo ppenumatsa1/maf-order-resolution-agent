@@ -55,7 +55,8 @@ For each run, verify these signals from timeline/API:
 
 ## ORD-1001 to ORD-1010 Cross-Use-Case Matrix
 
-Use this matrix as a repeatable parity suite after shim removal, while validating Azure app-hosted runtime, and later moving to Foundry-hosted runtime.
+Use this matrix as a repeatable parity suite for the local and Azure app-hosted
+runtime.
 
 For a quick executable check, run the script-backed matrix against any backend URL:
 
@@ -66,7 +67,7 @@ MANUAL_MATRIX_ARGS="--request-timeout 120 --timeout 90 --case-delay 15" API_URL=
 scripts/manual/run-manual-matrix.sh http://localhost:8000 --case ORD-1009
 ```
 
-The runner uses [frontend/src/data/manualCases.json](../frontend/src/data/manualCases.json) and prints a PASS/FAIL table with observed status, HITL detection, thread id, and failure reasons. Use `MANUAL_MATRIX_ARGS` with `--case-delay` for low-capacity hosted Foundry deployments to avoid model throttling while preserving the same workflow behavior.
+The runner uses [frontend/src/data/manualCases.json](../frontend/src/data/manualCases.json) and prints a PASS/FAIL table with observed status, HITL detection, thread id, and failure reasons. Use `MANUAL_MATRIX_ARGS` with `--case-delay` for low-capacity Azure model deployments to avoid model throttling while preserving the same workflow behavior.
 
 The Workflow Studio also includes a collapsed **Test Tools** panel with a **Manual Test Matrix** that uses the same fixture expectations:
 
@@ -97,7 +98,7 @@ Current deterministic local-runtime caveat:
 | ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.`         | Session history continuity  | None                | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages.                    |
 | ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.`                | Pause/resume checkpoint     | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`.                                         |
 | ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.`                          | High-amount HITL            | Approve             | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`.                            |
-| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case   | None                | No HITL; final status `completed`; use this as a smoke test after canonical layout/Azure/Foundry moves.                                   |
+| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case   | None                | No HITL; final status `completed`; use this as a smoke test after the Azure app-hosted deployment.                                        |
 
 For each row, capture:
 
@@ -109,7 +110,7 @@ For each row, capture:
 
 ## Azure App-Hosted Parity Smoke
 
-After Azure deployment, run the hosted smoke script with the deployed backend and frontend URLs:
+After Azure deployment, run the app-hosted smoke script with the deployed backend and frontend URLs:
 
 ```bash
 infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
@@ -124,9 +125,10 @@ This validates:
 4. high-risk `ORD-1009` emits `hitl.request`
 5. optional Foundry triage metadata when `EXPECT_TRIAGE_MODE=foundry_models` is set
 
-Then use the ORD-1001 to ORD-1010 matrix above for manual parity before moving to Foundry-hosted runtime.
+Then use the ORD-1001 to ORD-1010 matrix above for manual parity between the
+local and Azure app-hosted environments.
 
-## Three-target parity gate (local + Azure + Foundry)
+## Two-target parity gate (local + Azure)
 
 Use the parity runner when you need one comparable pass/fail view across all endpoints.
 
@@ -137,8 +139,6 @@ PARITY_LOCAL_API_URL=http://localhost:8000
 PARITY_LOCAL_WEB_URL=http://localhost:5173
 PARITY_AZURE_API_URL=https://<azure-backend-host>
 PARITY_AZURE_WEB_URL=https://<azure-web-host>
-PARITY_FOUNDRY_API_URL=https://<foundry-backend-host>
-PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
 ```
 
 Commands:
@@ -147,7 +147,7 @@ Commands:
 make parity-all
 ```
 
-- `parity-all` is the single parity gate for this POC and enforces all three targets.
+- `parity-all` is the single parity gate for this POC and enforces both targets.
 - The default fast profile runs:
   - manual cases `ORD-1001` and `ORD-1009`
   - all event contract checks
@@ -157,18 +157,20 @@ make parity-all
 To run exhaustive parity only when needed:
 
 ```bash
-python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full
+python3 scripts/parity/run_parity_matrix.py --targets local azure --profile full
 ```
 
-Parity runner behavior for hosted targets:
+Parity runner behavior for the Azure target:
 
-- For `azure` and `foundry` targets, the runner applies hosted-safe Playwright defaults automatically:
+- For the `azure` target, the runner applies cloud-safe Playwright defaults automatically:
   - `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000`
   - `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`
   - `PLAYWRIGHT_CASE_DELAY_MS=15000`
 - Local target timings remain unchanged.
 
-For standalone hosted Playwright runs (outside parity runner) against low-capacity Foundry model deployments, keep local defaults fast but add quota-aware environment overrides:
+For standalone Azure Playwright runs (outside parity runner) against
+low-capacity model deployments, keep local defaults fast but add quota-aware
+environment overrides:
 
 ```bash
 PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000 \

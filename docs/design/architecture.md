@@ -20,7 +20,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 - operationally transparent (SSE timeline, workflow history),
 - business-safe (deterministic HITL triggers and approvals),
 - durable (Postgres-backed persistence for runs/events/messages/checkpoints),
-- extensible (single MAF workflow path, Azure app-hosted deployed, Foundry-hosted Responses-native entrypoint).
+- extensible (one FastAPI-hosted MAF workflow locally and on Azure Container Apps, with Foundry used only for model calls and evaluations).
 
 ## High-Level Runtime Architecture
 
@@ -96,16 +96,15 @@ ASCII fallback (if Mermaid rendering is unavailable):
 Live updates: FastAPI Backend -> SSE event stream by thread -> UI timeline
 ```
 
-## Runtime mapping (Local API + Foundry hosted entrypoint)
+## Runtime mapping (Local and Azure app-hosted)
 
 There is one business workflow implementation (`OrderResolutionWorkflow`) and one
-service entrypoint (`OrderResolutionService`). FastAPI and Foundry-hosted paths both
-invoke this same service/workflow behavior.
+service entrypoint (`OrderResolutionService`). The FastAPI application hosts this
+same service/workflow locally and in Azure Container Apps.
 
 ```mermaid
 flowchart TD
     A[FastAPI /api/chat/run] --> SVC[OrderResolutionService]
-    B[Foundry Responses host\nbackend/foundry/main.py] --> SVC
     SVC --> RUN[OrderResolutionMafRunner]
     RUN --> WF[OrderResolutionWorkflow]
     WF --> EX[Triage + Policy + Resolution + HITL executors]
@@ -119,7 +118,7 @@ flowchart TD
 ### Shared vs distinct
 
 - **Shared:** business tools, HITL semantics, stable event contracts, persistence projections.
-- **Distinct wrappers:** FastAPI route layer vs Foundry Responses protocol wrapper in `backend/foundry/main.py`.
+- **Runtime wrapper:** FastAPI route layer is the sole executable application host.
 
 ## Core Business Flow
 
@@ -177,7 +176,7 @@ The same business flow runs across:
 
 1. local MAF runtime (implemented),
 2. Azure app-hosted runtime (deployed),
-3. Foundry-hosted Responses-native runtime (deployed).
+3. Azure Container Apps runtime with Foundry model/evaluation integration.
 
 Architecture keeps API and event contracts stable to simplify this progression while maintaining business traceability.
 

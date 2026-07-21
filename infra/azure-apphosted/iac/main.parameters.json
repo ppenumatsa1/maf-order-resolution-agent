@@ -11,8 +11,8 @@
     "namePrefix": {
       "value": "${AZURE_ENV_NAME}"
     },
-    "postgresAdministratorPassword": {
-      "value": "${POSTGRES_ADMIN_PASSWORD}"
+    "postgresBootstrapAllowedIp": {
+      "value": "${POSTGRES_BOOTSTRAP_ALLOWED_IP}"
     },
     "mcpServerUrl": {
       "value": "${MCP_SERVER_URL}"
@@ -36,13 +36,13 @@
       "value": "gpt-4.1-mini"
     },
     "foundryChatModelVersion": {
-      "value": "2024-07-18"
+      "value": "2025-04-14"
     },
     "foundryChatDeploymentSkuName": {
       "value": "GlobalStandard"
     },
     "foundryChatDeploymentCapacity": {
-      "value": 1
+      "value": 50
     },
     "foundryEmbeddingsDeploymentName": {
       "value": "text-embedding-3-small"
@@ -61,6 +61,9 @@
     },
     "foundryEmbeddingsDeploymentCapacity": {
       "value": 1
+    },
+    "foundryEvaluatorDeploymentCapacity": {
+      "value": 50
     },
     "foundryRaiPolicyName": {
       "value": "Microsoft.Default"

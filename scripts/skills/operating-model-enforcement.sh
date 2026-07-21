@@ -29,8 +29,8 @@ if grep -Eq '^(backend/app/maf/executors/hitl\.py|backend/app/modules/order_reso
   fi
 fi
 
-if grep -Eq '^(\.github/workflows/foundry-.*\.yml|infra/foundry-hosted/|backend/foundry/main\.py|backend/agent\.yaml|scripts/foundry/|scripts/github/foundry_hosted_e2e\.sh)' <<<"$changed_files"; then
-  require_changed "docs/design/issues-changes-fixes.md" "Hosted runtime/deploy surfaces changed"
+if grep -Eq '^(infra/azure-apphosted/|azure\.yaml|scripts/azure/)' <<<"$changed_files"; then
+  require_changed "docs/design/issues-changes-fixes.md" "App-hosted deployment surfaces changed"
 fi
 
 echo "[PASS] operating-model enforcement checks"

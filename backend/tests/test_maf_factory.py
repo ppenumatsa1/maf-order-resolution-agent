@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.core.config import AppConfig
 from app.infrastructure.events import EventBus
-from app.infrastructure.rag import NoopRAGProvider
 from app.maf.factory import create_workflow
 from app.maf.runner import OrderResolutionMafRunner
 from app.maf.workflows.order_resolution import OrderResolutionWorkflow
@@ -47,14 +46,12 @@ def test_create_workflow_uses_order_resolution_runner() -> None:
         config=AppConfig(
             workflow_mode="maf_sdk",
             store_provider="postgres",
-            rag_provider="pgvector",
             memory_provider="postgres",
         ),
         event_bus=EventBus(),
         memory_store=_MemoryStore(),
         checkpoint_store=_CheckpointStore(),
         mcp_tool=_McpTool(),
-        rag_provider=NoopRAGProvider(),
     )
     assert isinstance(workflow, OrderResolutionMafRunner)
     assert isinstance(workflow._workflow, OrderResolutionWorkflow)

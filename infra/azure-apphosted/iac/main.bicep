@@ -9,12 +9,8 @@ param location string
 @description('Prefix used for Azure resource names.')
 param namePrefix string = 'mafapp'
 
-@description('Azure Database for PostgreSQL administrator login. Use a non-reserved value.')
-param postgresAdministratorLogin string = 'pgadminuser'
-
-@secure()
-@description('Azure Database for PostgreSQL administrator password. Set with: azd env set POSTGRES_ADMIN_PASSWORD <value>')
-param postgresAdministratorPassword string
+@description('Public IPv4 address of the AZD runner that performs the PostgreSQL Entra grant bootstrap.')
+param postgresBootstrapAllowedIp string
 
 @description('Application database name.')
 param postgresDatabaseName string = 'maf_workflow'
@@ -43,13 +39,13 @@ param foundryChatModelFormat string = 'OpenAI'
 param foundryChatModelName string = 'gpt-4.1-mini'
 
 @description('Azure AI Foundry chat model version. Override when the target region requires a different version.')
-param foundryChatModelVersion string = '2024-07-18'
+param foundryChatModelVersion string = '2025-04-14'
 
 @description('Azure AI Foundry chat deployment SKU name. Keep low-cost defaults and override per-region/quota as needed.')
 param foundryChatDeploymentSkuName string = 'GlobalStandard'
 
 @description('Azure AI Foundry chat deployment capacity.')
-param foundryChatDeploymentCapacity int = 1
+param foundryChatDeploymentCapacity int = 50
 
 @description('Azure AI Foundry embeddings deployment name exposed to the backend.')
 param foundryEmbeddingsDeploymentName string = 'text-embedding-3-small'
@@ -69,6 +65,9 @@ param foundryEmbeddingsDeploymentSkuName string = 'GlobalStandard'
 @description('Azure AI Foundry embeddings deployment capacity.')
 param foundryEmbeddingsDeploymentCapacity int = 1
 
+@description('Azure AI Foundry evaluator deployment capacity.')
+param foundryEvaluatorDeploymentCapacity int = 50
+
 @description('Responsible AI policy name applied to model deployments.')
 param foundryRaiPolicyName string = 'Microsoft.Default'
 
@@ -78,6 +77,7 @@ var resourceGroupName = 'rg-${environmentName}'
 var commonTags = {
   'azd-env-name': environmentName
   app: 'maf-order-resolution-agent'
+  'deployment-revision': '2'
   workload: 'order-resolution'
 }
 
@@ -111,7 +111,7 @@ module keyVault './modules/key-vault.bicep' = {
   name: 'keyVault'
   scope: rg
   params: {
-    name: take('kv${normalizedPrefix}${resourceSuffix}', 24)
+    name: take('kv${resourceSuffix}${normalizedPrefix}', 24)
     location: location
     tags: commonTags
   }
@@ -139,6 +139,7 @@ module foundry './modules/foundry.bicep' = {
     embeddingsModelVersion: foundryEmbeddingsModelVersion
     embeddingsDeploymentSkuName: foundryEmbeddingsDeploymentSkuName
     embeddingsDeploymentCapacity: foundryEmbeddingsDeploymentCapacity
+    evaluatorDeploymentCapacity: foundryEvaluatorDeploymentCapacity
     raiPolicyName: foundryRaiPolicyName
   }
 }
@@ -150,13 +151,30 @@ module postgres './modules/postgres-flexible-server.bicep' = {
     name: take('${namePrefix}-pg-${resourceSuffix}', 63)
     location: location
     tags: commonTags
-    administratorLogin: postgresAdministratorLogin
-    administratorPassword: postgresAdministratorPassword
     databaseName: postgresDatabaseName
+    bootstrapAllowedIp: postgresBootstrapAllowedIp
   }
 }
 
-var databaseUrl = 'postgresql://${postgresAdministratorLogin}:${postgresAdministratorPassword}@${postgres.outputs.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
+module backendIdentity './modules/user-assigned-identity.bicep' = {
+  name: 'backendIdentity'
+  scope: rg
+  params: {
+    name: '${namePrefix}-backend-id-${resourceSuffix}'
+    location: location
+    tags: commonTags
+  }
+}
+
+module frontendIdentity './modules/user-assigned-identity.bicep' = {
+  name: 'frontendIdentity'
+  scope: rg
+  params: {
+    name: '${namePrefix}-frontend-id-${resourceSuffix}'
+    location: location
+    tags: commonTags
+  }
+}
 
 module containerAppsEnvironment './modules/container-app-environment.bicep' = {
   name: 'containerAppsEnvironment'
@@ -170,14 +188,8 @@ module containerAppsEnvironment './modules/container-app-environment.bicep' = {
   }
 }
 
-var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var placeholderImage = 'python:3.12-alpine'
 var backendSecrets = concat(
-  [
-    {
-      name: 'database-url'
-      value: databaseUrl
-    }
-  ],
   empty(mcpApiKey) ? [] : [
     {
       name: 'mcp-api-key'
@@ -206,16 +218,28 @@ var backendEnv = concat(
       value: 'postgres'
     }
     {
-      name: 'RAG_PROVIDER'
-      value: 'pgvector'
-    }
-    {
       name: 'MEMORY_PROVIDER'
       value: 'postgres'
     }
     {
-      name: 'DATABASE_URL'
-      secretRef: 'database-url'
+      name: 'AZURE_POSTGRES_HOST'
+      value: postgres.outputs.fullyQualifiedDomainName
+    }
+    {
+      name: 'AZURE_POSTGRES_DATABASE'
+      value: postgresDatabaseName
+    }
+    {
+      name: 'AZURE_POSTGRES_USER'
+      value: backendIdentity.outputs.name
+    }
+    {
+      name: 'AZURE_POSTGRES_SSLMODE'
+      value: 'require'
+    }
+    {
+      name: 'AZURE_CLIENT_ID'
+      value: backendIdentity.outputs.clientId
     }
     {
       name: 'OTEL_SERVICE_NAME'
@@ -261,8 +285,13 @@ var backendEnv = concat(
 module backend './modules/container-app.bicep' = {
   name: 'backendContainerApp'
   scope: rg
+  dependsOn: [
+    backendAcrPull
+    backendFoundryOpenAiUser
+    backendFoundryProjectUser
+  ]
   params: {
-    name: '${namePrefix}-backend-${resourceSuffix}'
+    name: 'maf-backend-${resourceSuffix}'
     location: location
     tags: commonTags
     serviceName: 'backend'
@@ -277,9 +306,11 @@ module backend './modules/container-app.bicep' = {
     registries: [
       {
         server: containerRegistry.outputs.loginServer
-        identity: 'system'
+        identity: backendIdentity.outputs.id
       }
     ]
+    userAssignedIdentityId: backendIdentity.outputs.id
+    command: []
     secrets: {
       items: backendSecrets
     }
@@ -300,8 +331,11 @@ var frontendEnv = [
 module frontend './modules/container-app.bicep' = {
   name: 'frontendContainerApp'
   scope: rg
+  dependsOn: [
+    frontendAcrPull
+  ]
   params: {
-    name: '${namePrefix}-frontend-${resourceSuffix}'
+    name: 'maf-frontend-${resourceSuffix}'
     location: location
     tags: commonTags
     serviceName: 'frontend'
@@ -316,9 +350,11 @@ module frontend './modules/container-app.bicep' = {
     registries: [
       {
         server: containerRegistry.outputs.loginServer
-        identity: 'system'
+        identity: frontendIdentity.outputs.id
       }
     ]
+    userAssignedIdentityId: frontendIdentity.outputs.id
+    command: []
     secrets: {
       items: []
     }
@@ -330,7 +366,7 @@ module backendAcrPull './modules/acr-pull-role.bicep' = {
   scope: rg
   params: {
     acrName: containerRegistry.outputs.name
-    principalId: backend.outputs.systemAssignedMIPrincipalId
+    principalId: backendIdentity.outputs.principalId
   }
 }
 
@@ -339,7 +375,7 @@ module frontendAcrPull './modules/acr-pull-role.bicep' = {
   scope: rg
   params: {
     acrName: containerRegistry.outputs.name
-    principalId: frontend.outputs.systemAssignedMIPrincipalId
+    principalId: frontendIdentity.outputs.principalId
   }
 }
 
@@ -349,7 +385,7 @@ module backendFoundryOpenAiUser './modules/foundry-openai-user-role.bicep' = {
   scope: rg
   params: {
     foundryAccountName: foundry.outputs.accountName
-    principalId: backend.outputs.systemAssignedMIPrincipalId
+    principalId: backendIdentity.outputs.principalId
   }
 }
 
@@ -359,7 +395,7 @@ module backendFoundryProjectUser './modules/foundry-project-user-role.bicep' = {
   params: {
     foundryAccountName: foundry.outputs.accountName
     foundryProjectName: foundry.outputs.projectName
-    principalId: backend.outputs.systemAssignedMIPrincipalId
+    principalId: backendIdentity.outputs.principalId
   }
 }
 
@@ -372,6 +408,11 @@ output FOUNDRY_PROJECT_NAME string = foundry.outputs.projectName
 output FOUNDRY_PROJECTS_ENDPOINT string = foundry.outputs.projectEndpoint
 output FOUNDRY_MODEL_DEPLOYMENT_NAME string = foundry.outputs.chatDeploymentName
 output FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME string = foundry.outputs.embeddingsDeploymentName
+output FOUNDRY_EVAL_MODEL string = foundry.outputs.evaluatorDeploymentName
+output AZURE_POSTGRES_HOST string = postgres.outputs.fullyQualifiedDomainName
+output AZURE_POSTGRES_DATABASE string = postgresDatabaseName
+output AZURE_POSTGRES_USER string = backendIdentity.outputs.name
+output AZURE_CLIENT_ID string = backendIdentity.outputs.clientId
 output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = monitoring.outputs.logAnalyticsWorkspaceId
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = monitoring.outputs.applicationInsightsConnectionString
 output API_URL string = backend.outputs.url

@@ -1,8 +1,10 @@
 # Infrastructure Scaffolding
 
-This directory contains deployment scaffolding for Azure hosting paths.
+This directory contains the one Azure app-hosted deployment package.
 
-- `azure-apphosted/`: Azure app-hosted runtime path using the current deterministic/MAF SDK backend mode.
-- `foundry-hosted/`: Active Foundry-hosted runtime path (`WORKFLOW_MODE=foundry_hosted`).
+- `azure-apphosted/`: two public Container Apps, one ACR, Entra-only Azure
+  PostgreSQL, Application Insights, Log Analytics, and a Foundry
+  models/evaluations module in one resource group.
 
-Both paths remain additive to local Docker/Make workflows.
+The FastAPI/MAF backend is the only application host; Foundry is not a hosted
+agent runtime.

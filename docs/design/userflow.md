@@ -4,9 +4,8 @@
 
 The product journey is:
 
-1. Local MAF runtime (current default)
-2. Azure app-hosted runtime
-3. Foundry-hosted runtime
+1. Local FastAPI + MAF runtime
+2. Azure Container Apps FastAPI + MAF runtime
 
 Current status:
 
@@ -14,12 +13,6 @@ Current status:
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
 | Azure app-hosted | Implemented | Same shared workflow behavior on ACA + Postgres. |
-| Foundry-hosted   | Implemented | Responses-native hosted entrypoint runs the same shared MAF workflow. |
-
-Operational status note (2026-07-15):
-
-- Public Foundry lane currently shows expected Conversations/Traces for `order-resolution-hosted`.
-- Private Foundry lane is under active investigation for intermittent upstream `HTTP 500 server_error` in smoke/probe despite successful deployment activation.
 
 ## Current Runtime User Flow (Implemented Path)
 
@@ -27,7 +20,7 @@ Operational status note (2026-07-15):
 2. UI starts SSE stream for the active thread.
 3. Backend executes sequential stages:
    - Triage agent extracts order and issue type.
-   - Policy retrieval stage performs local pgvector-compatible RAG lookup and records evidence IDs.
+   - Policy retrieval stage performs the configured MCP/local lookup and records evidence IDs.
    - Policy agent calls tools and MCP lookup.
    - Resolution agent decides action and HITL requirement.
 4. If HITL required:
@@ -36,8 +29,6 @@ Operational status note (2026-07-15):
 5. Reviewer approves/rejects via UI.
 6. Backend resumes from checkpoint and emits `workflow.output`.
 7. UI appends final output and keeps thread available for follow-up turns.
-
-For Foundry-hosted conversations, the same behavior is preserved through Responses turns in the same `conversation_id`, including explanation follow-ups such as “Why was that resolution selected?”.
 
 If the same approval/rejection request is accidentally submitted more than once for a checkpoint, backend handling is idempotent and does not emit duplicate terminal events.
 
@@ -140,7 +131,7 @@ Primary file touchpoints in this path:
 
 ## Policy Evidence IDs
 
-- The existing `tool.call` event now includes `policy_evidence_ids` (chunk IDs from retrieval) and `policy_retrieval` metadata (`provider`, `query_id`, `count`).
+- The existing `tool.call` event includes `policy_evidence_ids` and `policy_retrieval` metadata (`provider`, `query_id`, `count`).
 - Event type contracts are unchanged.
 - The stable SSE stream remains the primary contract. A parallel rich stream at `/api/chat/stream/{thread_id}/rich` projects native workflow events into AG-UI-compatible lifecycle, step, tool, text/output, HITL/custom, and raw events, and the current UI consumes it for live timeline updates.
 

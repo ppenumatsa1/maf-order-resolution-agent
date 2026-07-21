@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 REPORT_FILE="backend/.foundry/results/report.json"
-REPORT_BACKUP=".git/.design-review-report.backup.json"
+REPORT_BACKUP="$(git rev-parse --git-path .design-review-report.backup.json)"
 restore_report=0
 
 cleanup() {

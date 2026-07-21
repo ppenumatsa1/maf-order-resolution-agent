@@ -13,6 +13,8 @@ param minReplicas int = 1
 param maxReplicas int = 2
 param env array = []
 param registries array = []
+param userAssignedIdentityId string
+param command array = []
 
 @secure()
 param secrets object
@@ -24,7 +26,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     'azd-service-name': serviceName
   })
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentityId}': {}
+    }
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
@@ -44,6 +49,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: serviceName
           image: image
+          command: command
           env: env
           resources: {
             cpu: json(cpu)
@@ -62,4 +68,3 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
 output id string = containerApp.id
 output name string = containerApp.name
 output url string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
-output systemAssignedMIPrincipalId string = containerApp.identity.principalId

@@ -132,63 +132,6 @@ CREATE TABLE IF NOT EXISTS memory_items (
 CREATE INDEX IF NOT EXISTS idx_memory_items_thread_created_at
     ON memory_items (thread_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS documents (
-    id UUID PRIMARY KEY,
-    source TEXT,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_documents_created_at
-    ON documents (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_documents_source
-    ON documents (source);
-
-CREATE TABLE IF NOT EXISTS document_chunks (
-    id UUID PRIMARY KEY,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    chunk_index INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    embedding JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (document_id, chunk_index)
-);
-
-CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id
-    ON document_chunks (document_id, chunk_index);
-
-CREATE INDEX IF NOT EXISTS idx_document_chunks_issue_type
-    ON document_chunks ((metadata->>'issue_type'));
-
-CREATE TABLE IF NOT EXISTS rag_queries (
-    id UUID PRIMARY KEY,
-    thread_id TEXT REFERENCES workflow_runs(thread_id) ON DELETE SET NULL,
-    query TEXT NOT NULL,
-    filters JSONB NOT NULL DEFAULT '{}'::jsonb,
-    top_k INTEGER NOT NULL DEFAULT 5,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_rag_queries_thread_created_at
-    ON rag_queries (thread_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS rag_retrieval_results (
-    id UUID PRIMARY KEY,
-    rag_query_id UUID NOT NULL REFERENCES rag_queries(id) ON DELETE CASCADE,
-    chunk_id UUID REFERENCES document_chunks(id) ON DELETE SET NULL,
-    score DOUBLE PRECISION,
-    rank INTEGER,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_rag_retrieval_results_query_rank
-    ON rag_retrieval_results (rag_query_id, rank);
-
 CREATE TABLE IF NOT EXISTS eval_runs (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,

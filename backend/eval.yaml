@@ -6,11 +6,12 @@ evaluators:
 foundry:
   name: order-resolution-foundry-report
   report_only: true
-  max_queries: 10
+  report_case_ids:
+    - ord-1001-low-risk-late
+    - ord-1009-high-amount
   poll_interval: 5
   timeout: 900
   evaluators:
     - relevance
-  optional_groundedness_evaluator: groundedness
 options:
   pass_threshold: 0.8

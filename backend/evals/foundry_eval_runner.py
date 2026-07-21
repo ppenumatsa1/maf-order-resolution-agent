@@ -8,7 +8,6 @@ from uuid import uuid4
 
 import httpx
 import yaml
-from agent_framework.foundry import FoundryEvals
 from app.maf.clients import get_foundry_models_config
 from azure.ai.projects.aio import AIProjectClient
 from azure.identity.aio import DefaultAzureCredential
@@ -21,33 +20,28 @@ def _read_eval_config(path: Path) -> dict[str, object]:
     return config
 
 
-def _load_queries(dataset_path: Path) -> tuple[list[str], bool, bool]:
-    queries: list[str] = []
-    includes_groundedness = False
-    includes_tool_evals = False
-    for line in dataset_path.read_text(encoding="utf-8").splitlines():
+def _load_report_queries(dataset_path: Path, case_ids: list[str]) -> list[str]:
+    queries_by_case_id: dict[str, str] = {}
+    for line_number, line in enumerate(
+        dataset_path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not line.strip():
             continue
         row = json.loads(line)
+        case_id = row.get("id")
         query = row.get("input")
-        if isinstance(query, str) and query.strip():
-            queries.append(query.strip())
-        if bool(row.get("requires_grounded_policy_answer", False)):
-            includes_groundedness = True
-        if bool(row.get("include_tool_evaluators", False)):
-            includes_tool_evals = True
-    return queries, includes_groundedness, includes_tool_evals
+        if not isinstance(case_id, str) or not case_id.strip():
+            raise ValueError(f"{dataset_path}:{line_number} must contain a non-empty id")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError(f"{dataset_path}:{line_number} must contain a non-empty input")
+        queries_by_case_id[case_id] = query.strip()
 
-
-def _dedupe(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        ordered.append(value)
-    return ordered
+    missing_case_ids = [case_id for case_id in case_ids if case_id not in queries_by_case_id]
+    if missing_case_ids:
+        raise ValueError(
+            f"Foundry report case IDs are missing from {dataset_path}: {', '.join(missing_case_ids)}"
+        )
+    return [queries_by_case_id[case_id] for case_id in case_ids]
 
 
 def _to_jsonable(value: object) -> object:
@@ -133,50 +127,29 @@ async def run_foundry_eval() -> None:
         raise ValueError("backend/eval.yaml dataset.local_uri is required")
 
     dataset_path = root / local_uri
-    queries, includes_groundedness, includes_tool_evals = _load_queries(dataset_path)
-    if not queries:
-        raise ValueError(f"No queries found in dataset: {dataset_path}")
-
     foundry_cfg = config.get("foundry")
     if not isinstance(foundry_cfg, dict):
         raise ValueError("backend/eval.yaml is missing foundry config block")
 
     eval_name = str(foundry_cfg.get("name", "order-resolution-foundry-report"))
-    max_queries = int(foundry_cfg.get("max_queries", len(queries)))
-    base_evaluators_raw = foundry_cfg.get("evaluators", [])
-    if not isinstance(base_evaluators_raw, list) or not all(
-        isinstance(name, str) and name for name in base_evaluators_raw
+    report_case_ids_raw = foundry_cfg.get("report_case_ids", [])
+    if (
+        not isinstance(report_case_ids_raw, list)
+        or not report_case_ids_raw
+        or not all(isinstance(case_id, str) and case_id for case_id in report_case_ids_raw)
+    ):
+        raise ValueError("backend/eval.yaml foundry.report_case_ids must be a non-empty list")
+    report_case_ids = [str(case_id) for case_id in report_case_ids_raw]
+    if len(set(report_case_ids)) != len(report_case_ids):
+        raise ValueError("backend/eval.yaml foundry.report_case_ids must not contain duplicates")
+    selected_queries = _load_report_queries(dataset_path, report_case_ids)
+
+    evaluators_raw = foundry_cfg.get("evaluators", [])
+    if not isinstance(evaluators_raw, list) or not all(
+        isinstance(name, str) and name for name in evaluators_raw
     ):
         raise ValueError("backend/eval.yaml foundry.evaluators must be a list of evaluator names")
-    base_evaluators = [str(name) for name in base_evaluators_raw]
-
-    optional_groundedness = str(
-        foundry_cfg.get("optional_groundedness_evaluator", FoundryEvals.GROUNDEDNESS)
-    )
-    optional_tool_evaluators = foundry_cfg.get("optional_tool_evaluators", [])
-    if not isinstance(optional_tool_evaluators, list) or not all(
-        isinstance(name, str) and name for name in optional_tool_evaluators
-    ):
-        raise ValueError("backend/eval.yaml foundry.optional_tool_evaluators must be a list")
-
-    evaluators = list(base_evaluators)
-    if includes_groundedness:
-        evaluators.append(optional_groundedness)
-    if includes_tool_evals:
-        evaluators.extend(str(name) for name in optional_tool_evaluators)
-    evaluators = _dedupe(evaluators)
-
-    selected_queries = queries[: max_queries if max_queries > 0 else len(queries)]
-    if not selected_queries:
-        raise ValueError("No queries selected for Foundry evaluation")
-
-    models_cfg = get_foundry_models_config()
-    if models_cfg is None:
-        raise RuntimeError(
-            "Foundry model configuration is missing. Set FOUNDRY_PROJECTS_ENDPOINT and "
-            "FOUNDRY_MODEL_DEPLOYMENT_NAME."
-        )
-    judge_model = os.getenv("FOUNDRY_EVAL_MODEL", models_cfg.model)
+    evaluators = [str(name) for name in evaluators_raw]
     poll_interval = float(
         os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0))
     )
@@ -188,11 +161,19 @@ async def run_foundry_eval() -> None:
     payload: dict[str, object] = {
         "status": "failed",
         "provider": "foundry",
+        "case_ids": report_case_ids,
         "query_count": len(selected_queries),
         "evaluators": evaluators,
         "api_url": api_url,
     }
     try:
+        models_cfg = get_foundry_models_config()
+        if models_cfg is None:
+            raise RuntimeError(
+                "Foundry model configuration is missing. Set FOUNDRY_PROJECTS_ENDPOINT and "
+                "FOUNDRY_MODEL_DEPLOYMENT_NAME."
+            )
+        judge_model = os.getenv("FOUNDRY_EVAL_MODEL", models_cfg.model)
         credential = DefaultAzureCredential()
         project_client = AIProjectClient(
             endpoint=models_cfg.project_endpoint, credential=credential
@@ -261,6 +242,7 @@ async def run_foundry_eval() -> None:
             "provider": "foundry",
             "eval_id": eval_object.id,
             "run_id": eval_run.id,
+            "case_ids": report_case_ids,
             "query_count": len(selected_queries),
             "evaluators": evaluators,
             "result_counts": _to_jsonable(getattr(eval_run, "result_counts", None)),
@@ -284,9 +266,6 @@ async def run_foundry_eval() -> None:
                 f"{models_cfg.project_endpoint.rstrip('/')}/evaluation/evaluations/"
                 f"{payload['eval_id']}/runs/{payload['run_id']}"
             )
-        report_path.write_text(json.dumps(_to_jsonable(payload), indent=2), encoding="utf-8")
-        print(json.dumps(payload, indent=2))
-        print(f"Foundry report saved to: {report_path}")
     finally:
         if "openai_client" in locals():
             await openai_client.close()

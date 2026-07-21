@@ -44,8 +44,10 @@ Telemetry:
 Evaluation:
 
 - `make eval-backend` runs deterministic contract assertions against `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
-- `make eval-foundry` captures FastAPI workflow outputs then runs report-only
-  Foundry evaluators and writes `backend/.foundry/results/foundry-report.json`.
+- `make eval-foundry` captures the canonical low-risk (`ORD-1001`) and approved
+  high-risk (`ORD-1009`) FastAPI workflows, then runs the report-only relevance
+  evaluator and writes `backend/.foundry/results/foundry-report.json`. The full
+  ten-case dataset remains the deterministic `make eval-backend` contract gate.
 
 ## APIs
 

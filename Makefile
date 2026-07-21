@@ -11,7 +11,7 @@ help:
 	@echo "  bootstrap        - Install backend, frontend, and Playwright dependencies"
 	@echo "  test             - Run backend lint and tests"
 	@echo "  eval-backend     - Run deterministic workflow contract evaluation"
-	@echo "  eval-foundry     - Run report-only Foundry dataset evaluation"
+	@echo "  eval-foundry     - Run report-only Foundry low/high-risk evaluation"
 	@echo "  test-e2e         - Run local Playwright tests"
 	@echo "  docker-test      - Run Playwright against Docker Compose"
 	@echo "  parity-all       - Run fast local and Azure app-hosted parity checks"

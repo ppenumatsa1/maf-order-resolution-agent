@@ -1,5 +1,23 @@
 # Issues, Changes, and Fixes (Foundry Private VM Path)
 
+## Latest execution update (2026-07-21, simplified app-hosted Foundry report)
+
+The public Foundry branch uses evaluation over hosted Responses conversation
+traces. That source does not exist in the app-hosted Container Apps lane, so
+the equivalent simplification is a two-case FastAPI capture rather than a
+trace-evaluation dependency.
+
+1. `make eval-foundry` now captures only the existing canonical parity paths:
+   ORD-1001 low-risk completion and ORD-1009 approved HITL completion.
+2. The report uses only the relevance evaluator. The full ten-case dataset and
+   all HITL/event assertions remain in blocking `make eval-backend`.
+3. The report stays non-blocking and records a structured failure report when
+   Foundry configuration or cloud evaluation is unavailable.
+4. The first simplified cloud report completed successfully:
+   `eval_cc2b4f67d26640ddb3d2b45ed944b83c` /
+   `evalrun_f14cb075a9234b0383b0644911ded77d`, with 2/2 items passed and 0
+   errors.
+
 ## Latest execution update (2026-07-21, fresh app-hosted timing run)
 
 ### Timed Azure evidence

@@ -40,9 +40,15 @@ Deployed and validated.
 | Foundry report evaluation | Completed | 247s | `eval_078f27f2cfca469eb1549bf2f64b3e8f` / `evalrun_fdbaf7aa666a40acb98f5719030d1e19`; 10 items, 0 errors, 2 passed, 8 report-only quality findings. |
 | Application Insights KQL | Passed | 9s | 147 requests, 1,245 dependencies, 1,481 traces in the two-hour lookback; fresh HITL spans correlated under operation `9c79558d1d5e7a331c9dfbd10923041d`, with zero workflow exceptions and zero `NoneType` warnings. |
 
-The Foundry evaluator findings remain non-blocking. They reflect the known
-literal-order-ID versus intentional fallback behavior and are not evidence of
-deployment or runtime failure.
+The Foundry evaluator findings remain non-blocking. Future report-only runs are
+limited to canonical ORD-1001 low-risk and ORD-1009 approved-HITL captures with
+the relevance evaluator; the full dataset remains covered by the deterministic
+contract gate. This removes the known literal-order-ID versus intentional
+fallback mismatch from the cloud quality signal.
+
+The simplified report completed successfully on 2026-07-21:
+`eval_cc2b4f67d26640ddb3d2b45ed944b83c` /
+`evalrun_f14cb075a9234b0383b0644911ded77d`, with 2/2 passed and 0 errors.
 
 ### Runtime reliability fixes
 

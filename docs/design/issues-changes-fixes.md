@@ -1,5 +1,25 @@
 # Issues, Changes, and Fixes (Foundry Private VM Path)
 
+## Latest execution update (2026-07-21, fresh app-hosted timing run)
+
+### Timed Azure evidence
+
+| Task | Status | Elapsed | Result |
+|---|---:|---:|---|
+| IaC reconciliation | Passed | 32s | `azd provision --no-prompt` found no changes. |
+| Application deployment | Passed | 47s | `azd deploy --no-prompt` built/pushed both images and rolled out backend/frontend revisions. |
+| Public smoke | Passed | 40s | Health, low-risk completion, and high-risk HITL/resume. |
+| Public Playwright E2E | Passed | 84s | 7/7 scenarios. |
+| Foundry report evaluation | Completed | 247s | `eval_078f27f2cfca469eb1549bf2f64b3e8f` / `evalrun_fdbaf7aa666a40acb98f5719030d1e19`; 10 items, 0 errors, 2 passed, 8 report-only quality findings. |
+| App Insights validation query | Passed | 9s | Fresh correlated HITL operation, zero workflow exceptions, and zero `NoneType` attribute warnings. |
+
+The new telemetry sample included `workflow.hitl_waiting`,
+`workflow.hitl_request`, `workflow.hitl_resume`, `workflow.hitl_response`,
+and `workflow.workflow_output` under operation
+`9c79558d1d5e7a331c9dfbd10923041d`. Foundry quality outcomes remain
+report-only: the eight findings are the known evaluator mismatch for intentionally
+fallback-resolved unknown order IDs, not an infrastructure or workflow failure.
+
 ## Latest execution update (2026-07-21, app-hosted Azure validation complete)
 
 ### Completed evidence

@@ -29,6 +29,21 @@ Deployed and validated.
   expected FastAPI `GET /` 404 probe. HITL request/wait/response/resume spans
   share an operation ID for each validated approval thread.
 
+## Fresh end-to-end timing evidence (2026-07-21)
+
+| Task | Status | Elapsed | Result |
+|---|---:|---:|---|
+| `azd provision --no-prompt` | Passed | 32s | No IaC drift; Azure skipped resource changes. |
+| `azd deploy --no-prompt` | Passed | 47s | Builds/pushes both images and rolls out both Container App revisions. Backend completed in 26s; frontend in 43s. |
+| Public smoke | Passed | 40s | Health plus ORD-1001 completion and ORD-1009 HITL/resume paths. |
+| Hosted Playwright | Passed | 84s | 7/7 scenarios against the public frontend. |
+| Foundry report evaluation | Completed | 247s | `eval_078f27f2cfca469eb1549bf2f64b3e8f` / `evalrun_fdbaf7aa666a40acb98f5719030d1e19`; 10 items, 0 errors, 2 passed, 8 report-only quality findings. |
+| Application Insights KQL | Passed | 9s | 147 requests, 1,245 dependencies, 1,481 traces in the two-hour lookback; fresh HITL spans correlated under operation `9c79558d1d5e7a331c9dfbd10923041d`, with zero workflow exceptions and zero `NoneType` warnings. |
+
+The Foundry evaluator findings remain non-blocking. They reflect the known
+literal-order-ID versus intentional fallback behavior and are not evidence of
+deployment or runtime failure.
+
 ### Runtime reliability fixes
 
 - Backend requirements include `aiohttp` for the async managed-identity

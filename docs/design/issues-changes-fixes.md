@@ -3,6 +3,41 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
+
+### Successful runs
+
+1. Provision run: `29964165361` (success)
+2. Deploy run: `29964975627` (success)
+   - deploy
+   - smoke
+   - hosted E2E
+   - report-only Foundry eval
+   - eval report artifact upload (`foundry-eval-report-private`)
+
+### Success-run timeline
+
+| Phase | Run ID | Start (UTC) | End (UTC) | Duration | Result |
+|---|---:|---|---|---:|---|
+| Provision private infra | 29964165361 | 22:49:30 | 22:52:39 | 3m 09s | ✅ |
+| Deploy hosted agent + smoke + E2E + eval | 29964975627 | 23:04:26 | 23:06:44 | 2m 18s | ✅ |
+| Hosted deploy step | 29964975627 | 23:04:57 | 23:05:04 | 7s | ✅ |
+| Smoke invoke | 29964975627 | 23:05:04 | 23:05:19 | 15s | ✅ |
+| Hosted E2E | 29964975627 | 23:05:19 | 23:06:06 | 47s | ✅ |
+| Report-only Foundry eval | 29964975627 | 23:06:09 | 23:06:38 | 29s | ✅ |
+
+### What changed to reach green
+
+1. runtime DB URL stabilization (host drift + legacy URI rewrite)
+2. deploy-time sync from Foundry runtime connection + preflight host assertion
+3. eval runner hardening on private VM:
+   - auto-install `python3-venv` when missing
+   - explicit endpoint/model fallback injection into eval invocation
+
+### App Insights telemetry
+
+Hosted gate is now green; App Insights/KQL evidence capture for this exact successful window remains a follow-up execution item.
+
 ## Latest execution update (2026-07-22, private scratch lane: smoke/e2e green, eval runner dependency gap)
 
 ### Run status

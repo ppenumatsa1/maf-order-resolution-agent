@@ -17,9 +17,9 @@ environment_variables:
     - name: DATABASE_URL
       value: ${DATABASE_URL}
     - name: FOUNDRY_RUNTIME_DATABASE_URL
-      value: ${FOUNDRY_RUNTIME_DATABASE_URL}
+      value: ${{connections.orderresolutionruntimesecrets.credentials.keys.database_url}}
     - name: RUNTIME_DATABASE_URL
-      value: ${RUNTIME_DATABASE_URL}
+      value: ${{connections.orderresolutionruntimesecrets.credentials.keys.database_url}}
     - name: APP_ENV
       value: ${APP_ENV}
     - name: STORE_PROVIDER

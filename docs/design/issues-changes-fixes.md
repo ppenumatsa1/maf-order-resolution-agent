@@ -37,6 +37,11 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
    - explicitly seed azd env with `POSTGRES_ADMIN_PASSWORD` (from environment secret)
    - seed `RUNTIME_DATABASE_URL` and `DATABASE_URL` from `FOUNDRY_DATABASE_URL` secret when provided
    - this prevents new/recreated azd environments from silently deploying hosted agents with blank DB URL env vars
+4. Hosted runtime secret binding hardening (`backend/agent.yaml`)
+   - switched hosted DB runtime env vars to Foundry connection placeholders:
+     - `FOUNDRY_RUNTIME_DATABASE_URL=${{connections.orderresolutionruntimesecrets.credentials.keys.database_url}}`
+     - `RUNTIME_DATABASE_URL=${{connections.orderresolutionruntimesecrets.credentials.keys.database_url}}`
+   - avoids dependence on ad-hoc shell env interpolation for DB connection strings.
 
 ### Parallel observation: permissions
 

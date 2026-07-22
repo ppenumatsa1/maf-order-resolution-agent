@@ -175,6 +175,21 @@ jobs:
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
 
+      - name: Validate runtime DB host wiring
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          postgres_server="$(azd env get-value POSTGRES_SERVER_NAME || true)"
+          runtime_database_url="$(azd env get-value RUNTIME_DATABASE_URL || true)"
+          runtime_db_host="$(printf "%s" "$runtime_database_url" | sed -E 's#^[a-zA-Z0-9+.-]+://[^@]*@([^:/?]+).*#\1#')"
+          expected_host="${postgres_server}.postgres.database.azure.com"
+          echo "runtime_db_host=${runtime_db_host:-<empty>}"
+          echo "expected_db_host=${expected_host:-<empty>}"
+          if [[ -n "${runtime_db_host}" && "${runtime_db_host}" != "${expected_host}" ]]; then
+            echo "runtime database host mismatch in azd env"
+            exit 1
+          fi
+
       - name: Deploy hosted agent
         run: make foundry-deploy
 

@@ -47,6 +47,11 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
      `RUNTIME_DATABASE_URL`/`DATABASE_URL` (+ lowercase aliases) to the computed current-server URL.
    - if admin credentials are unavailable in the shell, host rewrite still proceeds by preserving existing
      user/password/query components and replacing only the hostname.
+6. Deploy preflight assertion (`.github/workflows/foundry-deploy.yml`)
+   - added `Validate runtime DB host wiring` step to log/compare:
+     - `RUNTIME_DATABASE_URL` host
+     - expected `${POSTGRES_SERVER_NAME}.postgres.database.azure.com`
+   - deploy now fails fast on host mismatch before smoke.
 
 ### Parallel observation: permissions
 

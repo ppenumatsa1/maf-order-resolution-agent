@@ -36,6 +36,18 @@ Follow-up hardening in `.github/workflows/foundry-deploy.yml`:
 
 This removes dependency on previous azd output-shape assumptions and guarantees deploy-time runtime env receives the canonical App Insights connection string.
 
+Additional telemetry hardening:
+
+1. default explicit runtime telemetry toggles in azd env:
+   - `ENABLE_TELEMETRY=true`
+   - `ENABLE_INSTRUMENTATION=true`
+2. default OTel identity fields:
+   - `OTEL_SERVICE_NAME=maf-order-resolution-hosted`
+   - `OTEL_SERVICE_NAMESPACE=maf-order-resolution`
+   - `OTEL_RECORD_CONTENT=false`
+
+Why this was needed: `backend/agent.yaml` uses `${...}` substitution for these fields; when absent in azd env, hosted runtime can receive unresolved placeholder strings instead of empty values, which can disable telemetry paths unexpectedly.
+
 ## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
 
 ### Successful runs

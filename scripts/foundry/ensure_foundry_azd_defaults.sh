@@ -127,6 +127,11 @@ set_if_missing FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${FOUNDRY_EMBEDDINGS_DEPL
 set_if_missing RUNNER_VM_SSH_PUBLIC_KEY "${RUNNER_VM_SSH_PUBLIC_KEY:-}"
 set_if_missing APPLICATIONINSIGHTS_CONNECTION_STRING "${APPLICATIONINSIGHTS_CONNECTION_STRING:-$(get_env_value applicationInsightsConnectionString)}"
 set_if_missing APPINSIGHTS_CONNECTION_STRING "${APPINSIGHTS_CONNECTION_STRING:-$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)}"
+set_if_missing ENABLE_TELEMETRY "${ENABLE_TELEMETRY:-true}"
+set_if_missing ENABLE_INSTRUMENTATION "${ENABLE_INSTRUMENTATION:-true}"
+set_if_missing OTEL_SERVICE_NAME "${OTEL_SERVICE_NAME:-maf-order-resolution-hosted}"
+set_if_missing OTEL_SERVICE_NAMESPACE "${OTEL_SERVICE_NAMESPACE:-maf-order-resolution}"
+set_if_missing OTEL_RECORD_CONTENT "${OTEL_RECORD_CONTENT:-false}"
 
 runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
 create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"

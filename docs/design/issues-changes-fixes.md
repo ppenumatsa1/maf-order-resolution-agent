@@ -3,6 +3,37 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-22, private scratch lane: smoke/e2e green, eval runner dependency gap)
+
+### Run status
+
+Deploy run `29964356273` progressed to:
+
+1. `Deploy hosted agent` -> success
+2. `Smoke invoke` -> success
+3. `Hosted E2E` -> success
+4. `Report-only Foundry eval` -> failure
+
+This confirms the previous `session_not_ready` startup class is currently resolved for the private V2 lane.
+
+### Eval failure root cause
+
+Failure is runner-environment specific, not Foundry runtime:
+
+- `python3 -m venv .venv` failed because `ensurepip` was unavailable
+- missing system package: `python3-venv`
+- make target failed in eval step before Foundry eval execution
+
+### Fix applied
+
+Updated `.github/workflows/foundry-deploy.yml` with a new step before `Report-only Foundry eval`:
+
+1. run a lightweight `python3 -m venv` check
+2. when it fails and `apt-get` is available, install `python3-venv`
+3. continue to `make eval-foundry`
+
+This keeps deploy/smoke/E2E behavior unchanged and closes the private-runner dependency gap that blocked eval execution.
+
 ## Latest execution update (2026-07-22, private scratch lane: smoke `session_not_ready` root-cause)
 
 ### Symptom

@@ -219,6 +219,18 @@ jobs:
         if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
         run: ./scripts/github/foundry_hosted_e2e.sh
 
+      - name: Ensure Python venv dependency for eval
+        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        run: |
+          set -euo pipefail
+          if command -v apt-get >/dev/null 2>&1; then
+            if ! python3 -m venv /tmp/foundry-eval-venv-check >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y python3-venv
+            fi
+            rm -rf /tmp/foundry-eval-venv-check
+          fi
+
       - name: Report-only Foundry eval
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
         run: make eval-foundry

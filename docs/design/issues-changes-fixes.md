@@ -50,6 +50,18 @@ Additional workflow hardening applied:
 
 This removes dependence on repo-local `.azure/.../.env` presence on the runner and ensures eval receives canonical Foundry model settings from the selected azd environment.
 
+### Follow-up hardening after second rerun
+
+Rerun `29964785769` still failed with the same missing-model-config runtime error, so the eval invocation path was hardened one level further:
+
+1. compute `eval_endpoint` in workflow from:
+   - `FOUNDRY_PROJECTS_ENDPOINT` -> `FOUNDRY_PROJECT_ENDPOINT` -> `AZURE_AI_PROJECT_ENDPOINT`
+2. compute `eval_model` from:
+   - `FOUNDRY_MODEL_DEPLOYMENT_NAME` -> `AZURE_AI_MODEL_DEPLOYMENT_NAME` -> `FOUNDRY_EVAL_MODEL` -> `gpt-4.1-mini`
+3. pass both explicitly into `make eval-foundry` as step-scoped environment variables
+
+This guarantees the eval runner receives required endpoint/model values even when azd env files are missing fields or workflow env seeding leaves them blank.
+
 ## Latest execution update (2026-07-22, private scratch lane: smoke `session_not_ready` root-cause)
 
 ### Symptom

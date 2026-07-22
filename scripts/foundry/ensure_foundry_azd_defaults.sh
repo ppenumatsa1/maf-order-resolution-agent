@@ -137,7 +137,7 @@ if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" ]]; then
   computed_runtime_database_url=""
   if [[ -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
     encoded_password="$(url_encode "$postgres_admin_password")"
-    computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+    computed_runtime_database_url="postgresql://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
   fi
   expected_host="${postgres_server_name}.postgres.database.azure.com"
   runtime_host="$(url_host "$runtime_database_url_existing")"

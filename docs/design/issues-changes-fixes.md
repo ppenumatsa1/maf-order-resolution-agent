@@ -56,6 +56,8 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
    - deploy now reads `orderresolutionruntimesecrets` with `--show-credentials` and writes
      `RUNTIME_DATABASE_URL`/`DATABASE_URL` into azd env before preflight validation.
    - this removes dependency on branch-local/stale secret values for runtime DB URL during deploy-only runs.
+8. Connection-string format correction (`scripts/foundry/ensure_foundry_azd_defaults.sh`)
+   - corrected generated PostgreSQL URL scheme from `postgresql+psycopg://` to `postgresql://` for Psycopg pool compatibility.
 
 ### Parallel observation: permissions
 

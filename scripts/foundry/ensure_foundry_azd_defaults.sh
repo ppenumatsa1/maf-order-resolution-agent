@@ -12,6 +12,15 @@ get_env_value() {
   fi
 }
 
+url_encode() {
+  local raw="$1"
+  python3 - "$raw" <<'PY'
+import sys
+from urllib.parse import quote
+print(quote(sys.argv[1], safe=''))
+PY
+}
+
 set_if_missing() {
   local key="$1"
   local value="$2"
@@ -75,6 +84,22 @@ set_if_missing FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${FOUNDRY_CHAT_DEPLOYMENT_CAPAC
 set_if_missing FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY:-2}"
 set_if_missing RUNNER_VM_SSH_PUBLIC_KEY "${RUNNER_VM_SSH_PUBLIC_KEY:-}"
 
+runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
+if [[ -z "$runtime_database_url_existing" ]]; then
+  create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
+  postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"
+  postgres_admin_username="$(get_env_value POSTGRES_ADMIN_USERNAME)"
+  postgres_admin_password="$(get_env_value POSTGRES_ADMIN_PASSWORD)"
+  postgres_database_name="$(get_env_value POSTGRES_DATABASE_NAME)"
+
+  if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
+    encoded_password="$(url_encode "$postgres_admin_password")"
+    computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+    azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
+    echo "defaulted RUNTIME_DATABASE_URL from postgres settings"
+  fi
+fi
+
 # Preserve lowercase env keys used by older scripts/workflows.
 set_if_missing aiSearchLocation "$(get_env_value AI_SEARCH_LOCATION)"
 set_if_missing foundryProjectName "$(get_env_value FOUNDRY_PROJECT_NAME)"
@@ -95,3 +120,4 @@ set_if_missing manageProjectConnections "$(get_env_value MANAGE_PROJECT_CONNECTI
 set_if_missing foundryChatDeploymentCapacity "$(get_env_value FOUNDRY_CHAT_DEPLOYMENT_CAPACITY)"
 set_if_missing foundryEmbeddingsDeploymentCapacity "$(get_env_value FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY)"
 set_if_missing runnerVmSshPublicKey "$(get_env_value RUNNER_VM_SSH_PUBLIC_KEY)"
+set_if_missing runtimeDatabaseUrl "$(get_env_value RUNTIME_DATABASE_URL)"

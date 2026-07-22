@@ -1,8 +1,8 @@
 # Infrastructure Scaffolding
 
-This directory contains deployment scaffolding for Azure hosting paths.
+This directory contains deployment scaffolding for the retained private Foundry
+hosted lane.
 
-- `azure-apphosted/`: Azure app-hosted runtime path using the current deterministic/MAF SDK backend mode.
-- `foundry-hosted/`: Active Foundry-hosted runtime path (`WORKFLOW_MODE=foundry_hosted`).
+- `foundry-hosted/`: Active private-VNet Foundry-hosted runtime path (`WORKFLOW_MODE=foundry_hosted`).
 
-Both paths remain additive to local Docker/Make workflows.
+This lane remains additive to local Docker/Make workflows.

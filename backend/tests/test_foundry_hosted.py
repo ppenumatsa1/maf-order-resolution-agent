@@ -155,11 +155,11 @@ def _fake_responses_types() -> tuple[
     )
 
 
-def test_hosted_manifest_propagates_deployment_profile() -> None:
+def test_hosted_manifest_uses_private_safe_environment_settings() -> None:
     manifest = Path(__file__).parents[1] / "agent.yaml"
     manifest_text = manifest.read_text()
 
-    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" in manifest_text
+    assert "name: FOUNDRY_DEPLOYMENT_PROFILE" not in manifest_text
     assert "AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING" not in manifest_text
     assert (
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
@@ -202,21 +202,8 @@ def test_foundry_model_env_aliases_preserve_canonical_values(
     assert os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME") == "canonical-model"
 
 
-def test_build_app_uses_platform_store_for_public_profile(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _FakeResponsesHost.instances.clear()
-    monkeypatch.setenv("FOUNDRY_DEPLOYMENT_PROFILE", "public")
-    monkeypatch.setattr(foundry_main, "_load_responses_types", _fake_responses_types)
-
-    app = foundry_main._build_app()
-
-    assert app is _FakeResponsesHost.instances[-1]
-    assert app.store_supplied is False
-
-
 @pytest.mark.parametrize("profile", ["private", ""])
-def test_build_app_uses_in_memory_store_for_private_safe_profiles(
+def test_build_app_uses_in_memory_store_for_all_profiles(
     monkeypatch: pytest.MonkeyPatch,
     profile: str,
 ) -> None:

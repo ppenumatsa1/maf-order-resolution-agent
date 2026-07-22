@@ -20,7 +20,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 - operationally transparent (SSE timeline, workflow history),
 - business-safe (deterministic HITL triggers and approvals),
 - durable (Postgres-backed persistence for runs/events/messages/checkpoints),
-- extensible (single MAF workflow path, Azure app-hosted deployed, Foundry-hosted Responses-native entrypoint).
+- extensible (single MAF workflow path and Foundry-hosted Responses-native private-VNet entrypoint).
 
 ## High-Level Runtime Architecture
 
@@ -176,8 +176,7 @@ Required commands:
 The same business flow runs across:
 
 1. local MAF runtime (implemented),
-2. Azure app-hosted runtime (deployed),
-3. Foundry-hosted Responses-native runtime (deployed).
+2. Foundry-hosted Responses-native runtime (private VNet lane retained).
 
 Architecture keeps API and event contracts stable to simplify this progression while maintaining business traceability.
 

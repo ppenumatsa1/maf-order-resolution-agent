@@ -10,13 +10,13 @@
 
 ## Phase 2
 
-- Azure app-hosted parity with Container Apps, Azure PostgreSQL, Foundry model-client configuration, App Insights telemetry, and HITL trace correlation.
-- Keep `WORKFLOW_MODE=maf_sdk`, `STORE_PROVIDER=postgres`, `RAG_PROVIDER=pgvector`, and `MEMORY_PROVIDER=postgres` for parity.
+- Private Foundry hosted parity with VNet/private endpoint networking, PostgreSQL runtime configuration, App Insights telemetry, and HITL trace correlation.
+- Keep `WORKFLOW_MODE=maf_sdk`, `STORE_PROVIDER=postgres`, `RAG_PROVIDER=pgvector`, and `MEMORY_PROVIDER=postgres` for local/hosted parity.
 - Keep HITL rules deterministic and preserve frontend/API event contracts.
 
 ## Phase 3
 
-- Compatibility shims have been removed now that Azure app-hosted parity is green.
+- Compatibility shims have been removed now that local and private-hosted parity is green.
 - Add a MAF middleware seam for telemetry/correlation, event enrichment/redaction, streamed model usage observation, session/run context, and explicit failure-event behavior.
 - Add an additive AG-UI-compatible rich event stream for future CopilotKit-style React consumption while preserving the legacy SSE stream.
 - Foundry-hosted runtime is Responses-native as the hosted contract.
@@ -36,7 +36,7 @@
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0: Product intent defined              | Demo objective finalized: sequential multi-agent order-resolution flow with deterministic HITL safety, checkpoint/resume, memory continuity, SSE timeline, telemetry, and eval coverage. |
 | M1: Local workflow foundation complete  | Local runtime path became the default (`WORKFLOW_MODE=maf_sdk`), with durable Postgres-backed run/event/checkpoint/approval history and stable frontend/API event contracts.             |
-| M2: Azure app-hosted parity             | Hosting and persistence moved to Azure infrastructure while preserving local behavior and contracts to minimize migration risk.                                                          |
+| M2: Private Foundry-hosted parity      | Hosting and persistence moved to the private Foundry lane while preserving local behavior and contracts to minimize migration risk.                                                     |
 | M3: Architecture hardening              | Compatibility shims removed; middleware and rich-stream seams added without breaking legacy SSE; backend/package boundaries standardized.                                                |
 | M4: Foundry-hosted runtime              | Responses-native hosted entrypoint is the current hosted path; stable workflow/event contracts remain unchanged.                                                                            |
 | M5: Safe operational policy             | Postgres projection remains the source of truth for UI/test contracts; deterministic HITL and replay rules stay enforced.                                                                   |

@@ -5,21 +5,18 @@
 The product journey is:
 
 1. Local MAF runtime (current default)
-2. Azure app-hosted runtime
-3. Foundry-hosted runtime
+2. Foundry-hosted runtime (private VNet lane retained)
 
 Current status:
 
 | Stage            | Status      | What is actually wired today                                                                                     |
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
-| Azure app-hosted | Implemented | Same shared workflow behavior on ACA + Postgres. |
 | Foundry-hosted   | Implemented | Responses-native hosted entrypoint runs the same shared MAF workflow. |
 
-Operational status note (2026-07-15):
+Operational status note (2026-07-18):
 
-- Public Foundry lane currently shows expected Conversations/Traces for `order-resolution-hosted`.
-- Private Foundry lane is under active investigation for intermittent upstream `HTTP 500 server_error` in smoke/probe despite successful deployment activation.
+- Private Foundry lane remains the only hosted lane tracked for this branch.
 
 ## Current Runtime User Flow (Implemented Path)
 

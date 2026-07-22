@@ -55,7 +55,7 @@ For each run, verify these signals from timeline/API:
 
 ## ORD-1001 to ORD-1010 Cross-Use-Case Matrix
 
-Use this matrix as a repeatable parity suite after shim removal, while validating Azure app-hosted runtime, and later moving to Foundry-hosted runtime.
+Use this matrix as a repeatable parity suite after shim removal and before/after moving to private Foundry-hosted runtime.
 
 For a quick executable check, run the script-backed matrix against any backend URL:
 
@@ -78,7 +78,7 @@ The Workflow Studio also includes a collapsed **Test Tools** panel with a **Manu
 6. Confirm each case shows PASS/FAIL, observed status, HITL result, evidence count, and generated thread id.
 7. Use **View run** to re-open the generated workflow timeline, output, RAG evidence, and metadata.
 
-The panel is an operator verification aid, not a separate backend test framework. The script runner remains the automation-friendly parity check for local and Azure URLs.
+The panel is an operator verification aid, not a separate backend test framework. The script runner remains the automation-friendly parity check for local and Foundry URLs.
 
 Current deterministic local-runtime caveat:
 
@@ -107,26 +107,7 @@ For each row, capture:
 4. any checkpoint/approval id
 5. observed `tool.call.policy_retrieval.provider`, `query_id`, and `policy_evidence_ids`
 
-## Azure App-Hosted Parity Smoke
-
-After Azure deployment, run the hosted smoke script with the deployed backend and frontend URLs:
-
-```bash
-infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
-EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
-```
-
-This validates:
-
-1. backend `/health`
-2. frontend `/health`
-3. low-risk `ORD-1001` emits `workflow.output` without `hitl.request`
-4. high-risk `ORD-1009` emits `hitl.request`
-5. optional Foundry triage metadata when `EXPECT_TRIAGE_MODE=foundry_models` is set
-
-Then use the ORD-1001 to ORD-1010 matrix above for manual parity before moving to Foundry-hosted runtime.
-
-## Three-target parity gate (local + Azure + Foundry)
+## Two-target parity gate (local + Foundry)
 
 Use the parity runner when you need one comparable pass/fail view across all endpoints.
 
@@ -135,8 +116,6 @@ Required environment variables (can be loaded from `maf-ora-central` `.env` via 
 ```bash
 PARITY_LOCAL_API_URL=http://localhost:8000
 PARITY_LOCAL_WEB_URL=http://localhost:5173
-PARITY_AZURE_API_URL=https://<azure-backend-host>
-PARITY_AZURE_WEB_URL=https://<azure-web-host>
 PARITY_FOUNDRY_API_URL=https://<foundry-backend-host>
 PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
 ```
@@ -147,7 +126,7 @@ Commands:
 make parity-all
 ```
 
-- `parity-all` is the single parity gate for this POC and enforces all three targets.
+- `parity-all` is the parity gate for this branch and enforces local + Foundry targets.
 - The default fast profile runs:
   - manual cases `ORD-1001` and `ORD-1009`
   - all event contract checks
@@ -157,12 +136,12 @@ make parity-all
 To run exhaustive parity only when needed:
 
 ```bash
-python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full
+python3 scripts/parity/run_parity_matrix.py --targets local foundry --profile full
 ```
 
 Parity runner behavior for hosted targets:
 
-- For `azure` and `foundry` targets, the runner applies hosted-safe Playwright defaults automatically:
+- For the hosted Foundry target, the runner applies hosted-safe Playwright defaults automatically:
   - `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000`
   - `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`
   - `PLAYWRIGHT_CASE_DELAY_MS=15000`

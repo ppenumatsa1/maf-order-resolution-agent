@@ -18,7 +18,7 @@ This model is Pareto-first: start with the minimum enforceable contract and expa
 Hosted validation and deployment are private-lane-first in the current operating posture:
 
 - **Default hosted lane:** private Foundry (`foundry-private-env` / private runner path).
-- Public Foundry is not part of the required hosted gate path unless explicitly re-enabled by a documented decision update.
+- No additional hosted lane is part of the required gate path unless explicitly re-enabled by a documented decision update.
 
 ## Inputs and authority
 
@@ -29,13 +29,13 @@ Required inputs before implementation:
 - Architecture boundaries and explicit non-goals
 - Business-rule truth conditions (including HITL triggers)
 - Acceptance criteria in observable terms (events, outputs, state)
-- Deployment lane scope (public/private, app-hosted/foundry-hosted)
+- Deployment lane scope (local runtime and private Foundry hosted lane)
 
 ### 2) Skill authority (implementation constraints)
 
 Skills define current best-practice patterns for Microsoft services/SDKs and deployment guidance.
 
-Skills do **not** override business rules or public contracts on their own. If skill guidance conflicts with accepted behavior/contracts, capture the delta as a documented decision and apply the smallest approved change.
+Skills do **not** override business rules or accepted contracts on their own. If skill guidance conflicts with accepted behavior/contracts, capture the delta as a documented decision and apply the smallest approved change.
 
 ### 3) Copilot delivery responsibilities
 

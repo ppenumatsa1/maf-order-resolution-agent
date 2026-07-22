@@ -9,7 +9,6 @@ param namePrefix string = 'maffnd'
 
 @description('Network profile for the Foundry-hosted infrastructure')
 @allowed([
-  'public'
   'private'
 ])
 param networkMode string = 'private'

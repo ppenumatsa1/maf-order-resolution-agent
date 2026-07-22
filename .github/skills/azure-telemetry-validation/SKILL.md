@@ -1,25 +1,25 @@
 ---
 name: azure-telemetry-validation
-description: Validate hosted Azure Container Apps workflow telemetry in Application Insights after deployment.
+description: Validate hosted private-Foundry workflow telemetry in Application Insights after deployment.
 ---
 
 # Azure Telemetry Validation Skill
 
-Use this skill after Azure deployment or hosted parity checks to prove workflow, HITL, request, dependency, trace, and exception telemetry is flowing into Application Insights.
+Use this skill after private Foundry deployment or hosted parity checks to prove workflow, HITL, request, dependency, trace, and exception telemetry is flowing into Application Insights.
 
 ## Required inputs
 
 - Hosted backend URL: `API_URL`
 - Hosted frontend URL when E2E parity is in scope: `WEB_URL`
 - Log Analytics workspace id: `AZURE_LOG_ANALYTICS_WORKSPACE_ID`
-- Azure subscription/resource group context for the deployed Container Apps environment
+- Azure subscription/resource group context for the deployed private Foundry environment
 
 ## Hosted workflow stimulus
 
 Run the hosted workflow cases before querying telemetry:
 
 ```bash
-EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+SMOKE_MESSAGE="Resolve delayed order ORD-1009" make foundry-smoke
 ```
 
 Then run one HITL approval flow against the hosted backend:

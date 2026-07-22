@@ -6,13 +6,19 @@ cd "${ROOT_DIR}/infra/foundry-hosted"
 
 get_env_value() {
   local key="$1"
-  azd env get-value "$key" 2>/dev/null || true
+  local value
+  if value="$(azd env get-value "$key" 2>/dev/null)"; then
+    printf "%s" "$value"
+  fi
 }
 
 set_if_missing() {
   local key="$1"
   local value="$2"
   local existing
+  if [[ -z "$value" ]]; then
+    return
+  fi
   existing="$(get_env_value "$key")"
   if [[ -z "$existing" ]]; then
     azd env set "$key" "$value" >/dev/null
@@ -24,38 +30,23 @@ mode="${NETWORK_MODE:-$(get_env_value NETWORK_MODE)}"
 if [[ -z "$mode" ]]; then
   mode="private"
 fi
-if [[ "$mode" != "private" && "$mode" != "public" ]]; then
-  echo "NETWORK_MODE must be 'public' or 'private'. Found: $mode"
+if [[ "$mode" != "private" ]]; then
+  echo "NETWORK_MODE must be 'private' for this branch. Found: $mode"
   exit 1
 fi
 
-if [[ "$mode" == "private" ]]; then
-  private_dns_default="true"
-  private_endpoints_default="true"
-  nat_default="true"
-  runner_access_default="false"
-  bastion_default="true"
-  runner_vm_default="true"
-  network_injection_default="true"
-  assign_pre_caphost_default="true"
-  assign_post_caphost_default="true"
-  create_account_caphost_default="false"
-  create_project_caphost_default="true"
-  manage_project_connections_default="true"
-else
-  private_dns_default="false"
-  private_endpoints_default="false"
-  nat_default="false"
-  runner_access_default="false"
-  bastion_default="false"
-  runner_vm_default="false"
-  network_injection_default="false"
-  assign_pre_caphost_default="false"
-  assign_post_caphost_default="false"
-  create_account_caphost_default="false"
-  create_project_caphost_default="false"
-  manage_project_connections_default="true"
-fi
+private_dns_default="true"
+private_endpoints_default="true"
+nat_default="true"
+runner_access_default="false"
+bastion_default="true"
+runner_vm_default="true"
+network_injection_default="true"
+assign_pre_caphost_default="true"
+assign_post_caphost_default="true"
+create_account_caphost_default="false"
+create_project_caphost_default="true"
+manage_project_connections_default="true"
 
 set_if_missing NETWORK_MODE "$mode"
 set_if_missing AI_SEARCH_LOCATION "${AI_SEARCH_LOCATION:-eastus}"

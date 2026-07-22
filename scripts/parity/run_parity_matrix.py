@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-TARGETS = ("local", "azure", "foundry")
+TARGETS = ("local", "foundry")
 TERMINAL_STATUSES = {"completed", "failed", "escalated"}
 FAST_MATRIX_ARGS = "--case ORD-1001 --case ORD-1009"
 FAST_PLAYWRIGHT_GREP = (
@@ -328,14 +328,12 @@ def parse_args() -> argparse.Namespace:
         if candidate.exists():
             default_env_file = str(candidate)
 
-    parser = argparse.ArgumentParser(
-        description="Run local/azure/foundry endpoint parity checks."
-    )
+    parser = argparse.ArgumentParser(description="Run local/foundry endpoint parity checks.")
     parser.add_argument(
         "--targets",
         nargs="+",
         default=list(TARGETS),
-        help="Targets to run (local azure foundry).",
+        help="Targets to run (local foundry).",
     )
     parser.add_argument(
         "--allow-partial",
@@ -397,7 +395,7 @@ def main() -> int:
     selected_targets = _resolve_targets([target.lower() for target in args.targets])
     if not args.allow_partial and set(selected_targets) != set(TARGETS):
         raise ValueError(
-            "Parity pass requires all three targets: local, azure, foundry. "
+            "Parity pass requires both targets: local and foundry. "
             f"Received: {', '.join(selected_targets)}"
         )
 

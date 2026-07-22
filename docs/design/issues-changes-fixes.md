@@ -2526,3 +2526,401 @@ Patch private deploy/provision env seeding so `FOUNDRY_RUNTIME_ENV` is always se
    - `POSTGRES_LOCATION`
 3. Added defaults for these env keys in `scripts/foundry/ensure_foundry_azd_defaults.sh`.
 4. Hardened both Foundry workflows to use deterministic PostgreSQL env keys and server-name-based URL construction instead of list-first fallback.
+
+## Latest execution update (2026-07-21, private-branch cleanup to remove public/app-hosted surfaces)
+
+### Goal
+
+Keep this branch focused on:
+
+- local end-to-end MAF workflow (`frontend` + `backend` + PostgreSQL), and
+- retained private-VNet Foundry hosted lane for later deployment.
+
+### Cleanup applied
+
+1. Removed Azure app-hosted lane assets:
+   - deleted `infra/azure-apphosted/**`
+   - deleted `.github/workflows/azure-apphosted.yml`
+2. Removed public Foundry deployment helpers and public profile artifacts:
+   - deleted `scripts/foundry/deploy_public_dev.sh`
+   - deleted `scripts/foundry/check_public_postgres_readiness.sh`
+   - deleted `infra/foundry-hosted/iac/parameters.public-dev.json`
+3. Removed hosted GitHub Actions deployment workflow set that carried public profile toggles:
+   - deleted `.github/workflows/foundry-{provision,deploy,orchestrator,runner-probe}.yml`
+4. Updated runtime/deploy wiring and docs for private-only posture:
+   - `azure.yaml` now points to `infra/foundry-hosted/iac` and keeps only hosted agent service
+   - `Makefile` removed public/app-hosted targets and scripts; parity target now runs `local foundry`
+   - updated README/doc surfaces to remove Azure app-hosted/public lane instructions.
+5. Private hosted runtime behavior tightened:
+   - `backend/foundry/main.py` now always uses in-memory response storage for private-network safety.
+
+### Outcome
+
+The branch now removes public/app-hosted deploy surfaces and keeps the local + private-hosted path as the only active contract.
+
+## Latest execution update (2026-07-21, private Foundry provision/deploy run from local host)
+
+### Goal
+
+Execute the requested full lane from this branch:
+
+- Local E2E
+- Foundry deployment path (IaC + deploy + hosted E2E + Foundry evals + App Insights checks)
+
+### What succeeded
+
+1. Local validation path:
+   - `make test` passed
+   - `make eval-backend` passed
+   - `make test-e2e` passed (using compose runtime with in-network MCP URL `http://mock-mcp:8011/mcp`)
+2. Azure validation path:
+   - `az bicep build --file infra/foundry-hosted/iac/main.bicep` passed (warnings only)
+   - `azd provision --preview` passed after seeding private env keys
+3. Private IaC provisioning:
+   - `make foundry-provision` eventually passed after:
+     - setting `POSTGRES_ADMIN_PASSWORD` in `infra/foundry-hosted` azd env
+     - rotating `POSTGRES_SERVER_NAME` to a unique value (`maffndpg07211051`) due global-name collision
+
+### What failed / blocker
+
+Hosted deploy and hosted eval/smoke from this developer machine fail with private endpoint access control:
+
+- `make foundry-deploy` failed with `HTTP 403`:
+  - `"Public access is disabled. Please configure private endpoint."`
+- `make foundry-smoke` failed with the same `HTTP 403`.
+- `make eval-foundry` produced report status `failed` with the same `HTTP 403` after model env vars were set.
+
+### Root cause
+
+The private Foundry project endpoint is reachable only from the private network path (in-VNet runner/VM). Running deploy/smoke/eval from this public workstation is blocked by design once public access is disabled.
+
+### Changes made to support reproducible private provisioning
+
+1. Fixed `scripts/foundry/ensure_foundry_azd_defaults.sh` so it can reliably seed missing azd env keys:
+   - ignore empty default values instead of failing on empty assignments
+   - treat missing `azd env get-value` keys correctly (without capturing azd error text as a value)
+2. Seeded missing private env values (`AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`, `AZURE_RESOURCE_GROUP`, `NETWORK_MODE`, postgres/foundry defaults).
+
+### Next action required
+
+Run deploy/smoke/hosted E2E/foundry eval/telemetry validation from an in-VNet private runner VM (or equivalent private endpoint path), then collect App Insights evidence.
+
+## Latest execution update (2026-07-21, private-runner rerun success + telemetry evidence)
+
+### Deployment/e2e/eval rerun outcome
+
+1. Reran Foundry orchestrator on `feature/foundry-private-network-vnet`:
+   - run: `29848715851`
+   - result: `success`
+2. Prior failure cause was runtime DB bootstrap timeout in hosted container:
+   - `psycopg_pool.PoolTimeout: couldn't get a connection after 30.00 sec`
+3. Fix applied before rerun:
+   - started PostgreSQL server `maffndpg7930` in `rg-maf-ora-foundry-v2`
+4. Successful rerun completed:
+   - deploy hosted agent
+   - smoke validation
+   - hosted E2E validation
+   - Foundry report-only evaluation + artifact upload
+
+### App Insights / Log Analytics validation evidence
+
+Workspace used: `maffnd-mon-4aiw7fw5gjdo4-law` (`2288ca32-1c34-4099-ab3b-886ae7a96be6`), lookback `2h`.
+
+1. Row-volume query:
+   - `AppDependenciesRows=779`
+   - `AppTracesRows=2118`
+   - `AppExceptionsRows=341`
+   - `AppRequestsRows=0`
+2. Workflow/HITL dependency spans observed:
+   - `workflow.run=93`
+   - `workflow.resolution_submit=5`
+   - `workflow.workflow_output=3`
+   - `workflow.hitl_resume=2`
+   - `workflow.hitl_response=2`
+3. HITL trace evidence in logs/traces:
+   - `workflow.event` rows with `event.type="hitl.response"` and `workflow.thread_id` present.
+4. Attribute hygiene:
+   - `Invalid type NoneType for attribute` count = `0`.
+
+### Open issue observed during eval telemetry window
+
+AppExceptions include repeated rate-limit failures from Foundry model calls:
+
+- `agent_framework.exceptions.ChatClientException`
+- message: `Your requests to gpt-4o-mini for gpt-4o-mini in eastus2 have exceeded rate limit.`
+
+This explains the `workflow.workflow_failed` dependency events in the same window and is now the primary remaining hosted quality issue (capacity/rate-limit), not deploy wiring or private network reachability.
+
+## Latest execution update (2026-07-21, model capacity increase + rerun)
+
+### Change applied
+
+Raised Foundry chat deployment capacity for `gpt-4o-mini` in private lane account:
+
+- account: `maffndai4aiw7fw5gjdo4`
+- deployment: `gpt-4o-mini`
+- capacity: `1 -> 3`
+- effective limits after update:
+  - requests/min: `30`
+  - tokens/min: `3000`
+
+### Rerun result
+
+Reran orchestrator `29848715851` after the capacity increase.
+
+- result: `success`
+- completed stages: deploy hosted agent, smoke, hosted E2E, Foundry report-only eval, artifact upload
+- eval report URL:
+  - `https://maffndai4aiw7fw5gjdo4.services.ai.azure.com/api/projects/order-resolution/evaluation/evaluations/eval_878d2d76489d4691941cfbda3159e8c8/runs/evalrun_facb8bb19b4b4068a422a8e86a1a447b`
+
+### Post-change telemetry spot-check
+
+Lookback window: `45m` after capacity increase.
+
+1. Rate-limit exceptions containing `exceeded rate limit`: `0`
+2. `workflow.workflow_failed` dependency events: `0`
+3. Positive workflow spans still present:
+   - `workflow.resolution_submit=4`
+   - `workflow.workflow_output=4`
+   - `workflow.hitl_resume=2`
+   - `workflow.hitl_response=2`
+
+## Latest execution update (2026-07-22, private-branch verification + outstanding tasks)
+
+### Verification scope
+
+- branch: `feature/foundry-private-network-vnet`
+- objective: verify this branch retains only private-lane hosted posture plus local MAF E2E path, and identify remaining work for IAC/deploy/E2E/evals/App Insights readiness.
+- method: fleet-style parallel verification (surface audit + validation gate run) followed by rubber-duck challenge pass.
+
+### Private-lane cleanup verification result
+
+1. Confirmed removed surfaces in working tree:
+   - `infra/azure-apphosted/**` removed
+   - legacy/public-oriented workflow files removed (`.github/workflows/azure-apphosted.yml`, `foundry-deploy.yml`, `foundry-orchestrator.yml`, `foundry-provision.yml`, `foundry-runner-probe.yml`)
+   - `infra/foundry-hosted/iac/parameters.public-dev.json` removed
+   - `scripts/foundry/deploy_public_dev.sh` and `scripts/foundry/check_public_postgres_readiness.sh` removed
+2. Active guidance remains private-lane-first in:
+   - `README.md`
+   - `backend/README.md`
+   - `docs/design/engineering-operating-model.md`
+   - `.github/copilot-instructions.md`
+3. Residual public/app-hosted mentions found are archival/history-oriented:
+   - `.azure/deployment-plan.md` (legacy app-hosted plan content)
+   - historical entries in this file (`docs/design/issues-changes-fixes.md`)
+
+### Validation run results (current environment)
+
+1. `make test` -> **PASS** (`89` tests passed)
+2. `make eval-backend` -> **PASS** (`10/10` deterministic eval cases)
+3. `make test-e2e` -> **FAIL** (backend not running for Playwright base URL in this run context)
+4. `make eval-foundry` -> **FAIL** (missing env vars: `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`)
+5. `./scripts/skills/design-review-skill.sh` -> **FAIL** (same E2E backend availability blocker)
+
+### IAC static verification result
+
+- `az bicep build --file infra/foundry-hosted/iac/main.bicep` -> **PASS** (non-blocking linter warnings only)
+
+### Rubber-duck review findings (high-signal)
+
+1. Verification should be considered against a reviewable commit/diff, not only a dirty working tree snapshot.
+2. `infra/foundry-hosted/iac/main.bicep` keeps storage account `publicNetworkAccess: 'Enabled'` with `networkAcls` deny+AzureServices bypass in private mode; this is an intentional exception and should remain explicitly documented/accepted as risk posture.
+3. E2E failure must be root-caused to environment/startup availability vs branch regressions before sign-off.
+
+### Outstanding tasks (autopilot handoff)
+
+1. **E2E gate closure**
+   - run backend/frontend in deterministic local mode and rerun `make test-e2e` until green.
+   - rerun `./scripts/skills/design-review-skill.sh` after E2E pass.
+2. **Foundry eval closure (private lane)**
+   - set `FOUNDRY_PROJECTS_ENDPOINT` + `FOUNDRY_MODEL_DEPLOYMENT_NAME` (and related hosted env vars as needed) and rerun `make eval-foundry`.
+3. **Deploy/telemetry refresh evidence**
+   - run private-lane hosted deploy path and append current run IDs + App Insights query evidence for this branch tip.
+4. **Archival public-doc decision**
+   - decide whether to keep `.azure/deployment-plan.md` as legacy archive or replace it with a private-lane-only deployment/validation plan.
+
+## Latest execution update (2026-07-22, autopilot fix pass: e2e + private workflow restore)
+
+### Fixes applied
+
+1. **E2E harness hardening in `Makefile`**
+   - `make test-e2e` now launches an isolated local backend on a random port with deterministic local settings.
+   - frontend Vite launch now sets both:
+     - `VITE_PROXY_TARGET=http://127.0.0.1:<backend_port>`
+     - `VITE_API_BASE=http://127.0.0.1:<backend_port>`
+   - this prevents accidental use of an unrelated backend on `localhost:8000` and removes false negatives from stale runtime sessions.
+2. **Foundry eval env alias loading in `Makefile`**
+   - `make eval-foundry` now auto-loads private AZD env (`infra/foundry-hosted/.azure/foundry-private-env/.env`) when present.
+   - canonical eval env vars are inferred from hosted aliases when needed:
+     - `FOUNDRY_PROJECT_ENDPOINT` -> `FOUNDRY_PROJECTS_ENDPOINT`
+     - `AZURE_AI_MODEL_DEPLOYMENT_NAME` -> `FOUNDRY_MODEL_DEPLOYMENT_NAME`
+3. **Private deployment workflow restoration**
+   - restored private-lane-only GitHub workflows (without public profile branches):
+     - `.github/workflows/foundry-provision.yml`
+     - `.github/workflows/foundry-deploy.yml`
+     - `.github/workflows/foundry-orchestrator.yml`
+     - `.github/workflows/foundry-runner-probe.yml`
+   - retained deletion of `.github/workflows/azure-apphosted.yml`.
+
+### Validation results after fixes
+
+1. `make test` -> **PASS**
+2. `make eval-backend` -> **PASS** (`10/10`)
+3. `make test-e2e` -> **PASS** (`7/7`)
+4. `./scripts/skills/design-review-skill.sh` -> **PASS**
+5. `make eval-foundry` -> runs and writes report, but status remains:
+   - `failed`
+   - error: `403 Access denied due to Virtual Network/Firewall rules.`
+
+### Current blockers / outstanding tasks
+
+1. **Run private-lane deploy/eval from inside private network runner**
+   - local execution outside private VNET is expected to hit `403`.
+   - execute via restored private workflows on `foundry-private` runner.
+2. **Runner readiness**
+   - verify private self-hosted runner is online before dispatching orchestration/deploy/eval.
+3. **Hosted telemetry evidence refresh**
+   - after a successful private workflow run, append current deploy run IDs, hosted E2E proof, Foundry eval artifact URL, and App Insights query evidence.
+
+## Latest execution update (2026-07-22, private V2 runner lane execution)
+
+### Environment and runner targeting
+
+1. Repointed private AZD environment context to V2 RG:
+   - `AZURE_RESOURCE_GROUP=rg-maf-ora-foundry-v2`
+2. Verified GitHub runner availability:
+   - online: `vm-maffnd-runner-v2-foundry-private` (labels include `foundry-private-v2`)
+   - offline: `vm-maforani-runner-foundry-private`
+
+### Workflow dispatches and outcomes
+
+1. **Run `29941873552`** (orchestrator, deploy-only path on `foundry-private-v2`) -> **failed**
+   - failure step: Smoke validation
+   - root cause from hosted runtime logs:
+     - `psycopg_pool.PoolTimeout: couldn't get a connection after 30.00 sec`
+2. Investigated V2 RG runtime dependency state:
+   - PostgreSQL server `maffndpg7930` in `rg-maf-ora-foundry-v2` was `Stopped`.
+3. Started PostgreSQL server:
+   - `az postgres flexible-server start -g rg-maf-ora-foundry-v2 -n maffndpg7930`
+   - post-check state: `Ready`
+4. **Run `29942484645`** (same orchestrator inputs) -> **success**
+   - deploy: success
+   - smoke: success
+   - hosted E2E: success
+   - Foundry eval step: completed but report status timed out (see below)
+
+### Foundry eval artifact evidence (run `29942484645`)
+
+Artifact:
+- `foundry-eval-29942484645-1/foundry-report.json`
+
+Report summary:
+- `status`: `timeout`
+- `error`: `Foundry eval run timed out after 900.0 seconds`
+- `eval_id`: `eval_d1fbff9a8a184cfd83f2520f6d4e6971`
+- `run_id`: `evalrun_7de123dd55dd4aa09e1d4fd8ce0ef9b2`
+- `report_url`:
+  - `https://maffndai4aiw7fw5gjdo4.services.ai.azure.com/api/projects/order-resolution/evaluation/evaluations/eval_d1fbff9a8a184cfd83f2520f6d4e6971/runs/evalrun_7de123dd55dd4aa09e1d4fd8ce0ef9b2`
+
+### App Insights / Log Analytics spot-check (RG V2 workspace)
+
+Workspace:
+- `maffnd-mon-4aiw7fw5gjdo4-law` (`2288ca32-1c34-4099-ab3b-886ae7a96be6`)
+
+Lookback:
+- `2h`
+
+Observed:
+1. Row volumes:
+   - `AppDependenciesRows=362`
+   - `AppTracesRows=963`
+   - `AppExceptionsRows=6`
+   - `AppRequestsRows=0`
+2. Workflow dependency spans present:
+   - `workflow.run=20`
+   - `workflow.resolution_submit=4`
+   - `workflow.workflow_output=4`
+   - `workflow.hitl_resume=2`
+   - `workflow.hitl_response=2`
+3. `workflow.workflow_failed` dependency events:
+   - `2`
+4. Recent exceptions (same window):
+   - `requests.exceptions.ConnectionError` (6 rows, during rollout window)
+
+### Remaining follow-ups
+
+1. Foundry eval run timeout requires follow-up (reduce evaluation scope and/or rerun with tuned timeout/profile on private runner).
+2. Continue telemetry monitoring after next eval rerun to confirm no recurring `workflow.workflow_failed` spikes.
+
+## Latest execution update (2026-07-22, capacity check + scale-up)
+
+### Capacity checks performed
+
+1. Subscription/region quota checks:
+   - `az quota list` for `Microsoft.CognitiveServices` in `eastus2` returns `BadRequest` (known API limitation for this provider).
+   - used `az cognitiveservices usage list -l eastus2` as fallback.
+2. Relevant OpenAI quota headroom before changes:
+   - `OpenAI.GlobalStandard.gpt-4o-mini`: `current=12`, `limit=6000`
+   - `OpenAI.GlobalStandard.text-embedding-3-small`: `current=256`, `limit=3000`
+   - result: **regional quota was not saturated**.
+3. Deployment-level capacity was low relative to workload:
+   - `gpt-4o-mini`: capacity `3`, limits `30 RPM / 3000 TPM`
+   - `text-embedding-3-small`: capacity `1`, limits `1 req/10s / 1000 TPM`
+
+### Capacity increases applied (RG V2)
+
+Updated account: `maffndai4aiw7fw5gjdo4` (`rg-maf-ora-foundry-v2`)
+
+1. `gpt-4o-mini`:
+   - capacity `3 -> 6`
+   - effective limits `30 RPM / 3000 TPM -> 60 RPM / 6000 TPM`
+2. `text-embedding-3-small`:
+   - capacity `1 -> 2`
+   - effective limits `1 req/10s / 1000 TPM -> 2 req/10s / 2000 TPM`
+
+### Post-scale validation run
+
+Dispatched private runner workflow:
+- run: `29944660113` (`foundry-deploy.yml`, `foundry-private-v2`, eval enabled)
+- workflow result: `success`
+- eval artifact report (`foundry-eval-29944660113-1/foundry-report.json`) status:
+  - `timeout`
+  - `eval_id=eval_bb1487ede79e4a77bebb591ebe6c8d43`
+  - `run_id=evalrun_119d23ba341c4b9dade34265e771a071`
+
+### Conclusion
+
+Capacity was increased and quota headroom is healthy, but eval timeout persists.  
+Current evidence indicates the timeout is **not solely a quota/capacity constraint** and needs eval-runner/workflow tuning (timeout/query count/evaluator set) in the next pass.
+
+## Latest execution update (2026-07-22, private-lane reference cleanup before push)
+
+### Removed residual public/app-hosted lane assets
+
+1. Deleted app-hosted/public deployment surfaces that should not exist in this branch:
+   - `infra/azure-apphosted/**`
+   - `.github/workflows/azure-apphosted.yml`
+   - `scripts/foundry/deploy_public_dev.sh`
+   - `scripts/foundry/check_public_postgres_readiness.sh`
+   - `infra/foundry-hosted/iac/parameters.public-dev.json`
+2. Removed transitional archival doc with app-hosted/public lane content:
+   - `docs/design/local-azure-foundry-decisions.md`
+
+### Private-only contract tightening
+
+1. Updated hosted IaC network-mode allowed values to private-only:
+   - `infra/foundry-hosted/iac/main.bicep`
+   - `infra/foundry-hosted/iac/main.json`
+2. Updated hosted test coverage to remove explicit public-profile parameterization:
+   - `backend/tests/test_foundry_hosted.py`
+3. Removed remaining app-hosted/public lane wording from active docs:
+   - `README.md`
+   - `scripts/README.md`
+   - `docs/design/engineering-operating-model.md`
+
+### Post-cleanup scan status
+
+1. No active repo assets remain for the public/app-hosted deployment lane.
+2. Residual public/app-hosted text matches are limited to:
+   - historical execution log entries in this file
+   - vendored skill metadata under `.github/skills/*`

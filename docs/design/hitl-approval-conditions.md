@@ -2,10 +2,9 @@
 
 This document defines the exact conditions that trigger human approval (`hitl.request`) in the MAF SDK workflow, with test-ready examples.
 
-## Journey Context (Local MAF -> Azure app-hosted -> Foundry-hosted)
+## Journey Context (Local MAF -> Foundry-hosted private lane)
 
 - Local FastAPI host runs the shared MAF workflow.
-- Azure app-hosted keeps the same behavior.
 - Foundry-hosted Responses entrypoint runs the same workflow.
 - Therefore, the trigger behavior below is the shared production contract across hosts.
 

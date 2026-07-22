@@ -1,16 +1,8 @@
-name: Foundry Runner Probe
+name: Foundry Runner Probe (Private)
 
 on:
   workflow_dispatch:
     inputs:
-      deployment_profile:
-        description: Deployment profile
-        required: false
-        type: choice
-        options:
-          - private
-          - public
-        default: private
       runner_label:
         description: Optional self-hosted runner label override
         required: false
@@ -36,7 +28,6 @@ jobs:
   probe:
     uses: ./.github/workflows/foundry-deploy.yml
     with:
-      deployment_profile: ${{ github.event.inputs.deployment_profile || 'private' }}
       runner_label: ${{ github.event.inputs.runner_label || '' }}
       environment: ${{ github.event.inputs.environment || '' }}
       probe_only: "true"

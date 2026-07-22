@@ -4,7 +4,7 @@ COMPOSE_ENV_FILE ?= backend/.env
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env ensure-test-postgres \
 	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-all test-e2e manual-matrix \
 	parity-all run-mock-mcp up down logs ps docker-test \
-	validate-quick validate-full deploy-app deploy-full clean \
+	validate-quick validate-full clean \
 	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path
 
 help:
@@ -30,8 +30,6 @@ help:
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
 	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
 	@echo "  validate-full   - Full validation (test + eval + e2e + design-review)"
-	@echo "  deploy-app      - App-only Azure deploy (azd deploy)"
-	@echo "  deploy-full     - Infra + app Azure deploy (azd provision && azd deploy)"
 	@echo "  foundry-up      - Self-contained Foundry hosted-agent azd up (BYO VNET + private deps)"
 	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
 	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
@@ -80,7 +78,18 @@ eval-backend: ensure-backend-env ensure-test-postgres
 	cd backend && . .venv/bin/activate && python -m evals.eval_runner
 
 eval-foundry: ensure-backend-env
-	cd backend && . .venv/bin/activate && python -m evals.foundry_eval_runner
+	cd backend && . .venv/bin/activate && \
+		foundry_env_file="../infra/foundry-hosted/.azure/$${FOUNDRY_AZD_ENV_NAME:-foundry-private-env}/.env"; \
+		if [[ -f "$$foundry_env_file" ]]; then \
+			set -a; . "$$foundry_env_file"; set +a; \
+		fi; \
+		if [[ -z "$${FOUNDRY_PROJECTS_ENDPOINT:-}" && -n "$${FOUNDRY_PROJECT_ENDPOINT:-}" ]]; then \
+			export FOUNDRY_PROJECTS_ENDPOINT="$$FOUNDRY_PROJECT_ENDPOINT"; \
+		fi; \
+		if [[ -z "$${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}" && -n "$${AZURE_AI_MODEL_DEPLOYMENT_NAME:-}" ]]; then \
+			export FOUNDRY_MODEL_DEPLOYMENT_NAME="$$AZURE_AI_MODEL_DEPLOYMENT_NAME"; \
+		fi; \
+		python -m evals.foundry_eval_runner
 
 eval-all: eval-backend eval-foundry
 
@@ -88,28 +97,64 @@ test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
 		cd scripts/playwright && npm run test:e2e; \
 	else \
-		health_json="$$(curl -fsS http://localhost:8000/api/health 2>/dev/null || true)"; \
-		if [[ -z "$$health_json" || "$$health_json" != *'"workflow_mode":"maf_sdk"'* ]]; then \
-			echo "Ensuring deterministic local backend for E2E (WORKFLOW_MODE=maf_sdk)."; \
-			$(MAKE) COMPOSE_ENV_FILE=backend/.env up; \
-		fi; \
+		$(MAKE) ensure-backend-env ensure-test-postgres; \
+		backend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+		backend_url="http://127.0.0.1:$${backend_port}"; \
+		backend_log="/tmp/maf-backend-e2e-$${backend_port}.log"; \
+		( \
+			cd backend && . .venv/bin/activate && \
+			APP_ENV=local \
+			WORKFLOW_MODE=maf_sdk \
+			STORE_PROVIDER=postgres \
+			RAG_PROVIDER=pgvector \
+			MEMORY_PROVIDER=postgres \
+			MCP_SERVER_URL= \
+			uvicorn app.main:app --host 127.0.0.1 --port "$${backend_port}" \
+		) > "$${backend_log}" 2>&1 & \
+		backend_pid="$$!"; \
+		disown "$${backend_pid}" 2>/dev/null || true; \
+		frontend_pid=""; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
-		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
+		frontend_log="/tmp/maf-frontend-e2e-$${frontend_port}.log"; \
+		trap 'kill "${backend_pid:-}" 2>/dev/null || true; kill "${frontend_pid:-}" 2>/dev/null || true' EXIT; \
+		for _ in {1..45}; do \
+			health_json="$$(curl -fsS "$${backend_url}/api/health" 2>/dev/null || true)"; \
+			if [[ "$${health_json}" == *'"workflow_mode":"maf_sdk"'* ]]; then \
+				break; \
+			fi; \
+			sleep 1; \
+		done; \
+		health_json="$$(curl -fsS "$${backend_url}/api/health" 2>/dev/null || true)"; \
+		if [[ "$${health_json}" != *'"workflow_mode":"maf_sdk"'* ]]; then \
+			echo "Backend failed to become ready for E2E. See $${backend_log}"; \
+			exit 1; \
+		fi; \
+		(cd frontend && VITE_PROXY_TARGET="$${backend_url}" VITE_API_BASE="$${backend_url}" node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "$${frontend_log}" 2>&1 & \
 		frontend_pid="$$!"; \
-		trap 'kill '"$$frontend_pid"' 2>/dev/null || true; wait '"$$frontend_pid"' 2>/dev/null || true' EXIT; \
+		disown "$${frontend_pid}" 2>/dev/null || true; \
 		for _ in {1..30}; do \
 			curl -fsS "$${frontend_url}" >/dev/null && break; \
 			sleep 1; \
 		done; \
-		PLAYWRIGHT_BASE_URL="$${frontend_url}" bash -c 'cd scripts/playwright && npm run test:e2e'; \
+		proxy_health="$$(curl -fsS "$${frontend_url}/api/health" 2>/dev/null || true)"; \
+		if [[ "$${proxy_health}" != *'"workflow_mode":"maf_sdk"'* || "$${proxy_health}" != *'"environment":"local"'* ]]; then \
+			echo "Frontend proxy is not targeting the isolated local backend. See $${frontend_log}"; \
+			exit 1; \
+		fi; \
+		cd scripts/playwright && PLAYWRIGHT_BASE_URL="$${frontend_url}" npm run test:e2e; \
+		e2e_status="$$?"; \
+		kill "$${backend_pid}" "$${frontend_pid}" 2>/dev/null || true; \
+		wait "$${backend_pid}" 2>/dev/null || true; \
+		wait "$${frontend_pid}" 2>/dev/null || true; \
+		exit "$${e2e_status}"; \
 	fi
 
 manual-matrix:
 	scripts/manual/run-manual-matrix.sh "$${API_URL:-http://localhost:8000}" $${MANUAL_MATRIX_ARGS:-}
 
 parity-all:
-	scripts/parity/run-parity-matrix.sh --targets local azure foundry --profile fast
+	scripts/parity/run-parity-matrix.sh --targets local foundry --profile fast
 
 run-mock-mcp: ensure-backend-env
 	. backend/.venv/bin/activate && uvicorn scripts.mcp.mock_mcp_server:app --reload --port 8011
@@ -158,22 +203,13 @@ validate-quick:
 	else \
 		$(MAKE) test-e2e; \
 	fi
-	@if [[ -n "$${API_URL:-}" ]]; then \
-		infra/azure-apphosted/runtime/smoke-test.sh "$${API_URL}" "$${WEB_URL:-}"; \
-	fi
+	@true
 
 validate-full:
 	$(MAKE) test
 	$(MAKE) eval-backend
 	$(MAKE) test-e2e
 	./scripts/skills/design-review-skill.sh
-
-deploy-app:
-	azd deploy
-
-deploy-full:
-	azd provision
-	azd deploy
 
 foundry-up:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
@@ -204,12 +240,6 @@ foundry-access-path:
 		--template-file iac/access-path.bicep \
 		--parameters @iac/access-path.parameters.json \
 		--parameters runnerVmSshPublicKey="$$(cat "$${RUNNER_SSH_PUBKEY_PATH:-$$HOME/.ssh/id_rsa.pub}")"
-
-foundry-postgres-readiness:
-	./scripts/foundry/check_public_postgres_readiness.sh
-
-foundry-deploy-public:
-	./scripts/foundry/deploy_public_dev.sh
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +

@@ -5,8 +5,7 @@
 | Stage | Status | Runtime behavior |
 | --- | --- | --- |
 | Local FastAPI host | Implemented | Runs the shared MAF workflow and exposes stable API/SSE/HITL contracts. |
-| Azure app-hosted | Implemented | Same FastAPI host pattern on ACA/Postgres/App Insights. |
-| Foundry hosted agent | Implemented | `backend/foundry/main.py` hosts the same workflow with Responses protocol (`backend/agent.yaml`). |
+| Foundry hosted agent | Implemented (private VNet lane retained) | `backend/foundry/main.py` hosts the same workflow with Responses protocol (`backend/agent.yaml`). |
 
 There is one business workflow path rooted at `backend/app/maf/workflows/order_resolution.py`,
 with modular internals in `backend/app/maf/prompts/`, `agents/`, `tools/`, `executors/`,
@@ -51,11 +50,9 @@ The hosted deploy source is configured in `infra/foundry-hosted/azure.yaml` as `
 
 For high-risk turns that request approval, continue the same conversation with `Approve` or `Reject`.
 
-Latest hosted-tracing status (2026-07-15):
+Latest hosted-tracing status (2026-07-18):
 
-- Public Foundry Conversations/Transactions are restored and visible.
-- Hosted tracing/root-cause fix included removing `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING` from `backend/agent.yaml` to avoid stream-wrapper incompatibility on the hosted Foundry path.
-- Private lane currently needs additional investigation for intermittent upstream `HTTP 500 server_error` during smoke/probe after deploy activation.
+- Private Foundry lane deploy + smoke + E2E validation is active.
 
 Telemetry:
 

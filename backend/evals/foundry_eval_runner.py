@@ -126,7 +126,9 @@ async def run_foundry_eval() -> None:
             "FOUNDRY_MODEL_DEPLOYMENT_NAME."
         )
     judge_model = os.getenv("FOUNDRY_EVAL_MODEL", models_cfg.model)
-    poll_interval = float(os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0)))
+    poll_interval = float(
+        os.getenv("FOUNDRY_EVAL_POLL_INTERVAL", foundry_cfg.get("poll_interval", 5.0))
+    )
     timeout = float(os.getenv("FOUNDRY_EVAL_TIMEOUT", foundry_cfg.get("timeout", 300.0)))
 
     report_path = foundry_root / "results" / "foundry-report.json"
@@ -139,7 +141,9 @@ async def run_foundry_eval() -> None:
     }
     try:
         credential = DefaultAzureCredential()
-        project_client = AIProjectClient(endpoint=models_cfg.project_endpoint, credential=credential)
+        project_client = AIProjectClient(
+            endpoint=models_cfg.project_endpoint, credential=credential
+        )
         openai_client = project_client.get_openai_client()
 
         testing_criteria = []
@@ -153,7 +157,8 @@ async def run_foundry_eval() -> None:
         for evaluator_name in evaluators:
             response_variable = (
                 "{{sample.output_items}}"
-                if evaluator_name in tool_evaluator_set or evaluator_name == FoundryEvals.TASK_ADHERENCE
+                if evaluator_name in tool_evaluator_set
+                or evaluator_name == FoundryEvals.TASK_ADHERENCE
                 else "{{sample.output_text}}"
             )
             testing_criteria.append(
@@ -230,7 +235,9 @@ async def run_foundry_eval() -> None:
             "error": _to_jsonable(getattr(eval_run, "error", None)),
         }
     except Exception as exc:  # noqa: BLE001
-        payload["status"] = "timeout" if isinstance(exc, TimeoutError) else str(payload.get("status") or "failed")
+        payload["status"] = (
+            "timeout" if isinstance(exc, TimeoutError) else str(payload.get("status") or "failed")
+        )
         payload["error"] = str(exc)
         if "eval_object" in locals():
             payload["eval_id"] = getattr(eval_object, "id", None)

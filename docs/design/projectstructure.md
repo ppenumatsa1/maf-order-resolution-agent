@@ -37,7 +37,6 @@ maf-order-resolution-agent/
     src/
     package.json
   infra/
-    azure-apphosted/
     foundry-hosted/
   scripts/
     github/

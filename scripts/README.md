@@ -2,15 +2,15 @@
 
 Current hosted-validation note (2026-07-15):
 
-- `scripts/github/foundry_hosted_e2e.sh` and workflow smoke checks are the primary hosted regressions used after each Foundry deploy.
-- Public trace visibility is currently confirmed; private-lane smoke/probe diagnostics are still in active use for intermittent upstream `HTTP 500 server_error`.
+- `scripts/github/foundry_hosted_e2e.sh` and `make foundry-smoke` are the primary hosted regressions used after each Foundry deploy.
+- Private-lane smoke/probe diagnostics are still in active use for intermittent upstream `HTTP 500 server_error`.
 
 ## Contents
 
 - `rubric/e2e-rubric.md`: evaluation rubric for end-to-end workflow quality.
 - `playwright/`: browser automation suite for key demo scenarios.
 - `mcp/mock_mcp_server.py`: authenticated mock MCP endpoint for POC.
-- `parity/`: multi-target parity runner for local/Azure/Foundry endpoint checks.
+- `parity/`: parity runner for local/Foundry endpoint checks.
 - `skills/design-review-skill.sh`: deterministic design-review validation entry point used by `/fleet` skill.
 - `skills/deployment-mode-router.sh`: routes quick/full validation and app-only/full deployment based on changed files.
 - `skills/operating-model-enforcement.sh`: enforces minimum operating-model guardrails for HITL and hosted runtime/deploy surface changes.
@@ -33,8 +33,6 @@ Set endpoint matrix environment variables (directly or via `PARITY_ENV_FILE`):
 ```bash
 PARITY_LOCAL_API_URL=http://localhost:8000
 PARITY_LOCAL_WEB_URL=http://localhost:5173
-PARITY_AZURE_API_URL=https://<azure-backend-host>
-PARITY_AZURE_WEB_URL=https://<azure-web-host>
 PARITY_FOUNDRY_API_URL=https://<foundry-backend-host>
 PARITY_FOUNDRY_WEB_URL=https://<foundry-web-host>
 ```
@@ -45,7 +43,7 @@ Run:
 make parity-all
 ```
 
-`make parity-all` is the single parity gate for this POC and always runs all three targets (`local`, `azure`, `foundry`) with the fast profile. Reports are written to `scripts/parity/reports/`.
+`make parity-all` is the parity gate for this branch and runs local plus Foundry targets with the fast profile. Reports are written to `scripts/parity/reports/`.
 
 Fast profile coverage:
 
@@ -59,10 +57,10 @@ Fast profile coverage:
 If you need a one-off exhaustive run, invoke the runner directly:
 
 ```bash
-python3 scripts/parity/run_parity_matrix.py --targets local azure foundry --profile full
+python3 scripts/parity/run_parity_matrix.py --targets local foundry --profile full
 ```
 
-For `azure` and `foundry` targets, the parity runner now applies hosted-safe Playwright defaults automatically:
+For hosted targets, the parity runner applies hosted-safe Playwright defaults automatically:
 
 - `PLAYWRIGHT_EXPECT_TIMEOUT_MS=60000`
 - `PLAYWRIGHT_TEST_TIMEOUT_MS=120000`

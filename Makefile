@@ -233,12 +233,14 @@ foundry-smoke:
 	attempt=1; \
 	max_attempts="$${SMOKE_MAX_ATTEMPTS:-6}"; \
 	while [[ "$$attempt" -le "$$max_attempts" ]]; do \
+		set +e; \
 		if [[ -n "$${SMOKE_THREAD_ID:-}" ]]; then \
 			output="$$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$$message" --protocol responses --conversation-id "$${SMOKE_THREAD_ID}" --no-prompt 2>&1)"; \
 		else \
 			output="$$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$$message" --protocol responses --new-conversation --new-session --no-prompt 2>&1)"; \
 		fi; \
 		rc="$$?"; \
+		set -e; \
 		if [[ "$$rc" -eq 0 ]]; then \
 			echo "$$output"; \
 			exit 0; \

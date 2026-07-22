@@ -58,6 +58,7 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
    - this removes dependency on branch-local/stale secret values for runtime DB URL during deploy-only runs.
 8. Connection-string format correction (`scripts/foundry/ensure_foundry_azd_defaults.sh`)
    - corrected generated PostgreSQL URL scheme from `postgresql+psycopg://` to `postgresql://` for Psycopg pool compatibility.
+   - drift guard also rewrites existing legacy-scheme values in azd env when detected.
 
 ### Parallel observation: permissions
 

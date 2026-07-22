@@ -141,11 +141,15 @@ if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" ]]; then
   fi
   expected_host="${postgres_server_name}.postgres.database.azure.com"
   runtime_host="$(url_host "$runtime_database_url_existing")"
+  runtime_legacy_scheme="false"
+  if [[ "$runtime_database_url_existing" == postgresql+psycopg://* ]]; then
+    runtime_legacy_scheme="true"
+  fi
 
   if [[ -z "$runtime_database_url_existing" && -n "$computed_runtime_database_url" ]]; then
     azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
     echo "defaulted RUNTIME_DATABASE_URL from postgres settings"
-  elif [[ "$runtime_host" != "$expected_host" ]]; then
+  elif [[ "$runtime_host" != "$expected_host" || "$runtime_legacy_scheme" == "true" ]]; then
     sync_runtime_database_url="$computed_runtime_database_url"
     if [[ -z "$sync_runtime_database_url" && -n "$runtime_database_url_existing" ]]; then
       sync_runtime_database_url="$(replace_url_host "$runtime_database_url_existing" "$expected_host")"

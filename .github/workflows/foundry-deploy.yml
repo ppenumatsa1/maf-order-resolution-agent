@@ -106,6 +106,9 @@ jobs:
         run: azd ext install azure.ai.agents --no-prompt
 
       - name: Select private azd environment
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          FOUNDRY_DATABASE_URL: ${{ secrets.FOUNDRY_DATABASE_URL }}
         run: |
           set -euo pipefail
           azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
@@ -166,6 +169,13 @@ jobs:
           azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
           azd env set FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_CHAT_DEPLOYMENT_CAPACITY || '30' }}"
           azd env set FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY || '2' }}"
+          if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+            azd env set POSTGRES_ADMIN_PASSWORD "${POSTGRES_ADMIN_PASSWORD}"
+          fi
+          if [[ -n "${FOUNDRY_DATABASE_URL:-}" ]]; then
+            azd env set RUNTIME_DATABASE_URL "${FOUNDRY_DATABASE_URL}"
+            azd env set DATABASE_URL "${FOUNDRY_DATABASE_URL}"
+          fi
 
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh

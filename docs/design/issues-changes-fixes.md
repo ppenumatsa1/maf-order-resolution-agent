@@ -33,6 +33,10 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
    - before `azd deploy`, hydrate shell env from selected azd env via:
      - `set -a && eval "$(azd env get-values)" && set +a`
    - ensures `backend/agent.yaml` `${...}` substitutions resolve with actual azd env values during deploy packaging
+3. Workflow env-seeding hardening (`.github/workflows/foundry-deploy.yml`, `.github/workflows/foundry-provision.yml`)
+   - explicitly seed azd env with `POSTGRES_ADMIN_PASSWORD` (from environment secret)
+   - seed `RUNTIME_DATABASE_URL` and `DATABASE_URL` from `FOUNDRY_DATABASE_URL` secret when provided
+   - this prevents new/recreated azd environments from silently deploying hosted agents with blank DB URL env vars
 
 ### Parallel observation: permissions
 

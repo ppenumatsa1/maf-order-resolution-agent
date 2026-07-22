@@ -149,7 +149,12 @@ jobs:
       - name: Install Foundry azd extension
         run: azd ext install azure.ai.agents --no-prompt
 
+      - name: Install Foundry connections extension
+        run: azd ext install azure.ai.connections --no-prompt
+
       - name: Select private azd environment
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"

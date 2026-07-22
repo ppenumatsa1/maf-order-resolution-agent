@@ -52,6 +52,10 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
      - `RUNTIME_DATABASE_URL` host
      - expected `${POSTGRES_SERVER_NAME}.postgres.database.azure.com`
    - deploy now fails fast on host mismatch before smoke.
+7. Runtime URL sync from Foundry connection (`.github/workflows/foundry-deploy.yml`)
+   - deploy now reads `orderresolutionruntimesecrets` with `--show-credentials` and writes
+     `RUNTIME_DATABASE_URL`/`DATABASE_URL` into azd env before preflight validation.
+   - this removes dependency on branch-local/stale secret values for runtime DB URL during deploy-only runs.
 
 ### Parallel observation: permissions
 

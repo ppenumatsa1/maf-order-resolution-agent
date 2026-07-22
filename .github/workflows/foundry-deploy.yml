@@ -105,6 +105,9 @@ jobs:
       - name: Install Foundry azd extension
         run: azd ext install azure.ai.agents --no-prompt
 
+      - name: Install Foundry connections extension
+        run: azd ext install azure.ai.connections --no-prompt
+
       - name: Select private azd environment
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
@@ -174,6 +177,16 @@ jobs:
 
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
+
+      - name: Sync runtime DB URL from Foundry connection
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          connection_database_url="$(azd ai connection show orderresolutionruntimesecrets --show-credentials --output json --no-prompt | jq -r '.credentials.database_url // empty')"
+          if [[ -n "${connection_database_url}" ]]; then
+            azd env set RUNTIME_DATABASE_URL "${connection_database_url}"
+            azd env set DATABASE_URL "${connection_database_url}"
+          fi
 
       - name: Validate runtime DB host wiring
         run: |

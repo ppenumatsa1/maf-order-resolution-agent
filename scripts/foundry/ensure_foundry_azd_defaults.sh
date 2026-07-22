@@ -125,6 +125,8 @@ set_if_missing MANAGE_PROJECT_CONNECTIONS "$manage_project_connections_default"
 set_if_missing FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${FOUNDRY_CHAT_DEPLOYMENT_CAPACITY:-30}"
 set_if_missing FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY:-2}"
 set_if_missing RUNNER_VM_SSH_PUBLIC_KEY "${RUNNER_VM_SSH_PUBLIC_KEY:-}"
+set_if_missing APPLICATIONINSIGHTS_CONNECTION_STRING "${APPLICATIONINSIGHTS_CONNECTION_STRING:-$(get_env_value applicationInsightsConnectionString)}"
+set_if_missing APPINSIGHTS_CONNECTION_STRING "${APPINSIGHTS_CONNECTION_STRING:-$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)}"
 
 runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
 create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
@@ -188,3 +190,4 @@ set_if_missing foundryEmbeddingsDeploymentCapacity "$(get_env_value FOUNDRY_EMBE
 set_if_missing runnerVmSshPublicKey "$(get_env_value RUNNER_VM_SSH_PUBLIC_KEY)"
 set_if_missing runtimeDatabaseUrl "$(get_env_value RUNTIME_DATABASE_URL)"
 set_if_missing databaseUrl "$(get_env_value DATABASE_URL)"
+set_if_missing applicationInsightsConnectionString "$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)"

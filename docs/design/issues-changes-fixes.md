@@ -3,6 +3,28 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-22, telemetry validation blocker and fix)
+
+### Telemetry validation blocker
+
+After the hosted gate turned green, Application Insights queries returned zero rows across AppRequests/AppDependencies/AppTraces/AppEvents/AppExceptions.
+
+Root cause in private azd env:
+
+1. `applicationInsightsConnectionString` (camelCase output) existed
+2. `APPLICATIONINSIGHTS_CONNECTION_STRING` and `APPINSIGHTS_CONNECTION_STRING` (uppercase runtime keys used by `backend/agent.yaml`) were missing
+3. hosted runtime therefore did not receive App Insights connection string and emitted no telemetry
+
+### Fix applied
+
+Updated `scripts/foundry/ensure_foundry_azd_defaults.sh` to synchronize telemetry env aliases:
+
+1. default `APPLICATIONINSIGHTS_CONNECTION_STRING` from `applicationInsightsConnectionString`
+2. default `APPINSIGHTS_CONNECTION_STRING` from `APPLICATIONINSIGHTS_CONNECTION_STRING`
+3. mirror back `applicationInsightsConnectionString` from uppercase canonical value for compatibility
+
+This aligns azd env outputs with hosted runtime env variable names so telemetry export is enabled after redeploy.
+
 ## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
 
 ### Successful runs

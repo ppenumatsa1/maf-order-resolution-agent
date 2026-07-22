@@ -228,11 +228,33 @@ foundry-deploy:
 	azd ai agent show "$$agent_name" --output json --no-prompt >/dev/null
 
 foundry-smoke:
-	@if [[ -n "$${SMOKE_THREAD_ID:-}" ]]; then \
-		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --conversation-id "$${SMOKE_THREAD_ID}" --no-prompt; \
-	else \
-		cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}" --protocol responses --new-conversation --new-session --no-prompt; \
-	fi
+	@set -euo pipefail; \
+	message="$${SMOKE_MESSAGE:-Resolve delayed order ORD-1009}"; \
+	attempt=1; \
+	max_attempts="$${SMOKE_MAX_ATTEMPTS:-6}"; \
+	while [[ "$$attempt" -le "$$max_attempts" ]]; do \
+		if [[ -n "$${SMOKE_THREAD_ID:-}" ]]; then \
+			output="$$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$$message" --protocol responses --conversation-id "$${SMOKE_THREAD_ID}" --no-prompt 2>&1)"; \
+		else \
+			output="$$(cd infra/foundry-hosted && azd ai agent invoke order-resolution-hosted "$$message" --protocol responses --new-conversation --new-session --no-prompt 2>&1)"; \
+		fi; \
+		rc="$$?"; \
+		if [[ "$$rc" -eq 0 ]]; then \
+			echo "$$output"; \
+			exit 0; \
+		fi; \
+		if echo "$$output" | grep -Eqi 'context deadline exceeded|session_not_ready|HTTP (404|409|429|5[0-9]{2})'; then \
+			echo "Transient smoke invoke failure ($$attempt/$$max_attempts); retrying in 15s..."; \
+			echo "$$output"; \
+			attempt="$$((attempt + 1))"; \
+			sleep 15; \
+			continue; \
+		fi; \
+		echo "$$output"; \
+		exit "$$rc"; \
+	done; \
+	echo "Smoke invoke failed after $$max_attempts attempts."; \
+	exit 1
 
 foundry-access-path:
 	cd infra/foundry-hosted && az deployment group create \

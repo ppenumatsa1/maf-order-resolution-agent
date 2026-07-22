@@ -48,6 +48,23 @@ Additional telemetry hardening:
 
 Why this was needed: `backend/agent.yaml` uses `${...}` substitution for these fields; when absent in azd env, hosted runtime can receive unresolved placeholder strings instead of empty values, which can disable telemetry paths unexpectedly.
 
+### Re-validation result after telemetry fixes
+
+Hosted deploy reruns remained green after telemetry hardening:
+
+1. `29965850415` -> success (deploy + smoke + hosted E2E + eval)
+2. `29966110736` -> success (deploy + smoke + hosted E2E + eval)
+
+Direct App Insights KQL validation against app id `4120ca65-19b4-4fa5-9dc0-850b17a2e57d` still returned zero rows in the last 2h for:
+
+- `requests`
+- `dependencies`
+- `traces`
+- `customEvents`
+- `exceptions`
+
+This means hosted functionality is passing, but telemetry ingestion is still blocked at runtime/export path (not deploy/test orchestration path).
+
 ## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
 
 ### Successful runs

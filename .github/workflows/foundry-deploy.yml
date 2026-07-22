@@ -233,7 +233,20 @@ jobs:
 
       - name: Report-only Foundry eval
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: make eval-foundry
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          set -a
+          eval "$(azd env get-values)"
+          set +a
+          if [[ -z "${FOUNDRY_PROJECTS_ENDPOINT:-}" && -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ]]; then
+            export FOUNDRY_PROJECTS_ENDPOINT="${FOUNDRY_PROJECT_ENDPOINT}"
+          fi
+          if [[ -z "${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}" && -n "${FOUNDRY_EVAL_MODEL:-}" ]]; then
+            export FOUNDRY_MODEL_DEPLOYMENT_NAME="${FOUNDRY_EVAL_MODEL}"
+          fi
+          cd ../..
+          make eval-foundry
 
       - name: Upload Foundry eval report
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}

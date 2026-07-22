@@ -34,6 +34,22 @@ Updated `.github/workflows/foundry-deploy.yml` with a new step before `Report-on
 
 This keeps deploy/smoke/E2E behavior unchanged and closes the private-runner dependency gap that blocked eval execution.
 
+### Follow-up blocker after dependency fix
+
+Rerun `29964570645` passed the new venv step but still failed at eval bootstrap with:
+
+- `RuntimeError: Foundry model configuration is missing. Set FOUNDRY_PROJECTS_ENDPOINT and FOUNDRY_MODEL_DEPLOYMENT_NAME.`
+
+Additional workflow hardening applied:
+
+1. hydrate eval process env directly from `azd env get-values` in deploy job before `make eval-foundry`
+2. normalize endpoint fallback:
+   - `FOUNDRY_PROJECT_ENDPOINT` -> `FOUNDRY_PROJECTS_ENDPOINT`
+3. normalize deployment fallback:
+   - `FOUNDRY_EVAL_MODEL` -> `FOUNDRY_MODEL_DEPLOYMENT_NAME` when deployment name is unset
+
+This removes dependence on repo-local `.azure/.../.env` presence on the runner and ensures eval receives canonical Foundry model settings from the selected azd environment.
+
 ## Latest execution update (2026-07-22, private scratch lane: smoke `session_not_ready` root-cause)
 
 ### Symptom

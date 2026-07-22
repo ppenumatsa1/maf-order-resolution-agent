@@ -152,6 +152,20 @@ jobs:
           azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
           azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
           azd env set NETWORK_MODE "private"
+          azd env set AZURE_RESOURCE_GROUP "${{ vars.FOUNDRY_RESOURCE_GROUP || '' }}"
+          azd env set AZURE_LOCATION "${{ vars.AZURE_LOCATION || 'eastus2' }}"
+          azd env set FOUNDRY_LOCATION "${{ vars.FOUNDRY_LOCATION || vars.AZURE_LOCATION || 'eastus2' }}"
+          azd env set FOUNDRY_PROJECT_NAME "${{ vars.FOUNDRY_PROJECT_NAME || 'order-resolution' }}"
+          azd env set HOSTED_AGENT_NAME "${{ vars.HOSTED_AGENT_NAME || 'order-resolution-hosted' }}"
+          azd env set AZURE_AI_PROJECT_ID "${{ vars.AZURE_AI_PROJECT_ID || vars.FOUNDRY_PROJECT_ID || '' }}"
+          azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID || vars.AZURE_AI_PROJECT_ID || '' }}"
+          azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT || vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
+          azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT || '' }}"
+          azd env set NAME_PREFIX "${{ vars.NAME_PREFIX || 'maffnd' }}"
+          azd env set POSTGRES_SERVER_NAME "${{ vars.POSTGRES_SERVER_NAME || 'maffndpg7930' }}"
+          azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
+          azd env set FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_CHAT_DEPLOYMENT_CAPACITY || '30' }}"
+          azd env set FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY || '2' }}"
 
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh

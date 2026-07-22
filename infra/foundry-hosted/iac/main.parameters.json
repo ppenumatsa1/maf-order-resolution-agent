@@ -2,6 +2,9 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
+    "namePrefix": {
+      "value": "${NAME_PREFIX}"
+    },
     "aiSearchLocation": {
       "value": "${AI_SEARCH_LOCATION}"
     },
@@ -32,6 +35,9 @@
     "createRunnerVm": {
       "value": "${CREATE_RUNNER_VM}"
     },
+    "runnerVmSshPublicKey": {
+      "value": "${RUNNER_VM_SSH_PUBLIC_KEY}"
+    },
     "enableStandardAgentNetworkInjection": {
       "value": "${ENABLE_STANDARD_AGENT_NETWORK_INJECTION}"
     },
@@ -49,6 +55,12 @@
     },
     "manageProjectConnections": {
       "value": "${MANAGE_PROJECT_CONNECTIONS}"
+    },
+    "foundryChatDeploymentCapacity": {
+      "value": "${FOUNDRY_CHAT_DEPLOYMENT_CAPACITY}"
+    },
+    "foundryEmbeddingsDeploymentCapacity": {
+      "value": "${FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY}"
     },
     "runtimeConnectionName": {
       "value": "orderresolutionruntimesecrets"

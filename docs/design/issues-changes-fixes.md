@@ -3,6 +3,45 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-22, private scratch lane: smoke `session_not_ready` root-cause)
+
+### Symptom
+
+Hosted deploy succeeded, but smoke repeatedly failed with:
+
+- HTTP `424 Failed Dependency`
+- `error.code=session_not_ready`
+- message: session did not become ready in time; check runtime `/readiness`
+
+### Root cause observed from hosted system logs
+
+For failing smoke session `d2ae288f70f55a36b29bbde054af36b84101e62b60a19a954bfdae404a87cb7`, hosted logs showed app startup failing on database initialization:
+
+1. runtime attempted PostgreSQL pool connections to `127.0.0.1:5432`
+2. repeated `connection refused`
+3. startup crashed with `psycopg_pool.PoolTimeout: couldn't get a connection after 30.00 sec`
+
+This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell back to loopback defaults and never became ready.
+
+### Fixes applied
+
+1. `scripts/foundry/ensure_foundry_azd_defaults.sh`
+   - auto-compute `RUNTIME_DATABASE_URL` from provisioned PostgreSQL settings when missing
+   - set `DATABASE_URL` from `RUNTIME_DATABASE_URL` when missing
+   - mirror both to legacy lowercase aliases for IaC/workflow compatibility
+2. `Makefile` (`foundry-deploy`)
+   - before `azd deploy`, hydrate shell env from selected azd env via:
+     - `set -a && eval "$(azd env get-values)" && set +a`
+   - ensures `backend/agent.yaml` `${...}` substitutions resolve with actual azd env values during deploy packaging
+
+### Parallel observation: permissions
+
+While diagnosing, VM-side log access initially failed with:
+
+- `403` for `Microsoft.CognitiveServices/accounts/AIServices/agents/read`
+
+VM runner identity was granted Foundry roles (`Azure AI Developer`, `Cognitive Services User`, `Azure AI Administrator`) at account/project scopes to unblock agent log retrieval for diagnosis.
+
 ## Latest execution update (2026-07-18, private preflight + IaC wiring hardening)
 
 ## Latest execution update (2026-07-18, private deploy gate green + Foundry eval run completed and populated)

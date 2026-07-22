@@ -62,6 +62,7 @@ set_if_missing AI_SEARCH_LOCATION "${AI_SEARCH_LOCATION:-eastus}"
 set_if_missing FOUNDRY_PROJECT_NAME "${FOUNDRY_PROJECT_NAME:-order-resolution}"
 set_if_missing HOSTED_AGENT_NAME "${HOSTED_AGENT_NAME:-order-resolution-hosted}"
 set_if_missing RUNTIME_DATABASE_URL "${RUNTIME_DATABASE_URL:-}"
+set_if_missing DATABASE_URL "${DATABASE_URL:-}"
 set_if_missing CREATE_POSTGRES_SERVER "${CREATE_POSTGRES_SERVER:-true}"
 set_if_missing POSTGRES_SERVER_NAME "${POSTGRES_SERVER_NAME:-maffndpg7930}"
 set_if_missing POSTGRES_ADMIN_USERNAME "${POSTGRES_ADMIN_USERNAME:-pgadmin}"
@@ -100,6 +101,8 @@ if [[ -z "$runtime_database_url_existing" ]]; then
   fi
 fi
 
+set_if_missing DATABASE_URL "$(get_env_value RUNTIME_DATABASE_URL)"
+
 # Preserve lowercase env keys used by older scripts/workflows.
 set_if_missing aiSearchLocation "$(get_env_value AI_SEARCH_LOCATION)"
 set_if_missing foundryProjectName "$(get_env_value FOUNDRY_PROJECT_NAME)"
@@ -121,3 +124,4 @@ set_if_missing foundryChatDeploymentCapacity "$(get_env_value FOUNDRY_CHAT_DEPLO
 set_if_missing foundryEmbeddingsDeploymentCapacity "$(get_env_value FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY)"
 set_if_missing runnerVmSshPublicKey "$(get_env_value RUNNER_VM_SSH_PUBLIC_KEY)"
 set_if_missing runtimeDatabaseUrl "$(get_env_value RUNTIME_DATABASE_URL)"
+set_if_missing databaseUrl "$(get_env_value DATABASE_URL)"

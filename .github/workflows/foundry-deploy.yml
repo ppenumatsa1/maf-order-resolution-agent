@@ -183,6 +183,18 @@ jobs:
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
 
+      - name: Sync Application Insights connection string
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
+          appi_connection_string="$(az resource list -g "$resource_group" --resource-type microsoft.insights/components --query "[0].properties.ConnectionString" -o tsv)"
+          if [[ -n "${appi_connection_string}" ]]; then
+            azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
+            azd env set APPINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
+            azd env set applicationInsightsConnectionString "${appi_connection_string}"
+          fi
+
       - name: Sync runtime DB URL from Foundry connection
         run: |
           set -euo pipefail

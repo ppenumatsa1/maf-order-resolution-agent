@@ -25,6 +25,17 @@ Updated `scripts/foundry/ensure_foundry_azd_defaults.sh` to synchronize telemetr
 
 This aligns azd env outputs with hosted runtime env variable names so telemetry export is enabled after redeploy.
 
+Follow-up hardening in `.github/workflows/foundry-deploy.yml`:
+
+1. added `Sync Application Insights connection string` step
+2. reads `properties.ConnectionString` from `microsoft.insights/components` in the selected resource group
+3. writes all expected azd env keys:
+   - `APPLICATIONINSIGHTS_CONNECTION_STRING`
+   - `APPINSIGHTS_CONNECTION_STRING`
+   - `applicationInsightsConnectionString`
+
+This removes dependency on previous azd output-shape assumptions and guarantees deploy-time runtime env receives the canonical App Insights connection string.
+
 ## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
 
 ### Successful runs

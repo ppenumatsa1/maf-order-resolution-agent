@@ -35,13 +35,16 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
    - ensures `backend/agent.yaml` `${...}` substitutions resolve with actual azd env values during deploy packaging
 3. Workflow env-seeding hardening (`.github/workflows/foundry-deploy.yml`, `.github/workflows/foundry-provision.yml`)
    - explicitly seed azd env with `POSTGRES_ADMIN_PASSWORD` (from environment secret)
-   - seed `RUNTIME_DATABASE_URL` and `DATABASE_URL` from `FOUNDRY_DATABASE_URL` secret when provided
-   - this prevents new/recreated azd environments from silently deploying hosted agents with blank DB URL env vars
+   - removed direct seeding from `FOUNDRY_DATABASE_URL` secret to avoid stale-host drift after scratch reprovision
+   - this prevents new/recreated azd environments from silently deploying hosted agents with stale DB URL hostnames
 4. Hosted runtime secret binding hardening (`backend/agent.yaml`)
    - switched hosted DB runtime env vars to Foundry connection placeholders:
      - `FOUNDRY_RUNTIME_DATABASE_URL=${{connections.orderresolutionruntimesecrets.credentials.database_url}}`
      - `RUNTIME_DATABASE_URL=${{connections.orderresolutionruntimesecrets.credentials.database_url}}`
    - avoids dependence on ad-hoc shell env interpolation for DB connection strings.
+5. Runtime DB URL drift guard (`scripts/foundry/ensure_foundry_azd_defaults.sh`)
+   - when current `RUNTIME_DATABASE_URL` host does not match `POSTGRES_SERVER_NAME`, script now rewrites
+     `RUNTIME_DATABASE_URL`/`DATABASE_URL` (+ lowercase aliases) to the computed current-server URL.
 
 ### Parallel observation: permissions
 

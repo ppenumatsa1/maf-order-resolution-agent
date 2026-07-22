@@ -21,6 +21,16 @@ print(quote(sys.argv[1], safe=''))
 PY
 }
 
+url_host() {
+  local value="$1"
+  python3 - "$value" <<'PY'
+import re
+import sys
+match = re.match(r'^[a-zA-Z0-9+.-]+://(?:[^@/]+@)?([^:/?]+)', sys.argv[1] or '')
+print(match.group(1).lower() if match else '')
+PY
+}
+
 set_if_missing() {
   local key="$1"
   local value="$2"
@@ -86,18 +96,27 @@ set_if_missing FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${FOUNDRY_EMBEDDINGS_DEPL
 set_if_missing RUNNER_VM_SSH_PUBLIC_KEY "${RUNNER_VM_SSH_PUBLIC_KEY:-}"
 
 runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
-if [[ -z "$runtime_database_url_existing" ]]; then
-  create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
-  postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"
-  postgres_admin_username="$(get_env_value POSTGRES_ADMIN_USERNAME)"
-  postgres_admin_password="$(get_env_value POSTGRES_ADMIN_PASSWORD)"
-  postgres_database_name="$(get_env_value POSTGRES_DATABASE_NAME)"
+create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
+postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"
+postgres_admin_username="$(get_env_value POSTGRES_ADMIN_USERNAME)"
+postgres_admin_password="$(get_env_value POSTGRES_ADMIN_PASSWORD)"
+postgres_database_name="$(get_env_value POSTGRES_DATABASE_NAME)"
 
-  if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
-    encoded_password="$(url_encode "$postgres_admin_password")"
-    computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
+  encoded_password="$(url_encode "$postgres_admin_password")"
+  computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+  expected_host="${postgres_server_name}.postgres.database.azure.com"
+  runtime_host="$(url_host "$runtime_database_url_existing")"
+
+  if [[ -z "$runtime_database_url_existing" ]]; then
     azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
     echo "defaulted RUNTIME_DATABASE_URL from postgres settings"
+  elif [[ "$runtime_host" != "$expected_host" ]]; then
+    azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
+    azd env set DATABASE_URL "$computed_runtime_database_url" >/dev/null
+    azd env set runtimeDatabaseUrl "$computed_runtime_database_url" >/dev/null
+    azd env set databaseUrl "$computed_runtime_database_url" >/dev/null
+    echo "synchronized runtime DB URLs to current postgres server host ${expected_host}"
   fi
 fi
 

@@ -31,6 +31,37 @@ print(match.group(1).lower() if match else '')
 PY
 }
 
+replace_url_host() {
+  local value="$1"
+  local new_host="$2"
+  python3 - "$value" "$new_host" <<'PY'
+import sys
+from urllib.parse import urlsplit, urlunsplit
+
+value = sys.argv[1]
+new_host = sys.argv[2]
+parts = urlsplit(value)
+if not parts.scheme:
+    print(value)
+    raise SystemExit(0)
+
+userinfo = ""
+host_port = parts.netloc
+if "@" in host_port:
+    userinfo, host_port = host_port.rsplit("@", 1)
+
+port = ""
+if ":" in host_port:
+    _, port = host_port.rsplit(":", 1)
+
+netloc = f"{userinfo}@{new_host}" if userinfo else new_host
+if port:
+    netloc = f"{netloc}:{port}"
+
+print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
+PY
+}
+
 set_if_missing() {
   local key="$1"
   local value="$2"
@@ -102,21 +133,30 @@ postgres_admin_username="$(get_env_value POSTGRES_ADMIN_USERNAME)"
 postgres_admin_password="$(get_env_value POSTGRES_ADMIN_PASSWORD)"
 postgres_database_name="$(get_env_value POSTGRES_DATABASE_NAME)"
 
-if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
-  encoded_password="$(url_encode "$postgres_admin_password")"
-  computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+if [[ "$create_postgres_server" == "true" && -n "$postgres_server_name" ]]; then
+  computed_runtime_database_url=""
+  if [[ -n "$postgres_admin_username" && -n "$postgres_admin_password" && -n "$postgres_database_name" ]]; then
+    encoded_password="$(url_encode "$postgres_admin_password")"
+    computed_runtime_database_url="postgresql+psycopg://${postgres_admin_username}:${encoded_password}@${postgres_server_name}.postgres.database.azure.com:5432/${postgres_database_name}?sslmode=require"
+  fi
   expected_host="${postgres_server_name}.postgres.database.azure.com"
   runtime_host="$(url_host "$runtime_database_url_existing")"
 
-  if [[ -z "$runtime_database_url_existing" ]]; then
+  if [[ -z "$runtime_database_url_existing" && -n "$computed_runtime_database_url" ]]; then
     azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
     echo "defaulted RUNTIME_DATABASE_URL from postgres settings"
   elif [[ "$runtime_host" != "$expected_host" ]]; then
-    azd env set RUNTIME_DATABASE_URL "$computed_runtime_database_url" >/dev/null
-    azd env set DATABASE_URL "$computed_runtime_database_url" >/dev/null
-    azd env set runtimeDatabaseUrl "$computed_runtime_database_url" >/dev/null
-    azd env set databaseUrl "$computed_runtime_database_url" >/dev/null
-    echo "synchronized runtime DB URLs to current postgres server host ${expected_host}"
+    sync_runtime_database_url="$computed_runtime_database_url"
+    if [[ -z "$sync_runtime_database_url" && -n "$runtime_database_url_existing" ]]; then
+      sync_runtime_database_url="$(replace_url_host "$runtime_database_url_existing" "$expected_host")"
+    fi
+    if [[ -n "$sync_runtime_database_url" ]]; then
+      azd env set RUNTIME_DATABASE_URL "$sync_runtime_database_url" >/dev/null
+      azd env set DATABASE_URL "$sync_runtime_database_url" >/dev/null
+      azd env set runtimeDatabaseUrl "$sync_runtime_database_url" >/dev/null
+      azd env set databaseUrl "$sync_runtime_database_url" >/dev/null
+      echo "synchronized runtime DB URLs to current postgres server host ${expected_host}"
+    fi
   fi
 fi
 

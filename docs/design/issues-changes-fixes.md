@@ -45,6 +45,8 @@ This confirms DB URL wiring was not reaching the hosted runtime, so runtime fell
 5. Runtime DB URL drift guard (`scripts/foundry/ensure_foundry_azd_defaults.sh`)
    - when current `RUNTIME_DATABASE_URL` host does not match `POSTGRES_SERVER_NAME`, script now rewrites
      `RUNTIME_DATABASE_URL`/`DATABASE_URL` (+ lowercase aliases) to the computed current-server URL.
+   - if admin credentials are unavailable in the shell, host rewrite still proceeds by preserving existing
+     user/password/query components and replacing only the hostname.
 
 ### Parallel observation: permissions
 

@@ -13,18 +13,13 @@ foundry:
   report_only: true
   max_queries: 10
   poll_interval: 5
-  timeout: 900
+  timeout: 1800
   evaluators:
     - task_completion
-    - task_adherence
-    - intent_resolution
-    - relevance
-  optional_groundedness_evaluator: groundedness
-  optional_tool_evaluators:
-    - tool_call_accuracy
-    - tool_selection
-    - tool_input_accuracy
-    - tool_output_utilization
-    - tool_call_success
+    - coherence
+  trace_evaluation:
+    evidence_file: .foundry/results/hosted-e2e-evidence.json
+    max_traces: 10
+    max_evidence_age_seconds: 21600
 options:
   pass_threshold: 0.8

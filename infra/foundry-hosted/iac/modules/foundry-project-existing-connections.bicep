@@ -43,6 +43,12 @@ param storageConnectionName string
 @description('Connection name for AI Search on the project')
 param aiSearchConnectionName string
 
+@description('Name of the existing Application Insights resource')
+param applicationInsightsName string
+
+@description('Resource ID of the existing Application Insights resource')
+param applicationInsightsResourceId string
+
 resource searchService 'Microsoft.Search/searchServices@2024-06-01-preview' existing = {
   name: aiSearchName
   scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
@@ -56,6 +62,10 @@ resource cosmosDBAccount 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-previ
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: applicationInsightsName
 }
 
 resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
@@ -108,6 +118,24 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-previ
       }
     }
   }
+
+  resource projectConnectionApplicationInsights 'connections@2025-04-01-preview' = {
+    name: 'ApplicationInsights'
+    properties: {
+      #disable-next-line BCP036
+      category: 'AppInsights'
+      target: applicationInsightsResourceId
+      authType: 'ApiKey'
+      isSharedToAll: true
+      credentials: {
+        key: applicationInsights.properties.ConnectionString
+      }
+      metadata: {
+        ApiType: 'Azure'
+        ResourceId: applicationInsightsResourceId
+      }
+    }
+  }
 }
 
 output projectId string = project.id
@@ -117,3 +145,5 @@ output projectWorkspaceId string = project.properties.internalId
 output cosmosConnection string = cosmosConnectionName
 output storageConnection string = storageConnectionName
 output aiSearchConnection string = aiSearchConnectionName
+output applicationInsightsConnection string = project::projectConnectionApplicationInsights.name
+output applicationInsightsConnectionId string = project::projectConnectionApplicationInsights.id

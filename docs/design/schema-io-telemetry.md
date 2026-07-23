@@ -67,14 +67,32 @@ Native workflow events remain the source of truth. The rich stream maps stages t
 
 ## App Insights Wiring
 
-Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
+Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Local processes can set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. Hosted private agents receive the same canonical variable from the Foundry project's supported `ApplicationInsights` connection; `backend/agent.yaml` does not map connection-string aliases or reconstruct split fields. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
 
 MAF workflow stream events are observed from `workflow.run(..., stream=True)` for `executor_invoked`, `executor_completed`, and terminal `output` events. Full event payload/content is not recorded unless `OTEL_RECORD_CONTENT=true`.
 
 MAF middleware enriches emitted workflow events with `workflow_run_id` and `session_id`, records streamed MAF event/usage hooks, and emits `workflow.failed` for real workflow failures before re-raising the original exception.
 
+Hosted invocation spans emit `gen_ai.operation.name`,
+`gen_ai.agent.name`, and `gen_ai.conversation.id`. Conversation-level Foundry
+evaluation additionally requires `gen_ai.input.messages` and
+`gen_ai.output.messages`; those content attributes are emitted only when the
+private validation agent is deployed with
+`FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT=true` **and** the individual request
+contains `metadata.trace_evaluation_record_content=true`. The hosted E2E script
+marks only its validation requests, so later ordinary hosted traffic remains
+redacted. Global
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` and `OTEL_RECORD_CONTENT`
+remain disabled.
+
 FastAPI request instrumentation is applied after app creation so hosted API calls are expected in `AppRequests`. Workflow, MAF, and Foundry model spans are exported as dependencies.
 
 HITL pause/resume crosses HTTP requests, so the checkpoint state stores a sanitized `telemetry_trace_context`. The approval path restores that context before creating `workflow.hitl_resume`, which keeps the HITL response and final output correlated with the original `workflow.hitl_waiting` operation in Application Insights.
 
-Post-deploy Application Insights verification is captured in `.github/skills/azure-telemetry-validation/SKILL.md`. The routine runs hosted ORD-1001/ORD-1009 flows and validates `AppRequests`, `AppDependencies`, `AppTraces`, and `AppExceptions` with KQL.
+Private hosted E2E records low-risk, high-risk approval/resume, and damaged-item
+approval/resume conversation IDs in
+`backend/.foundry/results/hosted-e2e-evidence.json`. Foundry evaluation judges
+those exact traces, and `scripts/foundry/verify_telemetry.sh` requires all three
+conversation IDs to appear in Application Insights with no correlated
+exceptions. The release artifact also includes
+`foundry-report.json` and `telemetry-verification.json`.

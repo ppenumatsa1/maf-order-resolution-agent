@@ -69,6 +69,8 @@ Current hosted gate posture is private-lane-first. Use private Foundry as the de
 - Backend lint + tests: `make test`
 - Eval harness: `make eval-backend`
 - Foundry evaluator report (hosted/runtime changes): `make eval-foundry`
+  (report-only by default; the private release workflow enforces judgement over
+  the current hosted E2E conversation traces)
 - Playwright E2E: `make test-e2e`
 - Docker E2E profile: `make docker-test`
 - Deterministic review/test gate: `./scripts/skills/design-review-skill.sh`

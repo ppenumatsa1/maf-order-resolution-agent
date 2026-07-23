@@ -3,6 +3,81 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-23, supported telemetry fix implemented)
+
+### Implemented
+
+1. Added the supported Foundry project connection:
+   - name: `ApplicationInsights`
+   - category: `AppInsights`
+   - target: the provisioned Application Insights component resource ID
+   - auth: `ApiKey` with the component connection string stored in the
+     connection credential
+2. Removed all hosted telemetry propagation experiments:
+   - no App Insights variables are copied into azd env by the deploy workflow
+   - no `APPINSIGHTS_*`, `MAF_APPINSIGHTS_*`, or `MAF_MONITOR_*` mappings remain
+     in `backend/agent.yaml`
+   - hosted startup no longer rewrites the platform-injected canonical value
+   - `FOUNDRY_RUNTIME_ENV` and App Insights `CustomKeys` fallbacks remain removed
+3. Consolidated hosted validation and judgement:
+   - hosted E2E covers low-risk, multi-turn continuity, high-risk HITL/resume,
+     and damaged-item HITL/resume
+   - raw evaluator input/output attributes require both the validation-agent env
+     opt-in and an E2E-only request metadata marker; ordinary hosted requests
+     remain redacted
+   - E2E writes the three conversation IDs and UTC validation window to
+     `backend/.foundry/results/hosted-e2e-evidence.json`
+   - Foundry evaluates those exact conversation traces instead of reinvoking the
+     agent from the dataset
+   - the private deploy workflow enforces completed evaluation status and zero
+     errored items
+   - App Insights verification uses the same conversation IDs and writes
+     `telemetry-verification.json`
+4. Added a post-provision assertion that the `ApplicationInsights` connection
+   exists with category `AppInsights` and targets the current component.
+5. Review hardening:
+   - Foundry eval cancellation now recognizes the API's `canceled` status
+   - a locally timed-out evaluation cancels the remote run before failing
+   - the Foundry project identity receives Log Analytics Reader on both the
+     Application Insights component and its workspace for trace evaluation
+   - the deploy workflow installs the Application Insights CLI extension before
+     the correlated KQL gate
+   - the telemetry ingestion wait is bounded at six minutes
+
+### Local evidence
+
+1. Full backend suite: `98 passed`.
+2. Focused telemetry/hosted/evaluator suite: `49 passed`
+   - telemetry configuration
+   - hosted Responses runtime
+   - E2E evidence and trace-evaluation mapping
+3. Deterministic backend evaluation: `10/10 passed`.
+4. Ruff passed for all changed backend files.
+5. Shell syntax passed for the defaulting, hosted E2E, and telemetry verifier
+   scripts.
+6. Bicep compilation passed. Three pre-existing warnings remain unrelated to
+   this fix.
+7. Private AZD provision preview passed in `43s` against:
+   - environment: `foundry-private-env`
+   - resource group: `rg-maf-ora-foundry-v2`
+   - Foundry region: `eastus2`
+   - PostgreSQL region: `centralus`
+   - planned telemetry change: create the `ApplicationInsights` project
+     connection
+
+### Pending hosted evidence
+
+The code and IaC fix are ready, but the following are not claimed complete until
+the private orchestrator runs with provisioning enabled:
+
+1. provision the `ApplicationInsights` project connection
+2. deploy the new immutable hosted-agent version
+3. pass smoke and the combined hosted E2E scenarios
+4. complete Foundry trace evaluation with zero errored items
+5. confirm all three conversations in App Insights with no correlated exceptions
+6. record the workflow run ID, agent version, connection inventory, evaluation
+   IDs/counts, KQL counts, and timing metrics in this document
+
 ## Handoff snapshot (2026-07-22 end of day)
 
 ### Completed today

@@ -65,6 +65,9 @@ jobs:
       - name: Install Foundry azd extension
         run: azd ext install azure.ai.agents --no-prompt
 
+      - name: Install Foundry connections extension
+        run: azd ext install azure.ai.connections --no-prompt
+
       - name: Select private azd environment
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
@@ -104,3 +107,22 @@ jobs:
           else
             make foundry-provision
           fi
+
+      - name: Verify Application Insights project connection
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          connection_json="$(azd ai connection show ApplicationInsights --output json --no-prompt)"
+          category="$(printf '%s' "$connection_json" | jq -r '.category // .properties.category // empty')"
+          target="$(printf '%s' "$connection_json" | jq -r '.target // .properties.target // empty')"
+          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
+          expected_target="$(az resource list --resource-group "$resource_group" --resource-type microsoft.insights/components --query '[0].id' -o tsv)"
+          if [[ "$category" != "AppInsights" ]]; then
+            echo "Application Insights connection category mismatch: ${category:-<empty>}"
+            exit 1
+          fi
+          if [[ -z "$target" || "${target,,}" != "${expected_target,,}" ]]; then
+            echo "Application Insights connection target mismatch."
+            exit 1
+          fi
+          echo "Verified ApplicationInsights project connection targeting $expected_target"

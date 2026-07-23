@@ -19,20 +19,6 @@ from app.core.telemetry import get_tracer
 logger = logging.getLogger(__name__)
 
 
-_UUID_PATTERN = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
-
-
-def _extract_connection_component(value: str, key: str) -> str:
-    match = re.search(rf"{key}=([^;\s]+)", value)
-    return match.group(1).strip() if match else ""
-
-
-def _looks_like_uuid(value: str) -> bool:
-    return bool(_UUID_PATTERN.fullmatch(value.strip()))
-
-
 def _apply_foundry_model_env_aliases() -> None:
     aliases = {
         "FOUNDRY_PROJECTS_ENDPOINT": "FOUNDRY_PROJECT_ENDPOINT",
@@ -65,97 +51,8 @@ def _apply_runtime_database_url_override() -> None:
         os.environ["DATABASE_URL"] = runtime_database_url
 
 
-def _apply_appinsights_connection_env_aliases() -> None:
-    canonical = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
-    if canonical and not canonical.startswith("${"):
-        return
-
-    appinsights_alias = os.getenv("APPINSIGHTS_CONNECTION_STRING", "").strip()
-    if not appinsights_alias or appinsights_alias.startswith("${"):
-        appinsights_alias = os.getenv("applicationInsightsConnectionString", "").strip()
-        if not appinsights_alias or appinsights_alias.startswith("${"):
-            return
-
-    # AgentServer's bootstrap parser is strict; provide a compact canonical form.
-    match = re.search(r"InstrumentationKey=([^;\s]+)", appinsights_alias)
-    if match:
-        os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_alias
-        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = f"InstrumentationKey={match.group(1)}"
-        return
-
-    os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_alias
-    os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = appinsights_alias
-
-
-def _apply_appinsights_custom_env_aliases() -> None:
-    custom_connection = os.getenv("MAF_MONITOR_CONNECTION_STRING", "").strip()
-    if not custom_connection or custom_connection.startswith("${"):
-        custom_connection = os.getenv("MAF_APPINSIGHTS_CONNECTION_STRING", "").strip()
-    custom_ikey = os.getenv("MAF_MONITOR_INSTRUMENTATION_KEY", "").strip()
-    if not custom_ikey or custom_ikey.startswith("${"):
-        custom_ikey = os.getenv("MAF_APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
-    custom_ingestion = os.getenv("MAF_MONITOR_INGESTION_ENDPOINT", "").strip().rstrip(";")
-    if not custom_ingestion or custom_ingestion.startswith("${"):
-        custom_ingestion = os.getenv("MAF_APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
-
-    connection_ikey = _extract_connection_component(custom_connection, "InstrumentationKey")
-    if (
-        custom_connection
-        and not custom_connection.startswith("${")
-        and "InstrumentationKey=" in custom_connection
-        and _looks_like_uuid(connection_ikey)
-    ):
-        os.environ["APPINSIGHTS_CONNECTION_STRING"] = custom_connection
-        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
-            f"InstrumentationKey={connection_ikey}"
-        )
-        return
-
-    if not custom_ikey or custom_ikey.startswith("${") or not _looks_like_uuid(custom_ikey):
-        return
-
-    appinsights_connection = f"InstrumentationKey={custom_ikey}"
-    if (
-        custom_ingestion
-        and not custom_ingestion.startswith("${")
-        and custom_ingestion.lower().startswith("https://")
-    ):
-        appinsights_connection = (
-            f"{appinsights_connection};IngestionEndpoint={custom_ingestion}"
-        )
-    os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_connection
-    os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = f"InstrumentationKey={custom_ikey}"
-
-
-def _apply_appinsights_component_env_aliases() -> None:
-    canonical = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
-    if canonical and not canonical.startswith("${"):
-        return
-
-    instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
-    if not instrumentation_key or instrumentation_key.startswith("${"):
-        return
-
-    ingestion_endpoint = os.getenv("APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
-    if ingestion_endpoint.startswith("${"):
-        ingestion_endpoint = ""
-
-    appinsights_connection = f"InstrumentationKey={instrumentation_key}"
-    if ingestion_endpoint:
-        appinsights_connection = (
-            f"{appinsights_connection};IngestionEndpoint={ingestion_endpoint}"
-        )
-    os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_connection
-    os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
-        f"InstrumentationKey={instrumentation_key}"
-    )
-
-
 _apply_foundry_model_env_aliases()
 _apply_runtime_database_url_override()
-_apply_appinsights_custom_env_aliases()
-_apply_appinsights_connection_env_aliases()
-_apply_appinsights_component_env_aliases()
 
 if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":
     order_resolution_service = None
@@ -485,16 +382,100 @@ def _set_span_attribute(span: Any, key: str, value: Any) -> None:
         span.set_attribute(key, value)
 
 
+def _trace_evaluation_content_enabled(create_response: Any) -> bool:
+    enabled = os.getenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not enabled:
+        return False
+    metadata = _coerce_payload(create_response).get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    requested = metadata.get("trace_evaluation_record_content", False)
+    if isinstance(requested, bool):
+        return requested
+    return isinstance(requested, str) and requested.strip().lower() in {"1", "true", "yes"}
+
+
+def _set_trace_evaluation_input(
+    span: Any,
+    parsed: _ParsedInput,
+    *,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    input_text = parsed.message or parsed.decision
+    if not input_text:
+        return
+    span.set_attribute(
+        "gen_ai.input.messages",
+        json.dumps(
+            [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "content": input_text}],
+                }
+            ]
+        ),
+    )
+
+
+def _set_trace_evaluation_output(
+    span: Any,
+    payload: dict[str, Any],
+    *,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    message = payload.get("message")
+    if not isinstance(message, str) or not message:
+        return
+    span.set_attribute(
+        "gen_ai.output.messages",
+        json.dumps(
+            [
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "content": message}],
+                    "finish_reason": "stop",
+                }
+            ]
+        ),
+    )
+
+
 async def _run_from_responses(
     create_response: Any, context: Any | None, text_response: type[Any]
 ) -> Any:
     parsed = _parse_input(create_response, context)
     tracer = get_tracer("foundry.responses")
+    trace_evaluation_content_enabled = _trace_evaluation_content_enabled(create_response)
     # Anchor all turn-level telemetry under a single invocation span.
     with tracer.start_as_current_span("foundry.responses.invoke") as span:
         _set_span_attribute(span, "workflow.thread_id", parsed.conversation_id)
         _set_span_attribute(span, "workflow.session_id", parsed.conversation_id)
         _set_span_attribute(span, "foundry.protocol", "responses")
+        _set_span_attribute(span, "gen_ai.operation.name", "invoke_agent")
+        _set_span_attribute(
+            span,
+            "gen_ai.agent.name",
+            os.getenv("FOUNDRY_HOSTED_AGENT_NAME", "order-resolution-hosted"),
+        )
+        _set_span_attribute(
+            span,
+            "gen_ai.agent.id",
+            os.getenv("FOUNDRY_HOSTED_AGENT_ID", "order-resolution-hosted"),
+        )
+        _set_span_attribute(span, "gen_ai.conversation.id", parsed.conversation_id)
+        _set_trace_evaluation_input(
+            span,
+            parsed,
+            enabled=trace_evaluation_content_enabled,
+        )
         checkpoint_id_for_span: str | None = None
         try:
             if parsed.decision:
@@ -544,6 +525,11 @@ async def _run_from_responses(
             events = payload.get("events")
             if isinstance(events, list):
                 _set_span_attribute(span, "workflow.event_count", len(events))
+            _set_trace_evaluation_output(
+                span,
+                payload,
+                enabled=trace_evaluation_content_enabled,
+            )
             response_text = json.dumps(payload)
             return text_response(context, create_response, text=response_text)
         except Exception as exc:
@@ -594,18 +580,8 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_camelcase=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s maf_appinsights_ingestion=%s maf_monitor_connection=%s maf_monitor_ikey=%s maf_monitor_ingestion=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
-        _env_state("APPINSIGHTS_CONNECTION_STRING"),
-        _env_state("applicationInsightsConnectionString"),
-        _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
-        _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
-        _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
-        _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
-        _env_state("MAF_APPINSIGHTS_INGESTIONENDPOINT"),
-        _env_state("MAF_MONITOR_CONNECTION_STRING"),
-        _env_state("MAF_MONITOR_INSTRUMENTATION_KEY"),
-        _env_state("MAF_MONITOR_INGESTION_ENDPOINT"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
@@ -616,20 +592,6 @@ def _initialize_app() -> Any:
                 "applicationinsights_connection_string": _env_state(
                     "APPLICATIONINSIGHTS_CONNECTION_STRING"
                 ),
-                "appinsights_connection_string": _env_state("APPINSIGHTS_CONNECTION_STRING"),
-                "application_insights_connection_string_camelcase": _env_state(
-                    "applicationInsightsConnectionString"
-                ),
-                "appinsights_instrumentationkey": _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
-                "appinsights_ingestionendpoint": _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
-                "maf_appinsights_connection_string": _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
-                "maf_appinsights_instrumentationkey": _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
-                "maf_appinsights_ingestionendpoint": _env_state("MAF_APPINSIGHTS_INGESTIONENDPOINT"),
-                "maf_monitor_connection_string": _env_state("MAF_MONITOR_CONNECTION_STRING"),
-                "maf_monitor_instrumentation_key": _env_state(
-                    "MAF_MONITOR_INSTRUMENTATION_KEY"
-                ),
-                "maf_monitor_ingestion_endpoint": _env_state("MAF_MONITOR_INGESTION_ENDPOINT"),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
             },

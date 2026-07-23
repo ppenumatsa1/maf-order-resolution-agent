@@ -45,10 +45,15 @@ If someone starts from this README, this path should let them understand and run
 MAF internals are split for maintainability into `backend/app/maf/prompts`,
 `agents`, `tools`, `executors`, `runner`, and `workflows`.
 
-## Latest Foundry trace status (2026-07-18)
+## Latest Foundry trace status (2026-07-23)
 
-- **Private Foundry is validated end-to-end**: deploy + smoke (`ORD-1001`, `ORD-1009`) + hosted E2E + App Insights trace/dependency evidence.
-- Recent private telemetry confirmation and run evidence are tracked in:
+- Private Foundry workflow, PostgreSQL state, and HITL behavior have prior hosted
+  E2E evidence.
+- The current scratch-lane telemetry fix adds the supported
+  `ApplicationInsights` project connection and removes manual connection-string
+  aliases. A fresh private provision/deploy is still required to record final
+  App Insights and Foundry trace-evaluation evidence.
+- Current private telemetry RCA and run evidence are tracked in:
   - [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)
 
 ## Quick Start (Local)
@@ -95,7 +100,7 @@ Run these before considering a change complete:
 ```bash
 make test
 make eval-backend
-make eval-foundry   # report-only Foundry evaluator run for hosted/runtime changes
+make eval-foundry   # report-only by default; evaluates current hosted E2E trace evidence
 make test-e2e
 ./scripts/skills/design-review-skill.sh
 ```

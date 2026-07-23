@@ -1,6 +1,35 @@
 # Azure Deployment Plan
 
-> **Status:** Deployed and Telemetry Verified (shim removal, MAF middleware, rich events, and frontend API proxy update)
+> **Status:** Validated for Foundry Private VNET Deployment
+
+Current target (2026-07-23):
+
+- AZD project: `infra/foundry-hosted`
+- AZD environment: `foundry-private-env`
+- GitHub environment: `foundry-private-env`
+- private runner label: `foundry-private-v2`
+- resource group: `rg-maf-ora-foundry-v2`
+- location: `eastus2` with PostgreSQL in `centralus`
+- deployment path: private provision -> immutable hosted-agent deploy -> smoke ->
+  hosted E2E evidence -> Foundry conversation trace evaluation -> correlated
+  Application Insights verification
+- telemetry source: supported Foundry `ApplicationInsights` project connection;
+  no manual hosted connection-string aliases or fallback payloads
+
+The older Azure Container Apps evidence below is retained as historical context;
+it is not the target of this private Foundry deployment.
+
+Validation evidence (2026-07-23):
+
+- Bicep compilation passed.
+- `azd provision --preview --no-prompt` passed in 43 seconds and planned creation
+  of the `ApplicationInsights` project connection.
+- private Foundry account has public access disabled, default network action
+  `Deny`, and an approved private endpoint.
+- `foundry-private-v2` runner is online and idle.
+- PostgreSQL `maffndpgv20722` is `Ready` in `centralus`.
+- local gates passed: 98 backend tests, 10/10 deterministic eval cases, 7/7
+  Playwright tests, and the deterministic design-review gate.
 
 Generated: 2026-06-10
 

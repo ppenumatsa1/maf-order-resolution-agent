@@ -56,15 +56,29 @@ Latest hosted-tracing status (2026-07-18):
 
 Telemetry:
 
-- `APPLICATIONINSIGHTS_CONNECTION_STRING` enables Azure Monitor/Application Insights export.
+- Local runs can set `APPLICATIONINSIGHTS_CONNECTION_STRING` to enable Azure
+  Monitor/Application Insights export.
+- Hosted private deployments receive that canonical variable from the Foundry
+  project's `ApplicationInsights` connection; the agent manifest does not copy
+  or reconstruct connection-string aliases.
 - `ENABLE_TELEMETRY=false` disables telemetry.
 - `ENABLE_INSTRUMENTATION` controls MAF/OpenTelemetry instrumentation when telemetry is enabled.
 - `OTEL_RECORD_CONTENT=false` keeps prompt/payload content out of span attributes.
+- `FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT=true` is a separate validation-lane
+  opt-in. Input/output messages are recorded only when an individual request also
+  carries `metadata.trace_evaluation_record_content=true`; the hosted E2E script
+  marks its validation conversations while ordinary hosted requests remain
+  redacted. Global OTel content capture stays disabled.
 
 Evaluation:
 
 - `make eval-backend` runs deterministic contract assertions against `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
-- `make eval-foundry` runs report-only Foundry evaluators and writes `backend/.foundry/results/foundry-report.json`.
+- Hosted E2E writes `backend/.foundry/results/hosted-e2e-evidence.json` for the
+  low-risk, high-risk HITL, and damaged-item HITL conversations.
+- `make eval-foundry` judges those exact Foundry traces without reinvoking the
+  agent and writes `backend/.foundry/results/foundry-report.json`. It is
+  report-only by default; the private release workflow enforces completion and
+  zero errored items.
 
 ## APIs
 

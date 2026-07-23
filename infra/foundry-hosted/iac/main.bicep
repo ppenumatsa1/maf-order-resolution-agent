@@ -288,6 +288,8 @@ var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections!.
 var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections!.outputs.cosmosConnection : effectiveCosmosConnectionName
 var resolvedStorageConnectionName = manageProjectConnections ? projectConnections!.outputs.storageConnection : effectiveStorageConnectionName
 var resolvedAiSearchConnectionName = manageProjectConnections ? projectConnections!.outputs.aiSearchConnection : effectiveAiSearchConnectionName
+var resolvedApplicationInsightsConnectionName = manageProjectConnections ? projectConnections!.outputs.applicationInsightsConnection : 'ApplicationInsights'
+var resolvedApplicationInsightsConnectionId = manageProjectConnections ? projectConnections!.outputs.applicationInsightsConnectionId : resourceId('Microsoft.CognitiveServices/accounts/projects/connections', effectiveFoundryAccountName, foundryProjectName, 'ApplicationInsights')
 var resolvedRuntimeConnectionName = !empty(runtimeDatabaseUrl) ? runtimeConnection!.outputs.runtimeConnection : effectiveRuntimeConnectionName
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -509,6 +511,31 @@ resource projectFoundryUserRoleAssignment 'Microsoft.Authorization/roleAssignmen
   }
 }
 
+var logAnalyticsReaderRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '73c42c96-874c-492b-b04d-ab87d138a893'
+)
+
+resource projectTraceReaderApplicationInsightsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(applicationInsights.id, foundryProject.id, logAnalyticsReaderRoleDefinitionId)
+  scope: applicationInsights
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRoleDefinitionId
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectTraceReaderLogAnalyticsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(logAnalytics.id, foundryProject.id, logAnalyticsReaderRoleDefinitionId)
+  scope: logAnalytics
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRoleDefinitionId
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource natPublicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = if (enableNat) {
   name: effectiveNatPublicIpName
   location: location
@@ -716,6 +743,8 @@ module projectConnections './modules/foundry-project-existing-connections.bicep'
     cosmosConnectionName: effectiveCosmosConnectionName
     storageConnectionName: effectiveStorageConnectionName
     aiSearchConnectionName: effectiveAiSearchConnectionName
+    applicationInsightsName: applicationInsights.name
+    applicationInsightsResourceId: applicationInsights.id
   }
   dependsOn: [
     foundryProject
@@ -858,7 +887,6 @@ output natGatewayId string = enableNat ? natGateway.id : ''
 output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
-output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
 output postgresFullyQualifiedDomainName string = createPostgresServer ? postgresServer!.properties.fullyQualifiedDomainName : ''
 output postgresDatabaseName string = postgresDatabaseName
 output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost!.outputs.accountCapabilityHostName : ''
@@ -869,8 +897,10 @@ output connectionNames object = {
   cosmos: resolvedCosmosConnectionName
   storage: resolvedStorageConnectionName
   aiSearch: resolvedAiSearchConnectionName
+  applicationInsights: resolvedApplicationInsightsConnectionName
   runtimeSecrets: resolvedRuntimeConnectionName
 }
+output applicationInsightsConnectionId string = resolvedApplicationInsightsConnectionId
 output virtualNetwork object = privateNetworking ? {
   name: virtualNetwork!.outputs.name
   id: virtualNetwork!.outputs.id
@@ -921,6 +951,5 @@ output privateRunnerAccess object = enablePrivateRunnerAccess ? {
 }
 output requiredBackendSettings array = [
   'FOUNDRY_PROJECTS_ENDPOINT=${foundryProjectEndpoint}'
-  'APPLICATIONINSIGHTS_CONNECTION_STRING=${applicationInsights.properties.ConnectionString}'
 ]
 output nextStep string = 'Run azd deploy order-resolution-hosted, then azd ai agent invoke with responses protocol and verify Foundry + App Insights telemetry.'

@@ -50,7 +50,8 @@ Run and report:
 
 - `make test`
 - `make eval-backend`
-- `make eval-foundry` (report-only for hosted/runtime changes)
+- `make eval-foundry` (report-only by default; the private release workflow
+  enforces judgement over the current hosted E2E conversation traces)
 - `make test-e2e`
 - `./scripts/skills/design-review-skill.sh` (consolidated deterministic review/test gate)
 

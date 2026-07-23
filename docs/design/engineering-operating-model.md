@@ -74,9 +74,14 @@ A change is done only when all applicable items are true:
 | --- | --- | --- |
 | App-only behavior (no hosting/IaC change) | `make test`, `make eval-backend`, `make test-e2e`, `./scripts/skills/design-review-skill.sh` | None |
 | HITL/business-rule change | local gates + targeted HITL rule assertions | Hosted smoke for `ORD-1001`, `ORD-1009` (+ approve/reject when applicable) |
-| MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E + telemetry verification + report-only `make eval-foundry` artifact |
+| MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E evidence + enforced conversation trace evaluation + correlated telemetry verification |
 | IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
 | Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
+
+`make eval-foundry` remains report-only for ad hoc/local use. The private release
+workflow first exercises low-risk and HITL scenarios once, then enforces Foundry
+judgement and Application Insights correlation over those same conversation IDs;
+it does not generate a second evaluator traffic pass.
 
 ## Operationalization (automated)
 

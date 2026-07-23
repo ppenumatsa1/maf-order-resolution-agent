@@ -28,7 +28,7 @@ on:
         required: false
         default: "false"
       run_eval:
-        description: Run report-only Foundry eval after deploy
+        description: Judge hosted E2E conversations with Foundry evaluation
         required: false
         default: "true"
 

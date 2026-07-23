@@ -20,7 +20,7 @@ on:
         required: false
         default: "false"
       run_eval:
-        description: Run report-only Foundry eval after smoke/E2E
+        description: Judge the hosted E2E conversations with Foundry evaluation
         required: false
         default: "true"
       probe_only:
@@ -176,38 +176,13 @@ jobs:
           azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
           azd env set FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_CHAT_DEPLOYMENT_CAPACITY || '30' }}"
           azd env set FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY || '2' }}"
+          azd env set FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${{ inputs.run_eval || github.event.inputs.run_eval || 'true' }}"
           if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
             azd env set POSTGRES_ADMIN_PASSWORD "${POSTGRES_ADMIN_PASSWORD}"
           fi
 
       - name: Ensure private defaults
         run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
-
-      - name: Sync Application Insights connection string
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
-          appi_connection_string="$(az resource list -g "$resource_group" --resource-type microsoft.insights/components --query "[0].properties.ConnectionString" -o tsv)"
-          if [[ -n "${appi_connection_string}" ]]; then
-            appi_ikey="$(printf '%s' "${appi_connection_string}" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
-            appi_ingestion_endpoint="$(printf '%s' "${appi_connection_string}" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
-            azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
-            azd env set APPINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
-            azd env set MAF_APPINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
-            azd env set MAF_MONITOR_CONNECTION_STRING "${appi_connection_string}"
-            azd env set applicationInsightsConnectionString "${appi_connection_string}"
-            if [[ -n "${appi_ikey}" ]]; then
-              azd env set APPINSIGHTS_INSTRUMENTATIONKEY "${appi_ikey}"
-              azd env set MAF_APPINSIGHTS_INSTRUMENTATIONKEY "${appi_ikey}"
-              azd env set MAF_MONITOR_INSTRUMENTATION_KEY "${appi_ikey}"
-            fi
-            if [[ -n "${appi_ingestion_endpoint}" ]]; then
-              azd env set APPINSIGHTS_INGESTIONENDPOINT "${appi_ingestion_endpoint}"
-              azd env set MAF_APPINSIGHTS_INGESTIONENDPOINT "${appi_ingestion_endpoint}"
-              azd env set MAF_MONITOR_INGESTION_ENDPOINT "${appi_ingestion_endpoint}"
-            fi
-          fi
 
       - name: Sync runtime DB URL from Foundry connection
         run: |
@@ -241,32 +216,8 @@ jobs:
         if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
         run: make foundry-smoke
 
-      - name: Capture hosted telemetry diagnostics
-        if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          raw_output="$(azd ai agent invoke order-resolution-hosted "Resolve delayed order ORD-1009" --protocol responses --new-conversation --new-session --no-prompt 2>&1 || true)"
-          echo "$raw_output"
-          clean_output="$(printf '%s\n' "$raw_output" | sed -E 's/\x1B\[[0-9;]*[mK]//g')"
-          session_id="$(printf '%s\n' "$clean_output" | grep 'assigned by server' | tail -n 1 | awk '{print $2}')"
-          invoke_json="$(printf '%s\n' "$raw_output" | sed -n 's/^\[order-resolution-hosted\][[:space:]]*//p' | tail -n 1)"
-          if [[ -z "$invoke_json" ]]; then
-            invoke_json="$(printf '%s\n' "$raw_output" | awk '/^\{/{flag=1} flag{print}')"
-          fi
-          if [[ -z "$session_id" ]]; then
-            session_id="$(printf '%s\n' "$invoke_json" | jq -r '[.. | objects | (.session?.id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty' 2>/dev/null || true)"
-          fi
-          if [[ -z "$session_id" ]]; then
-            echo "No session_id resolved from invoke payload; skipping monitor pull."
-            exit 0
-          fi
-          echo "Telemetry diagnostics session_id=$session_id"
-          azd ai agent monitor --session-id "$session_id" --tail 200 --type console --utc --no-prompt || true
-          azd ai agent monitor --session-id "$session_id" --tail 200 --type system --utc --no-prompt || true
-
-      - name: Hosted E2E
-        if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' }}
+      - name: Hosted E2E evidence
+        if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' || (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
         run: ./scripts/github/foundry_hosted_e2e.sh
 
       - name: Ensure Python venv dependency for eval
@@ -281,7 +232,7 @@ jobs:
             rm -rf /tmp/foundry-eval-venv-check
           fi
 
-      - name: Report-only Foundry eval
+      - name: Foundry trace evaluation
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
         run: |
           set -euo pipefail
@@ -300,12 +251,33 @@ jobs:
           cd ../..
           FOUNDRY_PROJECTS_ENDPOINT="${eval_endpoint}" \
           FOUNDRY_MODEL_DEPLOYMENT_NAME="${eval_model}" \
+          FOUNDRY_EVAL_ENFORCE_PASS=true \
+          FOUNDRY_EVAL_MAX_ERRORED=0 \
           make eval-foundry
 
-      - name: Upload Foundry eval report
+      - name: Install Application Insights CLI extension
         if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        run: az extension add --name application-insights --upgrade --yes --only-show-errors
+
+      - name: Verify correlated Application Insights telemetry
+        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
+          application_insights_name="$(az resource list --resource-group "$resource_group" --resource-type microsoft.insights/components --query '[0].name' -o tsv)"
+          cd ../..
+          AZURE_RESOURCE_GROUP="$resource_group" \
+          APPLICATION_INSIGHTS_NAME="$application_insights_name" \
+          ./scripts/foundry/verify_telemetry.sh
+
+      - name: Upload hosted validation evidence
+        if: ${{ always() && (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: foundry-eval-report-private
-          path: backend/.foundry/results/foundry-report.json
+          name: foundry-validation-private
+          path: |
+            backend/.foundry/results/hosted-e2e-evidence.json
+            backend/.foundry/results/foundry-report.json
+            backend/.foundry/results/telemetry-verification.json
           if-no-files-found: error

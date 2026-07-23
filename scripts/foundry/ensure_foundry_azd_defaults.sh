@@ -125,30 +125,12 @@ set_if_missing MANAGE_PROJECT_CONNECTIONS "$manage_project_connections_default"
 set_if_missing FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${FOUNDRY_CHAT_DEPLOYMENT_CAPACITY:-30}"
 set_if_missing FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY:-2}"
 set_if_missing RUNNER_VM_SSH_PUBLIC_KEY "${RUNNER_VM_SSH_PUBLIC_KEY:-}"
-set_if_missing APPLICATIONINSIGHTS_CONNECTION_STRING "${APPLICATIONINSIGHTS_CONNECTION_STRING:-$(get_env_value applicationInsightsConnectionString)}"
-set_if_missing APPINSIGHTS_CONNECTION_STRING "${APPINSIGHTS_CONNECTION_STRING:-$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)}"
-set_if_missing MAF_APPINSIGHTS_CONNECTION_STRING "${MAF_APPINSIGHTS_CONNECTION_STRING:-$(get_env_value APPINSIGHTS_CONNECTION_STRING)}"
-set_if_missing MAF_MONITOR_CONNECTION_STRING "${MAF_MONITOR_CONNECTION_STRING:-$(get_env_value APPINSIGHTS_CONNECTION_STRING)}"
 set_if_missing ENABLE_TELEMETRY "${ENABLE_TELEMETRY:-true}"
 set_if_missing ENABLE_INSTRUMENTATION "${ENABLE_INSTRUMENTATION:-true}"
 set_if_missing OTEL_SERVICE_NAME "${OTEL_SERVICE_NAME:-maf-order-resolution-hosted}"
 set_if_missing OTEL_SERVICE_NAMESPACE "${OTEL_SERVICE_NAMESPACE:-maf-order-resolution}"
 set_if_missing OTEL_RECORD_CONTENT "${OTEL_RECORD_CONTENT:-false}"
-
-appinsights_connection_string="$(get_env_value APPINSIGHTS_CONNECTION_STRING)"
-if [[ -z "$appinsights_connection_string" ]]; then
-  appinsights_connection_string="$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)"
-fi
-if [[ -n "$appinsights_connection_string" ]]; then
-  appinsights_ikey="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
-  appinsights_ingestion_endpoint="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
-  set_if_missing MAF_APPINSIGHTS_INSTRUMENTATIONKEY "$appinsights_ikey"
-  set_if_missing MAF_APPINSIGHTS_INGESTIONENDPOINT "$appinsights_ingestion_endpoint"
-  set_if_missing MAF_MONITOR_INSTRUMENTATION_KEY "$appinsights_ikey"
-  set_if_missing MAF_MONITOR_INGESTION_ENDPOINT "$appinsights_ingestion_endpoint"
-  set_if_missing APPINSIGHTS_INSTRUMENTATIONKEY "$appinsights_ikey"
-  set_if_missing APPINSIGHTS_INGESTIONENDPOINT "$appinsights_ingestion_endpoint"
-fi
+set_if_missing FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT:-false}"
 
 runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
 create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
@@ -212,4 +194,3 @@ set_if_missing foundryEmbeddingsDeploymentCapacity "$(get_env_value FOUNDRY_EMBE
 set_if_missing runnerVmSshPublicKey "$(get_env_value RUNNER_VM_SSH_PUBLIC_KEY)"
 set_if_missing runtimeDatabaseUrl "$(get_env_value RUNTIME_DATABASE_URL)"
 set_if_missing databaseUrl "$(get_env_value DATABASE_URL)"
-set_if_missing applicationInsightsConnectionString "$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)"

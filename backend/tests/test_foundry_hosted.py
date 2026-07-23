@@ -165,6 +165,14 @@ def test_hosted_manifest_uses_private_safe_environment_settings() -> None:
         'name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT\n      value: "false"'
         in manifest_text
     )
+    assert (
+        "name: FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT\n"
+        "      value: ${FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT}"
+    ) in manifest_text
+    assert "name: APPLICATIONINSIGHTS_CONNECTION_STRING" not in manifest_text
+    assert "APPINSIGHTS_CONNECTION_STRING" not in manifest_text
+    assert "MAF_APPINSIGHTS_" not in manifest_text
+    assert "MAF_MONITOR_" not in manifest_text
     assert "name: FOUNDRY_PROJECTS_ENDPOINT\n      value: ${FOUNDRY_PROJECTS_ENDPOINT}" in (
         manifest_text
     )
@@ -284,41 +292,6 @@ def test_runtime_database_url_override_keeps_existing_remote_database_url(
     foundry_main._apply_runtime_database_url_override()
 
     assert os.getenv("DATABASE_URL") == existing_url
-
-
-def test_appinsights_env_alias_sets_canonical_connection_string(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
-    monkeypatch.setenv(
-        "APPINSIGHTS_CONNECTION_STRING",
-        "InstrumentationKey=12345678-1234-1234-1234-1234567890ab;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus2.livediagnostics.monitor.azure.com/;ApplicationId=f3bf2e8e-9ca7-433c-ab54-0a886618d564",
-    )
-
-    foundry_main._apply_appinsights_connection_env_aliases()
-
-    assert os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") == (
-        "InstrumentationKey=12345678-1234-1234-1234-1234567890ab"
-    )
-
-
-def test_appinsights_env_alias_preserves_existing_canonical_value(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv(
-        "APPLICATIONINSIGHTS_CONNECTION_STRING",
-        "InstrumentationKey=aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb",
-    )
-    monkeypatch.setenv(
-        "APPINSIGHTS_CONNECTION_STRING",
-        "InstrumentationKey=cccccccc-1111-2222-3333-dddddddddddd",
-    )
-
-    foundry_main._apply_appinsights_connection_env_aliases()
-
-    assert os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") == (
-        "InstrumentationKey=aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
-    )
 
 
 def test_parse_input_extracts_conversation_and_message() -> None:
@@ -542,6 +515,8 @@ async def test_run_from_responses_resumes_pending_approval(
     assert span.attributes["workflow.checkpoint_id"] == "cp-123"
     assert span.attributes["workflow.status"] == "waiting_approval"
     assert span.attributes["workflow.event_count"] == 2
+    assert span.attributes["gen_ai.operation.name"] == "invoke_agent"
+    assert span.attributes["gen_ai.conversation.id"] == "C1"
 
 
 @pytest.mark.asyncio
@@ -567,3 +542,74 @@ async def test_run_from_responses_records_exception_on_root_span(
     assert span.name == "foundry.responses.invoke"
     assert len(span.recorded_exceptions) == 1
     assert isinstance(span.recorded_exceptions[0], RuntimeError)
+
+
+@pytest.mark.asyncio
+async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _FakeRepository()
+    service = _FakeService()
+    tracer = _FakeTracer()
+    repo.details_by_thread["C1"] = _details(
+        thread_id="C1",
+        status="completed",
+        output_message="Resolution complete.",
+    )
+    monkeypatch.setenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "true")
+    monkeypatch.setattr(foundry_main, "workflow_run_repository", repo)
+    monkeypatch.setattr(foundry_main, "order_resolution_service", service)
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
+
+    await foundry_main._run_from_responses(
+        {
+            "conversation": {"id": "C1"},
+            "input": "Resolve delayed order ORD-1001",
+            "metadata": {"trace_evaluation_record_content": True},
+        },
+        None,
+        _FakeTextResponse,
+    )
+
+    span = tracer.spans[0]
+    assert json.loads(str(span.attributes["gen_ai.input.messages"])) == [
+        {
+            "role": "user",
+            "parts": [{"type": "text", "content": "Resolve delayed order ORD-1001"}],
+        }
+    ]
+    assert json.loads(str(span.attributes["gen_ai.output.messages"])) == [
+        {
+            "role": "assistant",
+            "parts": [{"type": "text", "content": "Resolution complete."}],
+            "finish_reason": "stop",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_from_responses_does_not_record_unmarked_trace_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _FakeRepository()
+    service = _FakeService()
+    tracer = _FakeTracer()
+    repo.details_by_thread["C1"] = _details(
+        thread_id="C1",
+        status="completed",
+        output_message="Resolution complete.",
+    )
+    monkeypatch.setenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "true")
+    monkeypatch.setattr(foundry_main, "workflow_run_repository", repo)
+    monkeypatch.setattr(foundry_main, "order_resolution_service", service)
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
+
+    await foundry_main._run_from_responses(
+        {"conversation": {"id": "C1"}, "input": "Resolve delayed order ORD-1001"},
+        None,
+        _FakeTextResponse,
+    )
+
+    span = tracer.spans[0]
+    assert "gen_ai.input.messages" not in span.attributes
+    assert "gen_ai.output.messages" not in span.attributes

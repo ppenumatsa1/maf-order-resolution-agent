@@ -265,7 +265,13 @@ jobs:
           set -euo pipefail
           cd infra/foundry-hosted
           resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
-          application_insights_name="$(az resource list --resource-group "$resource_group" --resource-type microsoft.insights/components --query '[0].name' -o tsv)"
+          connection_json="$(azd ai connection show ApplicationInsights --output json --no-prompt)"
+          application_insights_target="$(printf '%s' "$connection_json" | jq -r '.target // .metadata.ResourceId // .properties.target // empty')"
+          if [[ -z "$application_insights_target" ]]; then
+            echo "ApplicationInsights project connection target is empty."
+            exit 1
+          fi
+          application_insights_name="${application_insights_target##*/}"
           cd ../..
           AZURE_RESOURCE_GROUP="$resource_group" \
           APPLICATION_INSIGHTS_NAME="$application_insights_name" \

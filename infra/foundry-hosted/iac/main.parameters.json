@@ -56,6 +56,9 @@
     "manageProjectConnections": {
       "value": "${MANAGE_PROJECT_CONNECTIONS}"
     },
+    "foundryChatDeploymentName": {
+      "value": "${FOUNDRY_MODEL_DEPLOYMENT_NAME}"
+    },
     "foundryChatDeploymentCapacity": {
       "value": "${FOUNDRY_CHAT_DEPLOYMENT_CAPACITY}"
     },

@@ -83,6 +83,22 @@ verification. Live inspection confirmed:
 - auth: `ApiKey`
 - target: the Application Insights component in `rg-maf-ora-foundry-v2`
 
+Corrected orchestrator run
+[`30022445522`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30022445522)
+then passed provisioning and connection verification in `1m 5s`, deployed the
+hosted agent, and passed smoke plus all hosted E2E/HITL scenarios. Foundry trace
+evaluation failed validation before judging because the workflow fell back to
+`gpt-4.1-mini`, which is not deployed in the private project.
+
+The private account inventory contains `gpt-4o-mini` at capacity `30` and
+`text-embedding-3-small` at capacity `2`. Private defaults now set both the
+hosted runtime model deployment and evaluator model to `gpt-4o-mini`, and the
+IaC parameter uses that same deployment name. This also prevents hosted runs
+from silently omitting Foundry Models configuration and using deterministic
+triage fallback. The telemetry step now obtains the Application Insights name
+from the verified project connection instead of the unreliable generic resource
+list lookup.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

@@ -52,14 +52,15 @@ invoke_responses_payload() {
 
   local raw
   local rc
+  local trace_header="x-client-trace-evaluation-record-content: true"
   for attempt in $(seq 1 20); do
     set +e
     if [[ -n "$conversation_id" ]]; then
-      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --conversation-id "$conversation_id" --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
+      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --client-header "$trace_header" --conversation-id "$conversation_id" --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
     elif [[ "$mode" == "new" ]]; then
-      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --new-conversation --new-session --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
+      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --client-header "$trace_header" --new-conversation --new-session --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
     else
-      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
+      raw="$(azd ai agent invoke order-resolution-hosted --protocol responses --client-header "$trace_header" --input-file "$PAYLOAD_FILE" --no-prompt 2>&1)"
     fi
     rc=$?
     set -e
@@ -109,7 +110,7 @@ assert_json_field() {
   }
 }
 
-first_payload="$(jq -cn --arg input "Resolve delayed order ORD-1001" '{input: $input, user: "maf-trace-evaluation"}')"
+first_payload="$(jq -cn --arg input "Resolve delayed order ORD-1001" '{input: $input}')"
 first_turn="$(invoke_responses_payload "" "$first_payload" "new")"
 assert_json_field "$first_turn" '.status == "completed"'
 assert_json_field "$first_turn" '(.events // []) | map(.type) | index("tool.call") != null'
@@ -121,7 +122,7 @@ if [[ -z "$C1" || "$C1" == "null" ]]; then
   exit 1
 fi
 
-second_payload="$(jq -cn --arg input "Why was that resolution selected?" '{input: $input, user: "maf-trace-evaluation"}')"
+second_payload="$(jq -cn --arg input "Why was that resolution selected?" '{input: $input}')"
 second_turn="$(invoke_responses_payload "$C1" "$second_payload")"
 SECOND_THREAD="$(extract_thread_id "$second_turn")"
 if [[ "$SECOND_THREAD" != "$C1" ]]; then
@@ -132,7 +133,7 @@ fi
 assert_json_field "$second_turn" '.status == "completed"'
 assert_json_field "$second_turn" '.message | test("resolution was selected|Resolution complete"; "i")'
 
-high_risk_payload="$(jq -cn --arg input "Resolve delayed order ORD-1009" '{input: $input, user: "maf-trace-evaluation"}')"
+high_risk_payload="$(jq -cn --arg input "Resolve delayed order ORD-1009" '{input: $input}')"
 high_risk_start="$(invoke_responses_payload "" "$high_risk_payload" "new")"
 assert_json_field "$high_risk_start" '.status == "waiting_approval"'
 assert_json_field "$high_risk_start" '(.events // []) | map(.type) | index("hitl.request") != null'
@@ -149,13 +150,13 @@ if [[ -z "$HIGH_RISK_CHECKPOINT" ]]; then
   echo "$high_risk_start"
   exit 1
 fi
-high_risk_resume_payload="$(jq -cn --arg input "Approve" --arg checkpoint "$HIGH_RISK_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint, user: "maf-trace-evaluation"}')"
+high_risk_resume_payload="$(jq -cn --arg input "Approve" --arg checkpoint "$HIGH_RISK_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint}')"
 high_risk_resume="$(invoke_responses_payload "$HIGH_RISK" "$high_risk_resume_payload")"
 assert_json_field "$high_risk_resume" '.status == "completed"'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("hitl.response") != null'
 assert_json_field "$high_risk_resume" '(.events // []) | map(.type) | index("workflow.output") != null'
 
-damaged_payload="$(jq -cn --arg input "Customer reports a damaged item for order ORD-1001 and requests a replacement" '{input: $input, user: "maf-trace-evaluation"}')"
+damaged_payload="$(jq -cn --arg input "Customer reports a damaged item for order ORD-1001 and requests a replacement" '{input: $input}')"
 damaged_start="$(invoke_responses_payload "" "$damaged_payload" "new")"
 assert_json_field "$damaged_start" '.status == "waiting_approval"'
 assert_json_field "$damaged_start" '(.events // []) | map(.type) | index("checkpoint.created") != null'
@@ -173,7 +174,7 @@ if [[ -z "$DAMAGED_CHECKPOINT" ]]; then
   echo "$damaged_start"
   exit 1
 fi
-damaged_resume_payload="$(jq -cn --arg input "Approve damaged-item replacement" --arg checkpoint "$DAMAGED_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint, user: "maf-trace-evaluation"}')"
+damaged_resume_payload="$(jq -cn --arg input "Approve damaged-item replacement" --arg checkpoint "$DAMAGED_CHECKPOINT" '{input: $input, decision: "approve", checkpoint_id: $checkpoint}')"
 damaged_resume="$(invoke_responses_payload "$DAMAGED_THREAD" "$damaged_resume_payload")"
 assert_json_field "$damaged_resume" '.status == "completed"'
 assert_json_field "$damaged_resume" '(.events // []) | map(.type) | index("hitl.response") != null'

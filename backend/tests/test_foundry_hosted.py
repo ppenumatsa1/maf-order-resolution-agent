@@ -553,7 +553,7 @@ async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
             return {
                 "conversation": {"id": "C1"},
                 "input": "Resolve delayed order ORD-1001",
-                "user": "maf-trace-evaluation",
+                "structured_inputs": {"trace_evaluation_record_content": True},
             }
 
     repo = _FakeRepository()
@@ -625,10 +625,10 @@ async def test_run_from_responses_reads_trace_marker_from_response_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _ResponseContext:
-        request_body = {
-            "metadata": {"trace_evaluation_record_content": "true"},
-            "input": "Resolve delayed order ORD-1001",
+        client_headers = {
+            "x-client-trace-evaluation-record-content": "true",
         }
+        request_body = {"input": "Resolve delayed order ORD-1001"}
 
     repo = _FakeRepository()
     service = _FakeService()

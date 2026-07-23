@@ -153,6 +153,19 @@ The runtime continues to accept structured-input and metadata markers for
 compatible clients, and still requires the deployment-level opt-in before
 recording content.
 
+App-only orchestrator run
+[`30026240306`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30026240306)
+showed the hosted invoke path also removes the `user` field before the handler;
+the six diagnostics remained `False`.
+
+The azd hosted invoke contract provides an explicit pass-through mechanism for
+custom `x-client-*` headers. E2E now sends
+`x-client-trace-evaluation-record-content: true`, and the runtime reads it from
+`ResponseContext.client_headers`. This is the canonical request-scoped marker:
+it does not overload Responses body semantics, is forwarded by the hosted
+gateway, and remains ineffective unless the deployment environment opt-in is
+also enabled.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

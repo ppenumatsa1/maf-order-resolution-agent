@@ -17,7 +17,7 @@ from app.core import telemetry as _telemetry
 from app.core.telemetry import get_tracer
 
 logger = logging.getLogger(__name__)
-_TRACE_EVALUATION_USER = "maf-trace-evaluation"
+_TRACE_EVALUATION_HEADER = "x-client-trace-evaluation-record-content"
 
 
 def _apply_foundry_model_env_aliases() -> None:
@@ -386,6 +386,16 @@ def _set_span_attribute(span: Any, key: str, value: Any) -> None:
 
 
 def _trace_evaluation_requested(create_response: Any, context: Any | None) -> bool:
+    client_headers = getattr(context, "client_headers", None)
+    if isinstance(client_headers, dict):
+        header_value = client_headers.get(_TRACE_EVALUATION_HEADER, "")
+        if isinstance(header_value, str) and header_value.strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return True
+
     payloads = [_coerce_payload(create_response)]
     if context is not None:
         for key in ("request", "request_body", "body", "payload", "raw_request"):
@@ -393,8 +403,6 @@ def _trace_evaluation_requested(create_response: Any, context: Any | None) -> bo
             if payload:
                 payloads.append(payload)
     for payload in payloads:
-        if payload.get("user") == _TRACE_EVALUATION_USER:
-            return True
         for container_name in ("structured_inputs", "metadata"):
             marker_container = payload.get(container_name)
             if not isinstance(marker_container, dict):

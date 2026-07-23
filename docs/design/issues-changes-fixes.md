@@ -223,6 +223,10 @@ Application Insights evidence:
   output)
 - unmarked smoke invocation: content gate `False`, zero input/output message
   attributes
+- both high-risk and damaged-item conversations correlated `workflow.run`,
+  `workflow.hitl_resume`, `workflow.hitl_response`, and
+  `workflow.resolution_submit` under one Application Insights operation ID,
+  confirming checkpoint trace-context restoration
 
 The only outstanding item is optional quality follow-up on the one failed
 evaluator result; it is not a deployment, E2E, telemetry, or zero-error eval

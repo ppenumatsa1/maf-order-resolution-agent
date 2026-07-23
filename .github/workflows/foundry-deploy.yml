@@ -234,11 +234,14 @@ jobs:
           cd infra/foundry-hosted
           raw_output="$(azd ai agent invoke order-resolution-hosted "Resolve delayed order ORD-1009" --protocol responses --new-conversation --new-session --no-prompt 2>&1 || true)"
           echo "$raw_output"
+          session_id="$(printf '%s\n' "$raw_output" | sed -n 's/^Session:[[:space:]]*\\([^[:space:]]\\+\\)[[:space:]]*(assigned by server).*$/\\1/p' | tail -n 1)"
           invoke_json="$(printf '%s\n' "$raw_output" | sed -n 's/^\[order-resolution-hosted\][[:space:]]*//p' | tail -n 1)"
           if [[ -z "$invoke_json" ]]; then
             invoke_json="$(printf '%s\n' "$raw_output" | awk '/^\{/{flag=1} flag{print}')"
           fi
-          session_id="$(printf '%s\n' "$invoke_json" | jq -r '[.. | objects | (.session_id? // .session?.id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty' 2>/dev/null || true)"
+          if [[ -z "$session_id" ]]; then
+            session_id="$(printf '%s\n' "$invoke_json" | jq -r '[.. | objects | (.session?.id? // empty)] | map(select(type=="string" and length>0)) | .[0] // empty' 2>/dev/null || true)"
+          fi
           if [[ -z "$session_id" ]]; then
             echo "No session_id resolved from invoke payload; skipping monitor pull."
             exit 0

@@ -198,9 +198,11 @@ jobs:
             azd env set applicationInsightsConnectionString "${appi_connection_string}"
             if [[ -n "${appi_ikey}" ]]; then
               azd env set APPINSIGHTS_INSTRUMENTATIONKEY "${appi_ikey}"
+              azd env set MAF_APPINSIGHTS_INSTRUMENTATIONKEY "${appi_ikey}"
             fi
             if [[ -n "${appi_ingestion_endpoint}" ]]; then
               azd env set APPINSIGHTS_INGESTIONENDPOINT "${appi_ingestion_endpoint}"
+              azd env set MAF_APPINSIGHTS_INGESTIONENDPOINT "${appi_ingestion_endpoint}"
             fi
           fi
 

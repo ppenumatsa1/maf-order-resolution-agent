@@ -141,6 +141,8 @@ fi
 if [[ -n "$appinsights_connection_string" ]]; then
   appinsights_ikey="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
   appinsights_ingestion_endpoint="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
+  set_if_missing MAF_APPINSIGHTS_INSTRUMENTATIONKEY "$appinsights_ikey"
+  set_if_missing MAF_APPINSIGHTS_INGESTIONENDPOINT "$appinsights_ingestion_endpoint"
   set_if_missing APPINSIGHTS_INSTRUMENTATIONKEY "$appinsights_ikey"
   set_if_missing APPINSIGHTS_INGESTIONENDPOINT "$appinsights_ingestion_endpoint"
 fi

@@ -562,13 +562,12 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         _env_state("APPINSIGHTS_CONNECTION_STRING"),
         _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
         _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
         _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
-        _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
@@ -583,7 +582,6 @@ def _initialize_app() -> Any:
                 "appinsights_instrumentationkey": _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
                 "appinsights_ingestionendpoint": _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
                 "maf_appinsights_connection_string": _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
-                "maf_appinsights_instrumentationkey": _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
             },

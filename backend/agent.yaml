@@ -48,7 +48,5 @@ environment_variables:
       value: ${APPINSIGHTS_INGESTIONENDPOINT}
     - name: MAF_APPINSIGHTS_CONNECTION_STRING
       value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_connection_string}}
-    - name: MAF_APPINSIGHTS_INSTRUMENTATIONKEY
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_instrumentationkey}}
     - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
       value: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}

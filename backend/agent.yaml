@@ -39,18 +39,18 @@ environment_variables:
     - name: OTEL_RECORD_CONTENT
       value: ${OTEL_RECORD_CONTENT}
     - name: APPLICATIONINSIGHTS_CONNECTION_STRING
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_connection_string}}
+      value: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
     - name: APPINSIGHTS_CONNECTION_STRING
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_connection_string}}
+      value: ${APPINSIGHTS_CONNECTION_STRING}
     - name: APPINSIGHTS_INSTRUMENTATIONKEY
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_instrumentationkey}}
+      value: ${APPINSIGHTS_INSTRUMENTATIONKEY}
     - name: APPINSIGHTS_INGESTIONENDPOINT
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_ingestionendpoint}}
+      value: ${APPINSIGHTS_INGESTIONENDPOINT}
     - name: MAF_APPINSIGHTS_CONNECTION_STRING
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_connection_string}}
+      value: ${MAF_APPINSIGHTS_CONNECTION_STRING}
     - name: MAF_APPINSIGHTS_INSTRUMENTATIONKEY
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_instrumentationkey}}
+      value: ${MAF_APPINSIGHTS_INSTRUMENTATIONKEY}
     - name: MAF_APPINSIGHTS_INGESTIONENDPOINT
-      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_ingestionendpoint}}
+      value: ${MAF_APPINSIGHTS_INGESTIONENDPOINT}
     - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
       value: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}

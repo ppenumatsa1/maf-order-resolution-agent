@@ -72,14 +72,18 @@ def _apply_appinsights_connection_env_aliases() -> None:
 
     appinsights_alias = os.getenv("APPINSIGHTS_CONNECTION_STRING", "").strip()
     if not appinsights_alias or appinsights_alias.startswith("${"):
-        return
+        appinsights_alias = os.getenv("applicationInsightsConnectionString", "").strip()
+        if not appinsights_alias or appinsights_alias.startswith("${"):
+            return
 
     # AgentServer's bootstrap parser is strict; provide a compact canonical form.
     match = re.search(r"InstrumentationKey=([^;\s]+)", appinsights_alias)
     if match:
+        os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_alias
         os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = f"InstrumentationKey={match.group(1)}"
         return
 
+    os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_alias
     os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = appinsights_alias
 
 
@@ -584,9 +588,10 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s maf_appinsights_ingestion=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_camelcase=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s maf_appinsights_ingestion=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         _env_state("APPINSIGHTS_CONNECTION_STRING"),
+        _env_state("applicationInsightsConnectionString"),
         _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
         _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
         _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
@@ -603,6 +608,9 @@ def _initialize_app() -> Any:
                     "APPLICATIONINSIGHTS_CONNECTION_STRING"
                 ),
                 "appinsights_connection_string": _env_state("APPINSIGHTS_CONNECTION_STRING"),
+                "application_insights_connection_string_camelcase": _env_state(
+                    "applicationInsightsConnectionString"
+                ),
                 "appinsights_instrumentationkey": _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
                 "appinsights_ingestionendpoint": _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
                 "maf_appinsights_connection_string": _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),

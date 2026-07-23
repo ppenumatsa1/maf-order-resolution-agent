@@ -213,6 +213,21 @@ jobs:
             azd env set DATABASE_URL "${connection_database_url}"
           fi
 
+      - name: Sync runtime App Insights secrets into Foundry connection
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          appinsights_connection_string="$(azd env get-value APPINSIGHTS_CONNECTION_STRING || true)"
+          appinsights_ikey="$(printf '%s' "${appinsights_connection_string}" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
+          appinsights_ingestion_endpoint="$(printf '%s' "${appinsights_connection_string}" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
+          if [[ -n "${appinsights_connection_string}" ]]; then
+            azd ai connection update orderresolutionruntimesecrets \
+              --custom-key "appinsights_connection_string=${appinsights_connection_string}" \
+              --custom-key "appinsights_instrumentationkey=${appinsights_ikey}" \
+              --custom-key "appinsights_ingestionendpoint=${appinsights_ingestion_endpoint}" \
+              --no-prompt
+          fi
+
       - name: Validate runtime DB host wiring
         run: |
           set -euo pipefail

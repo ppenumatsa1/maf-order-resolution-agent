@@ -74,7 +74,11 @@ def _apply_appinsights_custom_env_aliases() -> None:
     custom_ikey = os.getenv("MAF_APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
     custom_ingestion = os.getenv("MAF_APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
 
-    if custom_connection and not custom_connection.startswith("${"):
+    if (
+        custom_connection
+        and not custom_connection.startswith("${")
+        and "InstrumentationKey=" in custom_connection
+    ):
         os.environ["APPINSIGHTS_CONNECTION_STRING"] = custom_connection
         match = re.search(r"InstrumentationKey=([^;\s]+)", custom_connection)
         if match:

@@ -65,6 +65,16 @@ Direct App Insights KQL validation against app id `4120ca65-19b4-4fa5-9dc0-850b1
 
 This means hosted functionality is passing, but telemetry ingestion is still blocked at runtime/export path (not deploy/test orchestration path).
 
+### Known-issue cross-check (connection-string shape)
+
+Re-checked against the earlier known issue in this doc (`InstrumentationKey`-only compaction causing exporter region errors):
+
+1. `APPLICATIONINSIGHTS_CONNECTION_STRING`: present, non-placeholder, includes `IngestionEndpoint=...`, no trailing semicolon
+2. `APPINSIGHTS_CONNECTION_STRING`: present, non-placeholder, includes `IngestionEndpoint=...`, no trailing semicolon
+3. `applicationInsightsConnectionString`: present, non-placeholder, includes `IngestionEndpoint=...`, no trailing semicolon
+
+Conclusion: current private env no longer matches the previous known bad pattern (key-only or malformed/trailing-separator strings). The remaining telemetry gap is therefore downstream of this specific config-shape issue.
+
 ## Latest execution update (2026-07-22, private V2 scratch lane: full hosted gate green)
 
 ### Successful runs

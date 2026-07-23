@@ -216,6 +216,23 @@ jobs:
             azd env set DATABASE_URL "${connection_database_url}"
           fi
 
+      - name: Sync runtime App Insights keys to Foundry connection
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          appi_connection_string="$(azd env get-value APPINSIGHTS_CONNECTION_STRING || true)"
+          appi_ikey="$(azd env get-value APPINSIGHTS_INSTRUMENTATIONKEY || true)"
+          appi_ingestion_endpoint="$(azd env get-value APPINSIGHTS_INGESTIONENDPOINT || true)"
+          if [[ -z "${appi_connection_string}" || -z "${appi_ikey}" || -z "${appi_ingestion_endpoint}" ]]; then
+            echo "Missing App Insights values in azd env; skipping Foundry connection custom-key sync."
+            exit 0
+          fi
+          azd ai connection update orderresolutionruntimesecrets \
+            --custom-key "appinsights_connection_string=${appi_connection_string}" \
+            --custom-key "appinsights_instrumentationkey=${appi_ikey}" \
+            --custom-key "appinsights_ingestionendpoint=${appi_ingestion_endpoint}" \
+            --no-prompt
+
       - name: Validate runtime DB host wiring
         run: |
           set -euo pipefail

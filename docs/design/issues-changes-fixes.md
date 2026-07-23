@@ -73,6 +73,38 @@ Rationale: DB URL (no semicolon separators) consistently propagates; App Insight
 
 Validation run `30012691120` is queued waiting on `foundry-private` self-hosted runner availability, so this iteration is pushed but not yet runtime-verified.
 
+## Latest execution update (2026-07-23, telemetry remediation iterations on active runner)
+
+### Runner availability fix
+
+1. The default `foundry-private` runner label was offline, which left run `30012691120` queued.
+2. Active runner inventory showed `foundry-private-v2` online, so subsequent validation runs were dispatched with `runner_label=foundry-private-v2`.
+
+### Iteration results
+
+1. Run `30013641634` (deploy+smoke success): hosted runtime still had **no** App Insights env vars; `appinsights_configured=False`.
+2. Run `30013960623` after wiring telemetry through `orderresolutionruntimesecrets` custom keys:
+   - env vars appeared, but values were malformed for Azure Monitor parser
+   - runtime error: `ValueError: Invalid instrumentation key. It should be a valid UUID.`
+3. Run `30014337891` after hardening custom alias validation:
+   - runtime error changed to `ValueError: Invalid connection string`
+   - diagnostics showed custom-key sourced values still not parseable
+4. Run `30014661428` after reverting to direct env mapping and adding camelCase fallback:
+   - App Insights vars absent again; `appinsights_configured=False`
+5. Run `30015068848` after adding neutral aliases (`MAF_MONITOR_*`) to avoid `APPINSIGHTS` name filtering:
+   - neutral vars were also absent in hosted runtime
+   - confirms hosted runtime is dropping these env payloads before app init
+
+### Net result
+
+1. We eliminated the crashing `Invalid instrumentation key` branch introduced by custom-key wiring.
+2. Hosted deploy/smoke remains green.
+3. Telemetry exporter still cannot bootstrap in hosted runtime because all tested App Insights env paths are absent or transformed before app startup.
+
+### Current blocker
+
+Hosted agent runtime is not receiving App Insights connection/config vars from `agent.yaml` substitutions (both standard and neutral aliases), while DB connection placeholders continue to work. Next likely fix path is platform-level: verify allowed hosted env variable classes/names for `azure.ai.agent` deployments or provide telemetry connection through a supported non-env configuration channel.
+
 ## Latest execution update (2026-07-22, App Insights connectivity/AuthN/AuthZ ruled out)
 
 Per telemetry RCA guidance, we ran a minimal diagnostic from Python against the private-lane App Insights resource (`appId=4120ca65-19b4-4fa5-9dc0-850b17a2e57d`):

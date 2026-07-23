@@ -32,6 +32,88 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - verify `setup_observability()` exporter path is active inside hosted runtime
    - confirm hosted spans/requests are emitted under the expected App Insights app id/workspace
 
+## Latest execution update (2026-07-23, App Insights hosted telemetry RCA)
+
+### Root cause
+
+The scratch private Foundry project is not connected to an Application Insights
+resource, and the cleanup removed the previously validated manual runtime-env
+payload that compensated for that missing project connection.
+
+The resulting hosted agent version has no supported source for
+`APPLICATIONINSIGHTS_CONNECTION_STRING`. The runtime therefore starts with no
+App Insights configuration and emits no Azure Monitor telemetry.
+
+### Evidence
+
+1. ARM connection inventory for the current private project contains only:
+   - `AzureStorageAccount`
+   - `CosmosDb`
+   - `CognitiveSearch`
+   - `CustomKeys`
+   - no `ApplicationInsights` project connection
+2. Current IaC confirms the gap:
+   - `infra/foundry-hosted/iac/modules/foundry-project-existing-connections.bicep`
+     creates storage, Cosmos DB, and AI Search project connections only.
+3. Microsoft Foundry documentation states that hosted-agent App Insights
+   auto-injection occurs after an Application Insights resource is connected to
+   the Foundry project. Creating the App Insights component by itself does not
+   establish that project connection.
+4. Final diagnostic run `30015068848` shows the actual failure state:
+   - all standard App Insights vars are absent
+   - all `MAF_APPINSIGHTS_*` aliases are absent
+   - all neutral `MAF_MONITOR_*` aliases are absent
+   - `appinsights_configured=False`
+   - no `Invalid connection string` error occurs in this final state because no
+     connection string reaches the exporter
+5. The last telemetry-green runs used a separate runtime payload:
+   - run `29652488288`: `FOUNDRY_RUNTIME_ENV` was set; runtime diagnostics showed
+     compact canonical and full regional App Insights strings; AgentServer
+     reported `appinsights_configured=True`
+   - run `29653898864`: the same payload was set and App Insights queries confirmed
+     `429` traces and `140` dependencies
+6. Cleanup commit `3fd632a` removed the `FOUNDRY_RUNTIME_ENV` construction and
+   seeding from the private deploy workflow. Subsequent workflow logic retained
+   individual azd env keys, but those `${VAR}` mappings have not materialized in
+   the hosted process.
+
+### Important correction to the earlier hypothesis
+
+`DATABASE_URL` being present does not prove that normal `${VAR}` substitution
+works. `FOUNDRY_RUNTIME_DATABASE_URL` is injected through the Foundry-native
+connection expression:
+
+`connections.orderresolutionruntimesecrets.credentials.database_url`
+
+`backend/foundry/main.py` then copies that connection-backed value into
+`DATABASE_URL` before diagnostics run. Database propagation and App Insights env
+propagation therefore use different mechanisms.
+
+### What is ruled out
+
+1. App Insights resource or ingestion endpoint outage
+2. private-network connectivity to the ingestion endpoint
+3. invalid target instrumentation key
+4. ingestion AuthN/AuthZ failure
+5. Azure Monitor OpenTelemetry SDK inability to export
+
+The direct `/v2/track` and Python OpenTelemetry probes both ingested and were
+query-visible against the current component. Those probes bypassed the missing
+Foundry project/runtime configuration, which is why they succeeded.
+
+### Classification
+
+- **Primary configuration defect:** no Application Insights connection on the
+  scratch private Foundry project, so documented platform auto-injection cannot
+  occur.
+- **Contributing regression:** cleanup commit `3fd632a` removed the known-working
+  `FOUNDRY_RUNTIME_ENV` fallback.
+- **Non-root-cause experiments:** malformed values observed in runs
+  `30013960623` and `30014337891` came from attempted `CustomKeys` workarounds.
+  They do not describe the final run `30015068848`, where the values are absent.
+
+RCA confidence: **high**. No implementation fix is included in this RCA step.
+
 ## Latest execution update (2026-07-23, hosted telemetry env-drop RCA continuation)
 
 ### Fresh evidence from hosted deploy run

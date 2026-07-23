@@ -1,7 +1,8 @@
 # Issues, Changes, and Fixes (Foundry Private VM Path)
 
 Date: 2026-07-07
-Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
+Scope: Foundry hosted-agent deployment from the private network path in
+`rg-maf-ora-foundry-v2`.
 
 ## Latest execution update (2026-07-23, supported telemetry fix implemented)
 
@@ -23,8 +24,8 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - hosted E2E covers low-risk, multi-turn continuity, high-risk HITL/resume,
      and damaged-item HITL/resume
    - raw evaluator input/output attributes require both the validation-agent env
-     opt-in and an E2E-only request metadata marker; ordinary hosted requests
-     remain redacted
+     opt-in and an E2E-only `x-client-trace-evaluation-record-content` request
+     header; ordinary hosted requests remain redacted
    - E2E writes the three conversation IDs and UTC validation window to
      `backend/.foundry/results/hosted-e2e-evidence.json`
    - Foundry evaluates those exact conversation traces instead of reinvoking the
@@ -46,7 +47,7 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
 
 ### Local evidence
 
-1. Full backend suite: `98 passed`.
+1. Full backend suite: `99 passed`.
 2. Focused telemetry/hosted/evaluator suite: `49 passed`
    - telemetry configuration
    - hosted Responses runtime
@@ -64,6 +65,8 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - PostgreSQL region: `centralus`
    - planned telemetry change: create the `ApplicationInsights` project
      connection
+8. Final deterministic design review passed with backend `99/99`,
+   deterministic evaluation `10/10`, and Playwright `7/7`.
 
 ### First hosted attempt and gate correction
 
@@ -166,18 +169,64 @@ it does not overload Responses body semantics, is forwarded by the hosted
 gateway, and remains ineffective unless the deployment environment opt-in is
 also enabled.
 
-### Pending hosted evidence
+### Completed hosted evidence
 
-The code and IaC fix are ready, but the following are not claimed complete until
-the private orchestrator runs with provisioning enabled:
+The private deployment is complete. Infra apply run
+[`30021840335`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30021840335)
+created the supported `ApplicationInsights` connection in `3m 5s`; idempotent
+run
+[`30023173981`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30023173981)
+later reconfirmed infrastructure in `25s` and the connection inventory in `4s`.
 
-1. provision the `ApplicationInsights` project connection
-2. deploy the new immutable hosted-agent version
-3. pass smoke and the combined hosted E2E scenarios
-4. complete Foundry trace evaluation with zero errored items
-5. confirm all three conversations in App Insights with no correlated exceptions
-6. record the workflow run ID, agent version, connection inventory, evaluation
-   IDs/counts, KQL counts, and timing metrics in this document
+Final app and hosted-gate run
+[`30026828788`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30026828788)
+passed on commit `e03cee675900a8f8538933bc05fe0fbeafb11a49`:
+
+- environment: `foundry-private-env`
+- resource group: `rg-maf-ora-foundry-v2`
+- immutable hosted agent: `order-resolution-hosted`, version `22`
+- model: `gpt-4o-mini`, capacity `30`
+- Responses endpoint:
+  `https://mafprv0722v3ai4aiw7fw5gjdo4.services.ai.azure.com/api/projects/order-resolution/agents/order-resolution-hosted/endpoint/protocols/openai/responses?api-version=v1`
+
+| Gate | UTC window | Runtime | Result |
+| --- | --- | ---: | --- |
+| Hosted agent deploy | 16:50:56-16:52:06 | `1m 10s` (`azd`: `1m 8s`) | version `22` deployed |
+| Smoke invoke | 16:52:06-16:52:43 | `37s` | Foundry Models `gpt-4o-mini`; high-risk HITL reached |
+| Hosted E2E | 16:52:43-16:54:40 | `1m 57s` | low risk, multi-turn, high-risk HITL/resume, and damaged-item HITL/resume passed |
+| Foundry trace evaluation | 16:54:43-16:55:28 | `45s` | completed; `2` passed, `1` failed, `0` errored |
+| App Insights extension | 16:55:28-16:55:32 | `4s` | installed/upgraded |
+| Correlated App Insights KQL | 16:55:32-16:55:36 | `4s` | passed for all three conversations |
+| Overall deploy job | 16:50:18-16:55:39 | `5m 21s` | success |
+
+Foundry evaluation evidence:
+
+- evaluation ID: `eval_2035331adada410c9c56b94538527d06`
+- run ID: `evalrun_7961631e021b44309f0a3524075dad3f`
+- conversations: `3`
+- result counts: total `3`, passed `2`, failed `1`, errored `0`, skipped `0`
+- the enforced private gate passed because the run completed and produced zero
+  errored items; the single report-only quality failure is non-blocking evidence
+  for future evaluator tuning
+
+Application Insights evidence:
+
+- component: `mafprv0722v3-mon-4aiw7fw5gjdo4-appi`
+- correlated rows: `108`
+- traces: `62`
+- dependencies: `34`
+- requests: `6`
+- exceptions: `0`
+- matched E2E conversations: `3/3`
+- E2E invocation spans: content gate `True` for `6/6`, input messages `6/6`,
+  output messages `4/6` (approval-wait responses intentionally have no final
+  output)
+- unmarked smoke invocation: content gate `False`, zero input/output message
+  attributes
+
+The only outstanding item is optional quality follow-up on the one failed
+evaluator result; it is not a deployment, E2E, telemetry, or zero-error eval
+gate blocker.
 
 ## Handoff snapshot (2026-07-22 end of day)
 

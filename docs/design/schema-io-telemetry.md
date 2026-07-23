@@ -79,8 +79,9 @@ evaluation additionally requires `gen_ai.input.messages` and
 `gen_ai.output.messages`; those content attributes are emitted only when the
 private validation agent is deployed with
 `FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT=true` **and** the individual request
-contains `metadata.trace_evaluation_record_content=true`. The hosted E2E script
-marks only its validation requests, so later ordinary hosted traffic remains
+contains the pass-through header
+`x-client-trace-evaluation-record-content: true`. The hosted E2E script marks
+only its validation requests, so later ordinary hosted traffic remains
 redacted. Global
 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` and `OTEL_RECORD_CONTENT`
 remain disabled.

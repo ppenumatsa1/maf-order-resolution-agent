@@ -66,9 +66,10 @@ Telemetry:
 - `OTEL_RECORD_CONTENT=false` keeps prompt/payload content out of span attributes.
 - `FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT=true` is a separate validation-lane
   opt-in. Input/output messages are recorded only when an individual request also
-  carries `metadata.trace_evaluation_record_content=true`; the hosted E2E script
-  marks its validation conversations while ordinary hosted requests remain
-  redacted. Global OTel content capture stays disabled.
+  carries `x-client-trace-evaluation-record-content: true`; the hosted E2E
+  script sends this supported pass-through header only for its validation
+  conversations while ordinary hosted requests remain redacted. Global OTel
+  content capture stays disabled.
 
 Evaluation:
 

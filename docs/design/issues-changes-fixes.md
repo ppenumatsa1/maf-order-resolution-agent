@@ -141,6 +141,18 @@ which participates in the generated `CreateResponse` contract, while the
 runtime retains metadata support for compatible clients. Content capture still
 requires both the deployment environment opt-in and this per-request marker.
 
+App-only orchestrator run
+[`30025624908`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30025624908)
+showed `structured_inputs` is also removed by the hosted gateway before the
+handler; all six invocation diagnostics remained `False`.
+
+The E2E marker now uses the standard top-level Responses `user` scalar with the
+opaque value `maf-trace-evaluation`. This field is part of the generated
+`CreateResponse` contract and is expected to be retained as a standard scalar.
+The runtime continues to accept structured-input and metadata markers for
+compatible clients, and still requires the deployment-level opt-in before
+recording content.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

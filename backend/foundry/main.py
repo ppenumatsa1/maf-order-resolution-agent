@@ -17,6 +17,7 @@ from app.core import telemetry as _telemetry
 from app.core.telemetry import get_tracer
 
 logger = logging.getLogger(__name__)
+_TRACE_EVALUATION_USER = "maf-trace-evaluation"
 
 
 def _apply_foundry_model_env_aliases() -> None:
@@ -392,6 +393,8 @@ def _trace_evaluation_requested(create_response: Any, context: Any | None) -> bo
             if payload:
                 payloads.append(payload)
     for payload in payloads:
+        if payload.get("user") == _TRACE_EVALUATION_USER:
+            return True
         for container_name in ("structured_inputs", "metadata"):
             marker_container = payload.get(container_name)
             if not isinstance(marker_container, dict):

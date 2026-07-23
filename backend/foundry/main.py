@@ -384,7 +384,26 @@ def _set_span_attribute(span: Any, key: str, value: Any) -> None:
         span.set_attribute(key, value)
 
 
-def _trace_evaluation_content_enabled(create_response: Any) -> bool:
+def _trace_evaluation_requested(create_response: Any, context: Any | None) -> bool:
+    payloads = [_coerce_payload(create_response)]
+    if context is not None:
+        for key in ("request", "request_body", "body", "payload", "raw_request"):
+            payload = _coerce_payload(getattr(context, key, None))
+            if payload:
+                payloads.append(payload)
+    for payload in payloads:
+        metadata = payload.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        requested = metadata.get("trace_evaluation_record_content", False)
+        if isinstance(requested, bool) and requested:
+            return True
+        if isinstance(requested, str) and requested.strip().lower() in {"1", "true", "yes"}:
+            return True
+    return False
+
+
+def _trace_evaluation_content_enabled(create_response: Any, context: Any | None) -> bool:
     enabled = os.getenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "false").strip().lower() in {
         "1",
         "true",
@@ -392,13 +411,7 @@ def _trace_evaluation_content_enabled(create_response: Any) -> bool:
     }
     if not enabled:
         return False
-    metadata = _coerce_payload(create_response).get("metadata")
-    if not isinstance(metadata, dict):
-        return False
-    requested = metadata.get("trace_evaluation_record_content", False)
-    if isinstance(requested, bool):
-        return requested
-    return isinstance(requested, str) and requested.strip().lower() in {"1", "true", "yes"}
+    return _trace_evaluation_requested(create_response, context)
 
 
 def _set_trace_evaluation_input(
@@ -455,7 +468,7 @@ async def _run_from_responses(
 ) -> Any:
     parsed = _parse_input(create_response, context)
     tracer = get_tracer("foundry.responses")
-    trace_evaluation_content_enabled = _trace_evaluation_content_enabled(create_response)
+    trace_evaluation_content_enabled = _trace_evaluation_content_enabled(create_response, context)
     # Anchor all turn-level telemetry under a single invocation span.
     with tracer.start_as_current_span("foundry.responses.invoke") as span:
         _set_span_attribute(span, "workflow.thread_id", parsed.conversation_id)
@@ -473,6 +486,11 @@ async def _run_from_responses(
             os.getenv("FOUNDRY_HOSTED_AGENT_ID", "order-resolution-hosted"),
         )
         _set_span_attribute(span, "gen_ai.conversation.id", parsed.conversation_id)
+        _set_span_attribute(
+            span,
+            "foundry.trace_evaluation.content_enabled",
+            trace_evaluation_content_enabled,
+        )
         _set_trace_evaluation_input(
             span,
             parsed,

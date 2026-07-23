@@ -116,6 +116,19 @@ was discarded, keeping the dual-gated message capture disabled. Payload
 coercion now supports Azure generated models, with a regression test exercising
 the exact `as_dict()` shape.
 
+App-only orchestrator run
+[`30024311931`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30024311931)
+deployed that adapter correction and again passed smoke plus hosted E2E, but the
+newly correlated spans still contained zero message attributes. This proves the
+hosted server does not retain the custom metadata marker on the deserialized
+`CreateResponse` instance for this invocation path.
+
+The dual gate now also reads metadata from the raw `ResponseContext` request-body
+surfaces already used as hosted input fallbacks. The invocation span records
+only a non-sensitive `foundry.trace_evaluation.content_enabled` boolean so future
+validation can distinguish a disabled request gate from exporter loss without
+logging message content.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

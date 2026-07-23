@@ -617,3 +617,39 @@ async def test_run_from_responses_does_not_record_unmarked_trace_content(
     span = tracer.spans[0]
     assert "gen_ai.input.messages" not in span.attributes
     assert "gen_ai.output.messages" not in span.attributes
+    assert span.attributes["foundry.trace_evaluation.content_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_run_from_responses_reads_trace_marker_from_response_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ResponseContext:
+        request_body = {
+            "metadata": {"trace_evaluation_record_content": "true"},
+            "input": "Resolve delayed order ORD-1001",
+        }
+
+    repo = _FakeRepository()
+    service = _FakeService()
+    tracer = _FakeTracer()
+    repo.details_by_thread["C1"] = _details(
+        thread_id="C1",
+        status="completed",
+        output_message="Resolution complete.",
+    )
+    monkeypatch.setenv("FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT", "true")
+    monkeypatch.setattr(foundry_main, "workflow_run_repository", repo)
+    monkeypatch.setattr(foundry_main, "order_resolution_service", service)
+    monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
+
+    await foundry_main._run_from_responses(
+        {"conversation": {"id": "C1"}},
+        _ResponseContext(),
+        _FakeTextResponse,
+    )
+
+    span = tracer.spans[0]
+    assert span.attributes["foundry.trace_evaluation.content_enabled"] is True
+    assert "gen_ai.input.messages" in span.attributes
+    assert "gen_ai.output.messages" in span.attributes

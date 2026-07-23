@@ -234,7 +234,8 @@ jobs:
           cd infra/foundry-hosted
           raw_output="$(azd ai agent invoke order-resolution-hosted "Resolve delayed order ORD-1009" --protocol responses --new-conversation --new-session --no-prompt 2>&1 || true)"
           echo "$raw_output"
-          session_id="$(printf '%s\n' "$raw_output" | awk '/Session:[[:space:]]+[^[:space:]]+[[:space:]]+\\(assigned by server\\)/ {print $2}' | tail -n 1)"
+          clean_output="$(printf '%s\n' "$raw_output" | sed -E 's/\x1B\[[0-9;]*[mK]//g')"
+          session_id="$(printf '%s\n' "$clean_output" | grep 'assigned by server' | tail -n 1 | awk '{print $2}')"
           invoke_json="$(printf '%s\n' "$raw_output" | sed -n 's/^\[order-resolution-hosted\][[:space:]]*//p' | tail -n 1)"
           if [[ -z "$invoke_json" ]]; then
             invoke_json="$(printf '%s\n' "$raw_output" | awk '/^\{/{flag=1} flag{print}')"

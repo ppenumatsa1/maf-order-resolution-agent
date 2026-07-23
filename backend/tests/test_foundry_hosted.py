@@ -548,6 +548,14 @@ async def test_run_from_responses_records_exception_on_root_span(
 async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    class _AzureCreateResponse:
+        def as_dict(self) -> dict[str, object]:
+            return {
+                "conversation": {"id": "C1"},
+                "input": "Resolve delayed order ORD-1001",
+                "metadata": {"trace_evaluation_record_content": True},
+            }
+
     repo = _FakeRepository()
     service = _FakeService()
     tracer = _FakeTracer()
@@ -562,11 +570,7 @@ async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
     monkeypatch.setattr(foundry_main, "get_tracer", lambda _: tracer)
 
     await foundry_main._run_from_responses(
-        {
-            "conversation": {"id": "C1"},
-            "input": "Resolve delayed order ORD-1001",
-            "metadata": {"trace_evaluation_record_content": True},
-        },
+        _AzureCreateResponse(),
         None,
         _FakeTextResponse,
     )

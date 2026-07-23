@@ -146,6 +146,8 @@ def _coerce_payload(create_response: Any) -> dict[str, Any]:
         return dict(create_response)
     if hasattr(create_response, "model_dump"):
         return create_response.model_dump()
+    if hasattr(create_response, "as_dict"):
+        return create_response.as_dict()
     if hasattr(create_response, "dict"):
         return create_response.dict()
     return {}

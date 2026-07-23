@@ -99,6 +99,23 @@ triage fallback. The telemetry step now obtains the Application Insights name
 from the verified project connection instead of the unreliable generic resource
 list lookup.
 
+Orchestrator run
+[`30023173981`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30023173981)
+confirmed the model correction: hosted workflow events reported
+`triage_mode=foundry_models`, `model=gpt-4o-mini`, and `provider=foundry`.
+Provisioning, deployment, smoke, and hosted E2E passed. Trace evaluation found
+all `110` correlated spans but no `gen_ai.input.messages` or
+`gen_ai.output.messages`.
+
+The missing content was an application adapter defect rather than an
+instrumentation-version issue. The hosted Azure `CreateResponse` generated model
+exposes `as_dict()`, while the payload coercion helper only recognized plain
+dictionaries and Pydantic `model_dump()`/`dict()` objects. The workflow could
+parse input through context fallbacks, but the per-request E2E metadata marker
+was discarded, keeping the dual-gated message capture disabled. Payload
+coercion now supports Azure generated models, with a regression test exercising
+the exact `as_dict()` shape.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

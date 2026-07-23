@@ -88,9 +88,15 @@ def _apply_appinsights_connection_env_aliases() -> None:
 
 
 def _apply_appinsights_custom_env_aliases() -> None:
-    custom_connection = os.getenv("MAF_APPINSIGHTS_CONNECTION_STRING", "").strip()
-    custom_ikey = os.getenv("MAF_APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
-    custom_ingestion = os.getenv("MAF_APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
+    custom_connection = os.getenv("MAF_MONITOR_CONNECTION_STRING", "").strip()
+    if not custom_connection or custom_connection.startswith("${"):
+        custom_connection = os.getenv("MAF_APPINSIGHTS_CONNECTION_STRING", "").strip()
+    custom_ikey = os.getenv("MAF_MONITOR_INSTRUMENTATION_KEY", "").strip()
+    if not custom_ikey or custom_ikey.startswith("${"):
+        custom_ikey = os.getenv("MAF_APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
+    custom_ingestion = os.getenv("MAF_MONITOR_INGESTION_ENDPOINT", "").strip().rstrip(";")
+    if not custom_ingestion or custom_ingestion.startswith("${"):
+        custom_ingestion = os.getenv("MAF_APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
 
     connection_ikey = _extract_connection_component(custom_connection, "InstrumentationKey")
     if (
@@ -588,7 +594,7 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_camelcase=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s maf_appinsights_ingestion=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_camelcase=%s appinsights_ikey=%s appinsights_ingestion=%s maf_appinsights=%s maf_appinsights_ikey=%s maf_appinsights_ingestion=%s maf_monitor_connection=%s maf_monitor_ikey=%s maf_monitor_ingestion=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         _env_state("APPINSIGHTS_CONNECTION_STRING"),
         _env_state("applicationInsightsConnectionString"),
@@ -597,6 +603,9 @@ def _initialize_app() -> Any:
         _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
         _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
         _env_state("MAF_APPINSIGHTS_INGESTIONENDPOINT"),
+        _env_state("MAF_MONITOR_CONNECTION_STRING"),
+        _env_state("MAF_MONITOR_INSTRUMENTATION_KEY"),
+        _env_state("MAF_MONITOR_INGESTION_ENDPOINT"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
@@ -616,6 +625,11 @@ def _initialize_app() -> Any:
                 "maf_appinsights_connection_string": _env_state("MAF_APPINSIGHTS_CONNECTION_STRING"),
                 "maf_appinsights_instrumentationkey": _env_state("MAF_APPINSIGHTS_INSTRUMENTATIONKEY"),
                 "maf_appinsights_ingestionendpoint": _env_state("MAF_APPINSIGHTS_INGESTIONENDPOINT"),
+                "maf_monitor_connection_string": _env_state("MAF_MONITOR_CONNECTION_STRING"),
+                "maf_monitor_instrumentation_key": _env_state(
+                    "MAF_MONITOR_INSTRUMENTATION_KEY"
+                ),
+                "maf_monitor_ingestion_endpoint": _env_state("MAF_MONITOR_INGESTION_ENDPOINT"),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
             },

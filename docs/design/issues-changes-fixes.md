@@ -3,6 +3,35 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Handoff snapshot (2026-07-22 end of day)
+
+### Completed today
+
+1. Private V2 hosted lane deploy is green on latest runs (`29965850415`, `29966110736`):
+   - deploy
+   - smoke
+   - hosted E2E
+   - report-only Foundry eval
+2. Runtime/env hardening applied and pushed:
+   - DB runtime URL host/scheme stabilization
+   - eval env fallback injection (endpoint/model)
+   - App Insights connection-string sync into all expected env aliases
+   - telemetry/instrumentation env defaults to avoid unresolved placeholders
+3. Platform telemetry path was directly validated from Python:
+   - `/v2/track` accepts events (`itemsAccepted=1`)
+   - SDK span ingestion confirmed in App Insights
+   - therefore network + ingestion auth path is healthy
+
+### Pending for tomorrow
+
+1. Hosted runtime telemetry gap remains:
+   - App Insights still shows zero rows for hosted workflow traffic even though hosted runs are green
+   - direct probe data ingests, so issue is now narrowed to hosted runtime emission/bootstrap path
+2. Next debug pass should focus on hosted process/runtime evidence:
+   - capture runtime startup diagnostics for effective telemetry env values during hosted invoke
+   - verify `setup_observability()` exporter path is active inside hosted runtime
+   - confirm hosted spans/requests are emitted under the expected App Insights app id/workspace
+
 ## Latest execution update (2026-07-22, App Insights connectivity/AuthN/AuthZ ruled out)
 
 Per telemetry RCA guidance, we ran a minimal diagnostic from Python against the private-lane App Insights resource (`appId=4120ca65-19b4-4fa5-9dc0-850b17a2e57d`):

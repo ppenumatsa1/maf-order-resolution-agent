@@ -69,9 +69,34 @@ def _apply_appinsights_connection_env_aliases() -> None:
     os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = appinsights_alias
 
 
+def _apply_appinsights_component_env_aliases() -> None:
+    canonical = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+    if canonical and not canonical.startswith("${"):
+        return
+
+    instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
+    if not instrumentation_key or instrumentation_key.startswith("${"):
+        return
+
+    ingestion_endpoint = os.getenv("APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
+    if ingestion_endpoint.startswith("${"):
+        ingestion_endpoint = ""
+
+    appinsights_connection = f"InstrumentationKey={instrumentation_key}"
+    if ingestion_endpoint:
+        appinsights_connection = (
+            f"{appinsights_connection};IngestionEndpoint={ingestion_endpoint}"
+        )
+    os.environ["APPINSIGHTS_CONNECTION_STRING"] = appinsights_connection
+    os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
+        f"InstrumentationKey={instrumentation_key}"
+    )
+
+
 _apply_foundry_model_env_aliases()
 _apply_runtime_database_url_override()
 _apply_appinsights_connection_env_aliases()
+_apply_appinsights_component_env_aliases()
 
 if os.getenv("FOUNDRY_HOSTED_SKIP_APP_INIT_FOR_TESTS", "").strip().lower() == "true":
     order_resolution_service = None
@@ -510,9 +535,11 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s appinsights_alias=%s appinsights_ikey=%s appinsights_ingestion=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         _env_state("APPINSIGHTS_CONNECTION_STRING"),
+        _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
+        _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
@@ -524,6 +551,8 @@ def _initialize_app() -> Any:
                     "APPLICATIONINSIGHTS_CONNECTION_STRING"
                 ),
                 "appinsights_connection_string": _env_state("APPINSIGHTS_CONNECTION_STRING"),
+                "appinsights_instrumentationkey": _env_state("APPINSIGHTS_INSTRUMENTATIONKEY"),
+                "appinsights_ingestionendpoint": _env_state("APPINSIGHTS_INGESTIONENDPOINT"),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
             },

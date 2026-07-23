@@ -190,9 +190,17 @@ jobs:
           resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
           appi_connection_string="$(az resource list -g "$resource_group" --resource-type microsoft.insights/components --query "[0].properties.ConnectionString" -o tsv)"
           if [[ -n "${appi_connection_string}" ]]; then
+            appi_ikey="$(printf '%s' "${appi_connection_string}" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
+            appi_ingestion_endpoint="$(printf '%s' "${appi_connection_string}" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
             azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
             azd env set APPINSIGHTS_CONNECTION_STRING "${appi_connection_string}"
             azd env set applicationInsightsConnectionString "${appi_connection_string}"
+            if [[ -n "${appi_ikey}" ]]; then
+              azd env set APPINSIGHTS_INSTRUMENTATIONKEY "${appi_ikey}"
+            fi
+            if [[ -n "${appi_ingestion_endpoint}" ]]; then
+              azd env set APPINSIGHTS_INGESTIONENDPOINT "${appi_ingestion_endpoint}"
+            fi
           fi
 
       - name: Sync runtime DB URL from Foundry connection

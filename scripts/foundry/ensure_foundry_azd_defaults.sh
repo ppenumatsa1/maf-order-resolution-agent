@@ -133,6 +133,17 @@ set_if_missing OTEL_SERVICE_NAME "${OTEL_SERVICE_NAME:-maf-order-resolution-host
 set_if_missing OTEL_SERVICE_NAMESPACE "${OTEL_SERVICE_NAMESPACE:-maf-order-resolution}"
 set_if_missing OTEL_RECORD_CONTENT "${OTEL_RECORD_CONTENT:-false}"
 
+appinsights_connection_string="$(get_env_value APPINSIGHTS_CONNECTION_STRING)"
+if [[ -z "$appinsights_connection_string" ]]; then
+  appinsights_connection_string="$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)"
+fi
+if [[ -n "$appinsights_connection_string" ]]; then
+  appinsights_ikey="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*InstrumentationKey=\([^;]*\).*/\1/p')"
+  appinsights_ingestion_endpoint="$(printf "%s" "$appinsights_connection_string" | sed -n 's/.*IngestionEndpoint=\([^;]*\).*/\1/p')"
+  set_if_missing APPINSIGHTS_INSTRUMENTATIONKEY "$appinsights_ikey"
+  set_if_missing APPINSIGHTS_INGESTIONENDPOINT "$appinsights_ingestion_endpoint"
+fi
+
 runtime_database_url_existing="$(get_env_value RUNTIME_DATABASE_URL)"
 create_postgres_server="$(get_env_value CREATE_POSTGRES_SERVER)"
 postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"

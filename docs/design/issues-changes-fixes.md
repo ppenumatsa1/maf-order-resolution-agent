@@ -32,6 +32,47 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - verify `setup_observability()` exporter path is active inside hosted runtime
    - confirm hosted spans/requests are emitted under the expected App Insights app id/workspace
 
+## Latest execution update (2026-07-23, hosted telemetry env-drop RCA continuation)
+
+### Fresh evidence from hosted deploy run
+
+Run `30012340919` succeeded for deploy + smoke, but hosted telemetry diagnostics still showed no App Insights env vars inside runtime:
+
+1. `APPLICATIONINSIGHTS_CONNECTION_STRING`: absent
+2. `APPINSIGHTS_CONNECTION_STRING`: absent
+3. `APPINSIGHTS_INSTRUMENTATIONKEY`: absent
+4. `APPINSIGHTS_INGESTIONENDPOINT`: absent
+5. `MAF_APPINSIGHTS_CONNECTION_STRING`: absent
+6. `appinsights_configured=False` in `azure.ai.agentserver` connectivity log
+
+This explains zero hosted telemetry rows despite green smoke behavior and confirms the remaining issue is runtime env propagation, not ingestion platform availability.
+
+### Fix iteration applied
+
+To avoid relying on connection-string-only transport into hosted runtime, we added a split-field fallback path and kept startup diagnostics:
+
+1. `backend/agent.yaml`
+   - added hosted env mapping for:
+     - `MAF_APPINSIGHTS_INSTRUMENTATIONKEY`
+     - `MAF_APPINSIGHTS_INGESTIONENDPOINT`
+2. `scripts/foundry/ensure_foundry_azd_defaults.sh`
+   - derive/set:
+     - `MAF_APPINSIGHTS_INSTRUMENTATIONKEY`
+     - `MAF_APPINSIGHTS_INGESTIONENDPOINT`
+   - from `APPINSIGHTS_CONNECTION_STRING`
+3. `.github/workflows/foundry-deploy.yml`
+   - `Sync Application Insights connection string` now also writes:
+     - `MAF_APPINSIGHTS_INSTRUMENTATIONKEY`
+     - `MAF_APPINSIGHTS_INGESTIONENDPOINT`
+4. `backend/foundry/main.py`
+   - expanded hosted env diagnostics to log the new `MAF_*` split-field telemetry vars.
+
+Rationale: DB URL (no semicolon separators) consistently propagates; App Insights connection strings (semicolon-delimited) have shown runtime-drop/shape instability in this lane. Split vars provide a deterministic runtime reconstruction fallback.
+
+### Current blocker
+
+Validation run `30012691120` is queued waiting on `foundry-private` self-hosted runner availability, so this iteration is pushed but not yet runtime-verified.
+
 ## Latest execution update (2026-07-22, App Insights connectivity/AuthN/AuthZ ruled out)
 
 Per telemetry RCA guidance, we ran a minimal diagnostic from Python against the private-lane App Insights resource (`appId=4120ca65-19b4-4fa5-9dc0-850b17a2e57d`):

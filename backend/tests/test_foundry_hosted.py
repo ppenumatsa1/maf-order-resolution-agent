@@ -553,7 +553,7 @@ async def test_run_from_responses_records_genai_messages_for_trace_evaluation(
             return {
                 "conversation": {"id": "C1"},
                 "input": "Resolve delayed order ORD-1001",
-                "metadata": {"trace_evaluation_record_content": True},
+                "structured_inputs": {"trace_evaluation_record_content": True},
             }
 
     repo = _FakeRepository()

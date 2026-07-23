@@ -129,6 +129,18 @@ only a non-sensitive `foundry.trace_evaluation.content_enabled` boolean so futur
 validation can distinguish a disabled request gate from exporter loss without
 logging message content.
 
+App-only orchestrator run
+[`30024956130`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30024956130)
+confirmed that diagnostic was exported as `False` for every E2E invocation.
+This ruled out exporter loss and showed that the hosted Responses server strips
+custom `metadata` from both the deserialized request and context request-body
+surfaces.
+
+The E2E-only marker now uses the documented Responses `structured_inputs` field,
+which participates in the generated `CreateResponse` contract, while the
+runtime retains metadata support for compatible clients. Content capture still
+requires both the deployment environment opt-in and this per-request marker.
+
 ### Pending hosted evidence
 
 The code and IaC fix are ready, but the following are not claimed complete until

@@ -392,14 +392,15 @@ def _trace_evaluation_requested(create_response: Any, context: Any | None) -> bo
             if payload:
                 payloads.append(payload)
     for payload in payloads:
-        metadata = payload.get("metadata")
-        if not isinstance(metadata, dict):
-            continue
-        requested = metadata.get("trace_evaluation_record_content", False)
-        if isinstance(requested, bool) and requested:
-            return True
-        if isinstance(requested, str) and requested.strip().lower() in {"1", "true", "yes"}:
-            return True
+        for container_name in ("structured_inputs", "metadata"):
+            marker_container = payload.get(container_name)
+            if not isinstance(marker_container, dict):
+                continue
+            requested = marker_container.get("trace_evaluation_record_content", False)
+            if isinstance(requested, bool) and requested:
+                return True
+            if isinstance(requested, str) and requested.strip().lower() in {"1", "true", "yes"}:
+                return True
     return False
 
 

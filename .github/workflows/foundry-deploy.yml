@@ -228,6 +228,13 @@ jobs:
               --no-prompt
           fi
 
+      - name: Show runtime connection credential keys
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          azd ai connection show orderresolutionruntimesecrets --show-credentials --output json --no-prompt \
+            | jq -r '.credentials.keys // .credentials // {} | keys | .[]'
+
       - name: Validate runtime DB host wiring
         run: |
           set -euo pipefail

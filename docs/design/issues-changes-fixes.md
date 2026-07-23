@@ -3,6 +3,24 @@
 Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-ni-eus-07080910`.
 
+## Latest execution update (2026-07-22, App Insights connectivity/AuthN/AuthZ ruled out)
+
+Per telemetry RCA guidance, we ran a minimal diagnostic from Python against the private-lane App Insights resource (`appId=4120ca65-19b4-4fa5-9dc0-850b17a2e57d`):
+
+1. direct ingestion call to `IngestionEndpoint/v2/track` using instrumentation key
+2. SDK span emission via `azure.monitor.opentelemetry.configure_azure_monitor(...)`
+
+Diagnostic run id: `diag-e75b9ba302ef`
+
+Observed results:
+
+1. direct ingestion API returned `200` with `itemsReceived=1` and `itemsAccepted=1`
+2. App Insights query later returned both rows for that same marker:
+   - `customEvent`: `diag-track-diag-e75b9ba302ef`
+   - `dependency`: `diag.sdk.span.diag-e75b9ba302ef`
+
+Conclusion: network connectivity plus App Insights ingestion auth (instrumentation key path) are healthy for this environment; the remaining telemetry gap is specific to hosted runtime emission/configuration flow, not platform-level connectivity/AuthN/AuthZ.
+
 ## Latest execution update (2026-07-22, telemetry validation blocker and fix)
 
 ### Telemetry validation blocker

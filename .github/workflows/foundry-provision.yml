@@ -113,16 +113,24 @@ jobs:
           set -euo pipefail
           cd infra/foundry-hosted
           connection_json="$(azd ai connection show ApplicationInsights --output json --no-prompt)"
-          category="$(printf '%s' "$connection_json" | jq -r '.category // .properties.category // empty')"
-          target="$(printf '%s' "$connection_json" | jq -r '.target // .properties.target // empty')"
+          kind="$(printf '%s' "$connection_json" | jq -r '.kind // .category // .properties.category // empty')"
+          target="$(printf '%s' "$connection_json" | jq -r '.target // .metadata.ResourceId // .properties.target // empty')"
           resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
-          expected_target="$(az resource list --resource-group "$resource_group" --resource-type microsoft.insights/components --query '[0].id' -o tsv)"
-          if [[ "$category" != "AppInsights" ]]; then
-            echo "Application Insights connection category mismatch: ${category:-<empty>}"
+          if [[ "$kind" != "AppInsights" ]]; then
+            echo "Application Insights connection kind mismatch: ${kind:-<empty>}"
             exit 1
           fi
-          if [[ -z "$target" || "${target,,}" != "${expected_target,,}" ]]; then
+          if [[ -z "$target" ]]; then
+            echo "Application Insights connection target is empty."
+            exit 1
+          fi
+          resolved_target="$(az resource show --ids "$target" --query id -o tsv)"
+          target_type="$(az resource show --ids "$target" --query type -o tsv)"
+          expected_rg_segment="/resourcegroups/${resource_group,,}/"
+          if [[ "${resolved_target,,}" != "${target,,}" ||
+                "${target_type,,}" != "microsoft.insights/components" ||
+                "${target,,}" != *"$expected_rg_segment"* ]]; then
             echo "Application Insights connection target mismatch."
             exit 1
           fi
-          echo "Verified ApplicationInsights project connection targeting $expected_target"
+          echo "Verified ApplicationInsights project connection targeting $resolved_target"

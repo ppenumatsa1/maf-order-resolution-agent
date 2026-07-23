@@ -34,7 +34,7 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - App Insights verification uses the same conversation IDs and writes
      `telemetry-verification.json`
 4. Added a post-provision assertion that the `ApplicationInsights` connection
-   exists with category `AppInsights` and targets the current component.
+   exists with kind/category `AppInsights` and targets the current component.
 5. Review hardening:
    - Foundry eval cancellation now recognizes the API's `canceled` status
    - a locally timed-out evaluation cancels the remote run before failing
@@ -64,6 +64,24 @@ Scope: Foundry hosted-agent deployment from private network path in `rg-maf-ora-
    - PostgreSQL region: `centralus`
    - planned telemetry change: create the `ApplicationInsights` project
      connection
+
+### First hosted attempt and gate correction
+
+Orchestrator run
+[`30021840335`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30021840335)
+provisioned the private infrastructure successfully in `3m 5s`, including the
+new `ApplicationInsights` project connection. The post-provision verification
+then failed before deployment because `azd ai connection show` exposes the
+connection type as `.kind`, while the gate read only `.category`.
+
+The gate now accepts the actual CLI `.kind` field, retains compatibility with
+the ARM category shape, and falls back to `.metadata.ResourceId` for target
+verification. Live inspection confirmed:
+
+- name: `ApplicationInsights`
+- kind: `AppInsights`
+- auth: `ApiKey`
+- target: the Application Insights component in `rg-maf-ora-foundry-v2`
 
 ### Pending hosted evidence
 

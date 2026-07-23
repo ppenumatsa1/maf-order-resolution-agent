@@ -19,6 +19,20 @@ from app.core.telemetry import get_tracer
 logger = logging.getLogger(__name__)
 
 
+_UUID_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _extract_connection_component(value: str, key: str) -> str:
+    match = re.search(rf"{key}=([^;\s]+)", value)
+    return match.group(1).strip() if match else ""
+
+
+def _looks_like_uuid(value: str) -> bool:
+    return bool(_UUID_PATTERN.fullmatch(value.strip()))
+
+
 def _apply_foundry_model_env_aliases() -> None:
     aliases = {
         "FOUNDRY_PROJECTS_ENDPOINT": "FOUNDRY_PROJECT_ENDPOINT",
@@ -74,24 +88,28 @@ def _apply_appinsights_custom_env_aliases() -> None:
     custom_ikey = os.getenv("MAF_APPINSIGHTS_INSTRUMENTATIONKEY", "").strip()
     custom_ingestion = os.getenv("MAF_APPINSIGHTS_INGESTIONENDPOINT", "").strip().rstrip(";")
 
+    connection_ikey = _extract_connection_component(custom_connection, "InstrumentationKey")
     if (
         custom_connection
         and not custom_connection.startswith("${")
         and "InstrumentationKey=" in custom_connection
+        and _looks_like_uuid(connection_ikey)
     ):
         os.environ["APPINSIGHTS_CONNECTION_STRING"] = custom_connection
-        match = re.search(r"InstrumentationKey=([^;\s]+)", custom_connection)
-        if match:
-            os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
-                f"InstrumentationKey={match.group(1)}"
-            )
+        os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = (
+            f"InstrumentationKey={connection_ikey}"
+        )
         return
 
-    if not custom_ikey or custom_ikey.startswith("${"):
+    if not custom_ikey or custom_ikey.startswith("${") or not _looks_like_uuid(custom_ikey):
         return
 
     appinsights_connection = f"InstrumentationKey={custom_ikey}"
-    if custom_ingestion and not custom_ingestion.startswith("${"):
+    if (
+        custom_ingestion
+        and not custom_ingestion.startswith("${")
+        and custom_ingestion.lower().startswith("https://")
+    ):
         appinsights_connection = (
             f"{appinsights_connection};IngestionEndpoint={custom_ingestion}"
         )

@@ -150,8 +150,13 @@ jobs:
         run: |
           set -euo pipefail
           cd infra/foundry-hosted
-          session_id="$(azd ai agent sessions list --output json --no-prompt \
-            | jq -r '.[0].id // .[0].session_id // empty')"
+          sessions_json="$(azd ai agent sessions list --output json --no-prompt 2>/dev/null || true)"
+          session_id="$(
+            printf '%s' "$sessions_json" \
+              | jq -r '(.sessions // .items // .data // .value // [])
+                | if type == "array" then .[0] else empty end
+                | .id // .session_id // empty' 2>/dev/null || true
+          )"
           if [[ -z "$session_id" ]]; then
             echo "No hosted-agent session was available for diagnostics."
             exit 0

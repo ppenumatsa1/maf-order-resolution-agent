@@ -25,13 +25,29 @@ get_env_value() {
 postgres_server_name="$(get_env_value POSTGRES_SERVER_NAME)"
 postgres_admin_username="$(get_env_value POSTGRES_ADMIN_USERNAME)"
 runtime_database_url="$(get_env_value RUNTIME_DATABASE_URL)"
+foundry_project_id="$(get_env_value FOUNDRY_PROJECT_ID)"
 
-[[ -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$runtime_database_url" ]] || {
-  echo "Private PostgreSQL repair requires POSTGRES_SERVER_NAME, POSTGRES_ADMIN_USERNAME, and RUNTIME_DATABASE_URL."
+[[ -n "$postgres_server_name" && -n "$postgres_admin_username" && -n "$runtime_database_url" && -n "$foundry_project_id" ]] || {
+  echo "Private PostgreSQL repair requires PostgreSQL runtime settings and FOUNDRY_PROJECT_ID."
   exit 1
 }
 
 expected_host="${postgres_server_name,,}.postgres.database.azure.com"
+foundry_account_name="$(
+  FOUNDRY_PROJECT_ID="$foundry_project_id" python3 - <<'PY'
+import os
+
+parts = [part for part in os.environ["FOUNDRY_PROJECT_ID"].split("/") if part]
+try:
+    account_index = next(
+        index for index, part in enumerate(parts[:-1]) if part.lower() == "accounts"
+    )
+except StopIteration:
+    raise SystemExit("FOUNDRY_PROJECT_ID does not contain a Foundry account.")
+
+print(parts[account_index + 1])
+PY
+)"
 runtime_password="$(
   RUNTIME_DATABASE_URL="$runtime_database_url" \
   EXPECTED_HOST="$expected_host" \
@@ -78,4 +94,24 @@ server_state="$(
   exit 1
 }
 
-echo "Synchronized the canonical PostgreSQL administrator credential with the protected runtime connection."
+foundry_location="$(
+  az cognitiveservices account show \
+    --resource-group "$TARGET_RESOURCE_GROUP" \
+    --name "$foundry_account_name" \
+    --query location \
+    --output tsv
+)"
+
+az deployment group create \
+  --resource-group "$TARGET_RESOURCE_GROUP" \
+  --name "runtime-secret-sync-$(date +%s)" \
+  --template-file "$FOUNDRY_DIR/iac/modules/foundry-project-runtime-secret-connection.bicep" \
+  --parameters \
+    accountName="$foundry_account_name" \
+    projectName="$TARGET_FOUNDRY_PROJECT" \
+    location="$foundry_location" \
+    runtimeDatabaseUrl="$runtime_database_url" \
+  --only-show-errors \
+  --output none
+
+echo "Synchronized the canonical PostgreSQL administrator credential and Foundry runtime connection."

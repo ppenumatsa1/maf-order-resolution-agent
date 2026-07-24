@@ -15,12 +15,13 @@ Build a demo-ready multi-agent orchestration using Microsoft Agent Framework-ali
 - Observability with OTEL and App Insights-ready exporters.
 - Evals with baseline dataset and report.
 - AGUI-style streaming events over SSE.
-- FastAPI backend consumed by React + Vite UI.
+- React + Vite UI consuming the stable FastAPI API/SSE contract locally and
+  through the public same-origin wrapper deployment.
 
 ## Non-Goals (v1)
 
 - Production auth/RBAC.
-- Full cloud deployment automation.
+- Multi-region or active-active cloud deployment.
 - Parallel/branching orchestrations.
 
 ## Acceptance Criteria

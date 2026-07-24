@@ -7,3 +7,4 @@ tests
 .foundry/results
 .foundry/memory
 .env
+tmp-foundry-sample

@@ -20,5 +20,6 @@ foundry:
   trace_evaluation:
     evidence_file: .foundry/results/hosted-e2e-evidence.json
     max_traces: 10
+    minimum_trace_age_seconds: 90
 options:
   pass_threshold: 0.8

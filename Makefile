@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE_ENV_FILE ?= backend/.env
 
 .PHONY: help bootstrap venv-backend install-backend install-frontend ensure-backend-env ensure-test-postgres \
-	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-all test-e2e manual-matrix \
+	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-foundry-config eval-all test-e2e manual-matrix \
 	run-mock-mcp up down logs ps docker-test \
 	validate-quick validate-full clean \
 	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-release foundry-postgres-readiness
@@ -21,9 +21,10 @@ help:
 	@echo "  test            - Run lint + backend tests"
 	@echo "  test-backend    - Run backend pytest suite"
 	@echo "  eval-backend    - Run deterministic workflow contract eval harness"
-	@echo "  eval-foundry    - Run report-only Foundry evaluator run"
+	@echo "  eval-foundry    - Run report-only Foundry evaluator using nested azd configuration"
+	@echo "  eval-foundry-config - Verify the selected nested azd evaluator configuration"
 	@echo "  eval-all        - Run deterministic and Foundry evals"
-	@echo "  test-e2e        - Run Playwright tests locally"
+	@echo "  test-e2e        - Run Playwright tests locally (isolated dynamic Docker ports)"
 	@echo "  manual-matrix   - Run ORD-1001..ORD-1010 manual verification matrix"
 	@echo "  run-mock-mcp    - Start local authenticated MCP simulator"
 	@echo "  docker-test     - Run Playwright tests in Docker compose profile"
@@ -77,7 +78,10 @@ eval-backend: ensure-backend-env ensure-test-postgres
 	cd backend && . .venv/bin/activate && python -m evals.eval_runner
 
 eval-foundry: ensure-backend-env
-	cd backend && . .venv/bin/activate && python -m evals.foundry_eval_runner
+	./scripts/foundry/run_foundry_eval.sh
+
+eval-foundry-config:
+	./scripts/foundry/run_foundry_eval.sh --check
 
 eval-all: eval-backend eval-foundry
 
@@ -85,13 +89,29 @@ test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
 		cd scripts/playwright && npm run test:e2e; \
 	else \
-		echo "Recreating deterministic local backend and mock MCP for E2E."; \
-		$(MAKE) COMPOSE_ENV_FILE=backend/.env up; \
+		set -euo pipefail; \
+		free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }; \
+		backend_port="$${E2E_BACKEND_HOST_PORT:-$$(free_port)}"; \
+		postgres_port="$${E2E_POSTGRES_HOST_PORT:-$$(free_port)}"; \
+		mock_mcp_port="$${E2E_MOCK_MCP_HOST_PORT:-$$(free_port)}"; \
+		compose_project="$${E2E_COMPOSE_PROJECT_NAME:-maf-e2e-$${backend_port}}"; \
+		echo "Starting isolated E2E stack '$${compose_project}' with backend on :$${backend_port}."; \
+		cleanup() { \
+			if [[ -n "$${frontend_pid:-}" ]]; then kill "$${frontend_pid}" 2>/dev/null || true; wait "$${frontend_pid}" 2>/dev/null || true; fi; \
+			COMPOSE_PROJECT_NAME="$${compose_project}" BACKEND_HOST_PORT="$${backend_port}" POSTGRES_HOST_PORT="$${postgres_port}" MOCK_MCP_HOST_PORT="$${mock_mcp_port}" docker compose --env-file backend/.env down --remove-orphans >/dev/null 2>&1 || true; \
+		}; \
+		trap cleanup EXIT; \
+		COMPOSE_PROJECT_NAME="$${compose_project}" BACKEND_HOST_PORT="$${backend_port}" POSTGRES_HOST_PORT="$${postgres_port}" MOCK_MCP_HOST_PORT="$${mock_mcp_port}" docker compose --env-file backend/.env up --build -d backend; \
+		backend_url="http://127.0.0.1:$${backend_port}"; \
+		for _ in {1..60}; do \
+			curl -fsS "$${backend_url}/health" >/dev/null && break; \
+			sleep 1; \
+		done; \
+		curl -fsS "$${backend_url}/health" >/dev/null; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
-		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
+		(cd frontend && VITE_PROXY_TARGET="$${backend_url}" node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) >/dev/null 2>&1 & \
 		frontend_pid="$$!"; \
-		trap 'kill '"$$frontend_pid"' 2>/dev/null || true; wait '"$$frontend_pid"' 2>/dev/null || true' EXIT; \
 		for _ in {1..30}; do \
 			curl -fsS "$${frontend_url}" >/dev/null && break; \
 			sleep 1; \
@@ -139,7 +159,18 @@ ps:
 	docker compose --env-file $(COMPOSE_ENV_FILE) ps
 
 docker-test:
-	docker compose --env-file $(COMPOSE_ENV_FILE) --profile test up --build --abort-on-container-exit playwright
+	@set -euo pipefail; \
+	free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }; \
+	backend_port="$${E2E_BACKEND_HOST_PORT:-$$(free_port)}"; \
+	frontend_port="$${E2E_FRONTEND_HOST_PORT:-$$(free_port)}"; \
+	postgres_port="$${E2E_POSTGRES_HOST_PORT:-$$(free_port)}"; \
+	mock_mcp_port="$${E2E_MOCK_MCP_HOST_PORT:-$$(free_port)}"; \
+	compose_project="$${E2E_COMPOSE_PROJECT_NAME:-maf-e2e-docker-$${backend_port}}"; \
+	cleanup() { \
+		COMPOSE_PROJECT_NAME="$${compose_project}" BACKEND_HOST_PORT="$${backend_port}" FRONTEND_HOST_PORT="$${frontend_port}" POSTGRES_HOST_PORT="$${postgres_port}" MOCK_MCP_HOST_PORT="$${mock_mcp_port}" docker compose --env-file $(COMPOSE_ENV_FILE) down --remove-orphans >/dev/null 2>&1 || true; \
+	}; \
+	trap cleanup EXIT; \
+	COMPOSE_PROJECT_NAME="$${compose_project}" BACKEND_HOST_PORT="$${backend_port}" FRONTEND_HOST_PORT="$${frontend_port}" POSTGRES_HOST_PORT="$${postgres_port}" MOCK_MCP_HOST_PORT="$${mock_mcp_port}" docker compose --env-file $(COMPOSE_ENV_FILE) --profile test up --build --abort-on-container-exit --exit-code-from playwright playwright
 
 validate-quick:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
@@ -159,6 +190,7 @@ foundry-up:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
 	./scripts/foundry/sync_hosted_source.sh
 	cd infra/foundry-hosted && azd up --no-prompt
+	cd infra/foundry-hosted && ../../scripts/foundry/verify_project_appinsights_connection.sh
 
 foundry-provision:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh

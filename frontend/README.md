@@ -7,10 +7,14 @@ npm run dev
 ```
 
 The app defaults to backend `http://localhost:8000` during Vite development.
-The container runtime writes `env-config.js` from `API_BASE` and renders the
-Nginx `/api/` proxy from `NGINX_API_UPSTREAM`; Docker Compose points the proxy
-to `http://backend:8000`, while Azure points it to the deployed backend HTTPS
-URL.
+Container deployments use the built-in same-origin `/api` base. At startup,
+Nginx renders its `/api/` proxy from the required `NGINX_API_UPSTREAM`; Docker
+Compose points it to `http://backend:8000`, while Azure points it to the
+internal backend ACA HTTPS URL.
+
+For isolated local Playwright runs, `make test-e2e` sets Vite's
+`VITE_PROXY_TARGET` to the dedicated dynamically selected backend port. Regular
+development continues to default to `http://localhost:8000`.
 
 Workflow Studio runtime info:
 
@@ -24,6 +28,15 @@ UI highlights:
 - Event timeline uses rich SSE (`/api/chat/stream/{thread_id}/rich`) for live updates, while polling details remains as fallback.
 - Right panel includes a RAG Evidence view that surfaces retrieved policy evidence and chunk IDs from workflow events/details when available.
 
-Hosted runtime note (2026-07-15):
+## Hosted runtime
 
-- Frontend workflow behavior and SSE event contracts are unchanged by the recent Foundry tracing fixes; updates were confined to hosted runtime/deploy surfaces.
+The public frontend is externally reachable at
+`https://ora-public-dev2-frontend.greentree-dc9ce897.eastus2.azurecontainerapps.io/`.
+It is the only browser entrypoint: Nginx proxies same-origin `/api` requests to
+the internal backend Container App, and the browser never receives a Foundry
+endpoint or credential.
+
+Foundry Responses work can take longer than local workflow execution. For an
+HTTPS `PLAYWRIGHT_BASE_URL`, the Playwright configuration uses 60-second
+assertions and 120-second test timeouts; local defaults remain 10 and 45
+seconds. Both are configurable through the existing Playwright environment.

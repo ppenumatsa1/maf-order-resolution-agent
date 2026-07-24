@@ -7,6 +7,7 @@
 - Pydantic v2
 - httpx for MCP HTTP tool calls
 - OpenTelemetry SDK + OTLP exporter
+- Azure Monitor OpenTelemetry exporter for public Application Insights
 
 ## Frontend
 
@@ -23,7 +24,10 @@
 
 - MCP via streamable HTTP endpoint (`MCP_SERVER_URL`)
 - OTEL exporters configurable by environment variables
-- App Insights enabled by setting OTLP endpoint to Azure Monitor/OpenTelemetry collector
+- Public Azure: Foundry Responses, Container Apps, managed identity, PostgreSQL
+  Flexible Server, and Application Insights
+- App Insights enabled through `APPLICATIONINSIGHTS_CONNECTION_STRING`; FastAPI
+  health and SSE request spans are excluded to keep workflow telemetry visible
 
 ## Skills Baseline
 

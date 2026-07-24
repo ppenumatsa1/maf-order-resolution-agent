@@ -7,12 +7,14 @@ from typing import Literal
 
 WorkflowMode = Literal["maf_sdk"]
 StoreProvider = Literal["postgres", "azure_postgres", "app_db"]
+RuntimeTarget = Literal["local_maf", "responses_wrapper"]
 
 
 @dataclass(frozen=True)
 class AppConfig:
     workflow_mode: WorkflowMode
     store_provider: StoreProvider
+    runtime_target: RuntimeTarget = "local_maf"
 
 
 def _normalized(name: str, default: str) -> str:
@@ -26,9 +28,17 @@ def _store_provider() -> StoreProvider:
     raise ValueError(f"Unsupported STORE_PROVIDER: {value}")
 
 
+def _runtime_target() -> RuntimeTarget:
+    value = _normalized("RUNTIME_TARGET", "local_maf")
+    if value in {"local_maf", "responses_wrapper"}:
+        return value
+    raise ValueError(f"Unsupported RUNTIME_TARGET: {value}")
+
+
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     return AppConfig(
         workflow_mode="maf_sdk",
         store_provider=_store_provider(),
+        runtime_target=_runtime_target(),
     )

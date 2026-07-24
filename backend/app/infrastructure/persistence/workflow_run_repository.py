@@ -108,6 +108,65 @@ class WorkflowRunRepository:
                     "updated_at": _as_iso(row["updated_at"]),
                 }
 
+    def create_or_get_responses_dispatch(
+        self,
+        *,
+        idempotency_key: str,
+        request_hash: str,
+        run_id: str,
+        thread_id: str,
+    ) -> dict[str, Any]:
+        now = _utc_now_iso()
+        with self._pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO responses_dispatches (
+                        idempotency_key, request_hash, run_id, thread_id, status, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    """,
+                    (idempotency_key, request_hash, run_id, thread_id, "pending", now, now),
+                )
+                cur.execute(
+                    """
+                    SELECT idempotency_key, request_hash, run_id, thread_id, status
+                    FROM responses_dispatches
+                    WHERE idempotency_key = %s
+                    """,
+                    (idempotency_key,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError(f"Failed to create Responses dispatch: {idempotency_key}")
+                if row["request_hash"] != request_hash:
+                    raise ValueError("Idempotency key was already used with a different request.")
+                return dict(row)
+
+    def update_responses_dispatch_status(self, idempotency_key: str, status: str) -> None:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE responses_dispatches
+                    SET status = %s, updated_at = %s
+                    WHERE idempotency_key = %s
+                    """,
+                    (status, _utc_now_iso(), idempotency_key),
+                )
+
+    def update_responses_dispatch_thread(self, idempotency_key: str, thread_id: str) -> None:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE responses_dispatches
+                    SET thread_id = %s, updated_at = %s
+                    WHERE idempotency_key = %s
+                    """,
+                    (thread_id, _utc_now_iso(), idempotency_key),
+                )
+
     def list_workflow_runs(
         self,
         page: int,

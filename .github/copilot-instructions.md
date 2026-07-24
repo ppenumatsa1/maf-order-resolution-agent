@@ -27,6 +27,14 @@ GitHub Actions is credential-free CI only; use the local authenticated
 `make foundry-release` flow for Azure provision, deployment, smoke, hosted E2E,
 evaluation, and telemetry verification.
 
+The public UI topology is external frontend ACA -> internal FastAPI wrapper ACA
+-> Foundry Responses. Keep browser calls same-origin through the frontend
+proxy; only the backend's managed identity may call Foundry, and wrapper SSE
+must use persisted workflow events. The initial wrapper dispatch is non-streaming;
+the browser obtains live updates by polling durable state and subscribing to SSE.
+FastAPI health and SSE request spans are intentionally excluded from Application
+Insights request telemetry so workflow/HITL spans remain the operational signal.
+
 ## Workflow Guardrails
 
 - Keep API, application service, MAF runtime, and infrastructure concerns separated:

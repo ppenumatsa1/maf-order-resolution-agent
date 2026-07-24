@@ -223,10 +223,11 @@ export default function App() {
   }, [isComposingNewRun, selectedThreadId, loadWorkflowDetails]);
 
   useEffect(() => {
-    if (isComposingNewRun || !selectedThreadId || !selectedWorkflowDetails) {
+    if (isComposingNewRun || !selectedThreadId) {
       return;
     }
     if (
+      selectedWorkflowDetails &&
       !["running", "waiting_approval"].includes(selectedWorkflowDetails.status)
     ) {
       return;
@@ -234,7 +235,7 @@ export default function App() {
 
     const timer = window.setInterval(() => {
       void loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
-    }, 2500);
+    }, 1000);
 
     return () => {
       window.clearInterval(timer);

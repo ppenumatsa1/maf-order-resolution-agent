@@ -25,7 +25,9 @@
 
 ## Rich Event Envelope
 
-The legacy SSE stream is unchanged at `/api/chat/stream/{thread_id}`. A parallel rich stream is available at `/api/chat/stream/{thread_id}/rich` for AG-UI-compatible clients:
+The native SSE stream remains stable at `/api/chat/stream/{thread_id}`. A
+parallel rich stream is available at `/api/chat/stream/{thread_id}/rich` for
+AG-UI-compatible clients:
 
 ```json
 {
@@ -73,8 +75,28 @@ MAF workflow stream events are observed from `workflow.run(..., stream=True)` fo
 
 MAF middleware enriches emitted workflow events with `workflow_run_id` and `session_id`, records streamed MAF event/usage hooks, and emits `workflow.failed` for real workflow failures before re-raising the original exception.
 
-FastAPI request instrumentation is applied after app creation so hosted API calls are expected in `AppRequests`. Workflow, MAF, and Foundry model spans are exported as dependencies.
+FastAPI request instrumentation is applied after app creation. Public-lane
+health (`/health`, `/api/health`) and chat SSE request paths are excluded so
+Container Apps probes and long-lived stream requests do not obscure workflow
+signal in `AppRequests`. Workflow, MAF, Foundry model, invocation, and HITL
+spans are exported as dependencies; Foundry agent-server `/readiness` remains
+observable.
 
 HITL pause/resume crosses HTTP requests, so the checkpoint state stores a sanitized `telemetry_trace_context`. The approval path restores that context before creating `workflow.hitl_resume`, which keeps the HITL response and final output correlated with the original `workflow.hitl_waiting` operation in Application Insights.
 
 Post-deploy Application Insights verification is captured in `.github/skills/azure-telemetry-validation/SKILL.md`. The routine runs hosted ORD-1001/ORD-1009 flows and validates `AppRequests`, `AppDependencies`, `AppTraces`, and `AppExceptions` with KQL.
+
+For operational investigation, query business dependencies first rather than
+the portal's newest-first Search list:
+
+```kusto
+AppDependencies
+| where TimeGenerated > ago(6h)
+| where Name startswith "workflow."
+| extend thread_id = tostring(Properties["workflow.thread_id"])
+| project TimeGenerated, Name, thread_id, OperationId
+| order by TimeGenerated desc
+```
+
+Open an end-to-end transaction for a returned `OperationId` to inspect the
+correlated Foundry, workflow, model, and HITL hierarchy.

@@ -10,8 +10,17 @@ This file describes expected behavior for coding agents working in this reposito
   Actions remains credential-free CI; authenticated Azure execution is local via
   `make foundry-release`.
 - Frontend: React + Vite, consumes SSE workflow events.
+- Public browser delivery uses an external frontend Container App proxying to an
+  internal FastAPI wrapper Container App. The browser must not receive Foundry
+  credentials; the wrapper uses managed identity and persisted PostgreSQL events
+  when it delegates to Foundry Responses. It creates the Foundry `conv_...`
+  conversation before the first Responses request; approvals resume it with
+  checkpoint-keyed `function_call_output`.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
+- Telemetry: FastAPI health and SSE requests are excluded from request telemetry
+  in the public lane; preserve Foundry invocation, workflow, model, and HITL
+  correlation spans.
 - Backend package boundaries:
   - `backend/app/api/v1/routers/*` owns HTTP/SSE routes.
   - `backend/app/api/v1/schemas/*` owns API contracts.

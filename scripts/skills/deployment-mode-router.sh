@@ -14,7 +14,7 @@ if [[ -z "$changed_files" ]]; then
   exit 0
 fi
 
-if grep -Eq '^(infra/|\.azure/|docker-compose\.yml|frontend/Dockerfile|frontend/nginx\.conf|backend/Dockerfile|\.github/workflows/|infra/azure-apphosted/runtime/)' <<<"$changed_files"; then
+if grep -Eq '^(infra/|\.azure/|docker-compose\.yml|frontend/Dockerfile|frontend/nginx\.conf|backend/Dockerfile|\.github/workflows/)' <<<"$changed_files"; then
   echo "deploy_mode=full"
   echo "validation_mode=full"
   echo "reason=infra_or_runtime_surface_changed"

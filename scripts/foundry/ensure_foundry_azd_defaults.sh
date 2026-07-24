@@ -25,8 +25,9 @@ set_if_missing() {
 }
 
 set_if_missing FOUNDRY_ACCOUNT_NAME "${FOUNDRY_ACCOUNT_NAME:-maffndaibfscpfhjr7sp4}"
+set_if_missing CONTAINER_REGISTRY_NAME "${CONTAINER_REGISTRY_NAME:-maffndacrbfscpfhjr7sp4}"
 set_if_missing FOUNDRY_TRACE_READER_PRINCIPAL_ID "${FOUNDRY_TRACE_READER_PRINCIPAL_ID:-$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)}"
-set_if_missing FOUNDRY_PROJECT_NAME "${FOUNDRY_PROJECT_NAME:-order-resolution-public-managed-dev}"
+set_if_missing FOUNDRY_PROJECT_NAME "${FOUNDRY_PROJECT_NAME:-order-resolution-public-managed-dev2}"
 set_if_missing HOSTED_AGENT_NAME "${HOSTED_AGENT_NAME:-order-resolution-hosted}"
 set_if_missing FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT:-true}"
 set_if_missing RUNTIME_DATABASE_URL "${RUNTIME_DATABASE_URL:-}"
@@ -58,3 +59,12 @@ fi
 
 set_if_missing foundryProjectName "$(get_env_value FOUNDRY_PROJECT_NAME)"
 set_if_missing hostedAgentName "$(get_env_value HOSTED_AGENT_NAME)"
+
+# Keep legacy telemetry env aliases populated because agent.yaml references both names.
+appinsights_connection_string="$(get_env_value APPLICATIONINSIGHTS_CONNECTION_STRING)"
+if [[ -n "$appinsights_connection_string" ]]; then
+  set_if_missing APPINSIGHTS_CONNECTION_STRING "$appinsights_connection_string"
+fi
+set_if_missing OTEL_SERVICE_NAMESPACE "${OTEL_SERVICE_NAMESPACE:-maf-order-resolution}"
+# agent.yaml references this key; default to empty to avoid unresolved variable placeholders.
+set_if_missing OTEL_EXPORTER_OTLP_TRACES_ENDPOINT "${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}"

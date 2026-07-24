@@ -97,9 +97,15 @@ AppDependencies
 let lookback=2h;
 AppRequests
 | where TimeGenerated > ago(lookback)
+| where Url !has "/health"
+| where Url !has "/api/chat/stream/"
 | project TimeGenerated, Name, Url, ResultCode, Success, OperationId, DurationMs
 | order by TimeGenerated desc
 ```
+
+Public FastAPI health and SSE request spans are intentionally excluded. Do not
+fail this check because those paths are absent; use workflow dependencies and
+Foundry readiness/invocation spans as the required signal.
 
 ### Attribute hygiene and exceptions
 

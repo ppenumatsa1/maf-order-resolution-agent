@@ -2,6 +2,20 @@
 
 name: maf-order-resolution-foundry-hosted
 services:
+    backend:
+        project: ../../backend
+        host: containerapp
+        language: python
+        docker:
+            remoteBuild: true
+    frontend:
+        project: ../../frontend
+        host: containerapp
+        language: js
+        docker:
+            remoteBuild: true
+        uses:
+            - backend
     order-resolution-hosted:
         project: ./agent
         host: azure.ai.agent

@@ -12,24 +12,22 @@ def clear_config_cache():
 
 
 def test_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("WORKFLOW_MODE", raising=False)
     monkeypatch.delenv("STORE_PROVIDER", raising=False)
 
     cfg = get_config()
     assert cfg.workflow_mode == "maf_sdk"
     assert cfg.store_provider == "postgres"
+    assert cfg.runtime_target == "local_maf"
 
 
 def test_config_uses_store_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("WORKFLOW_MODE", "foundry_hosted")
     monkeypatch.setenv("STORE_PROVIDER", "azure_postgres")
 
     cfg = get_config()
     assert cfg.workflow_mode == "maf_sdk"
     assert cfg.store_provider == "azure_postgres"
 
+def test_config_selects_responses_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNTIME_TARGET", "responses_wrapper")
 
-def test_config_ignores_workflow_mode_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("WORKFLOW_MODE", "invalid-mode")
-    cfg = get_config()
-    assert cfg.workflow_mode == "maf_sdk"
+    assert get_config().runtime_target == "responses_wrapper"

@@ -6,6 +6,8 @@ This document defines the exact conditions that trigger human approval (`hitl.re
 
 - Local FastAPI host runs the shared MAF workflow.
 - Public Foundry-hosted Responses entrypoint runs the same workflow.
+- The public frontend uses the same stable API/SSE contract through an internal
+  FastAPI wrapper, which resumes the Foundry conversation using the checkpoint ID.
 - Therefore, the trigger behavior below is the shared production contract across hosts.
 
 ## Scope

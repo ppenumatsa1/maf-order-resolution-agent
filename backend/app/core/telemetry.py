@@ -191,7 +191,10 @@ def instrument_fastapi_app(app: Any) -> bool:
         return False
 
     try:
-        FastAPIInstrumentor.instrument_app(app, excluded_urls=r".*/api/chat/stream/.*")
+        FastAPIInstrumentor.instrument_app(
+            app,
+            excluded_urls=r".*/(?:api/)?health(?:\?.*)?$|.*/api/chat/stream/.*",
+        )
     except Exception:
         logger.exception("FastAPI telemetry instrumentation setup failed")
         return False

@@ -8,6 +8,7 @@ import pytest
 from evals.foundry_eval_runner import (
     _build_conversation_trace_testing_criteria,
     _load_hosted_e2e_evidence,
+    _trace_materialization_delay,
 )
 
 
@@ -27,9 +28,10 @@ def test_load_hosted_e2e_evidence_requires_low_risk_and_approved_conversations(
         encoding="utf-8",
     )
 
-    started_at, conversation_ids = _load_hosted_e2e_evidence(evidence)
+    started_at, generated_at, conversation_ids = _load_hosted_e2e_evidence(evidence)
 
     assert started_at == datetime(2026, 7, 20, 13, 45, tzinfo=timezone.utc)
+    assert generated_at == datetime(2026, 7, 20, 14, 0, tzinfo=timezone.utc)
     assert conversation_ids == ["conv-low", "conv-approved"]
 
 
@@ -39,6 +41,7 @@ def test_load_hosted_e2e_evidence_rejects_missing_conversation(tmp_path: Path) -
         json.dumps(
             {
                 "generated_at": "2026-07-20T14:00:00Z",
+                "started_at": "2026-07-20T13:45:00Z",
                 "low_risk_thread_id": "conv-low",
             }
         ),
@@ -63,3 +66,26 @@ def test_conversation_trace_criteria_use_messages_mapping() -> None:
             },
         }
     ]
+
+
+def test_trace_materialization_delay_waits_for_minimum_evidence_age() -> None:
+    generated_at = datetime(2026, 7, 20, 14, 0, tzinfo=timezone.utc)
+
+    delay = _trace_materialization_delay(
+        generated_at,
+        90,
+        now=datetime(2026, 7, 20, 14, 0, 30, tzinfo=timezone.utc),
+    )
+
+    assert delay == 60
+
+
+@pytest.mark.parametrize("minimum_age_seconds", [-1, float("nan"), float("inf")])
+def test_trace_materialization_delay_rejects_invalid_minimum_age(
+    minimum_age_seconds: float,
+) -> None:
+    with pytest.raises(ValueError, match="finite non-negative"):
+        _trace_materialization_delay(
+            datetime(2026, 7, 20, 14, 0, tzinfo=timezone.utc),
+            minimum_age_seconds,
+        )

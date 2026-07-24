@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,21 +44,29 @@ def _to_jsonable(value: object) -> object:
     return str(value)
 
 
-def _load_hosted_e2e_evidence(path: Path) -> tuple[datetime, list[str]]:
+def _parse_evidence_timestamp(payload: dict[str, object], field: str) -> datetime:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"Hosted E2E evidence is missing {field}")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Hosted E2E evidence {field} must be ISO 8601") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"Hosted E2E evidence {field} must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _load_hosted_e2e_evidence(path: Path) -> tuple[datetime, datetime, list[str]]:
     if not path.is_file():
         raise FileNotFoundError(f"Hosted E2E evidence is required: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Hosted E2E evidence must be a JSON object")
-    started_at_value = payload.get("started_at", payload.get("generated_at"))
-    if not isinstance(started_at_value, str):
-        raise ValueError("Hosted E2E evidence is missing started_at")
-    try:
-        started_at = datetime.fromisoformat(started_at_value.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError("Hosted E2E evidence started_at must be ISO 8601") from exc
-    if started_at.tzinfo is None:
-        raise ValueError("Hosted E2E evidence started_at must include a timezone")
+    started_at = _parse_evidence_timestamp(payload, "started_at")
+    generated_at = _parse_evidence_timestamp(payload, "generated_at")
+    if generated_at < started_at:
+        raise ValueError("Hosted E2E evidence generated_at cannot precede started_at")
 
     conversation_ids = _dedupe(
         [
@@ -71,7 +80,22 @@ def _load_hosted_e2e_evidence(path: Path) -> tuple[datetime, list[str]]:
     )
     if len(conversation_ids) != 2:
         raise ValueError("Hosted E2E evidence must contain two conversation IDs")
-    return started_at.astimezone(timezone.utc), conversation_ids
+    return started_at, generated_at, conversation_ids
+
+
+def _trace_materialization_delay(
+    generated_at: datetime,
+    minimum_age_seconds: float,
+    *,
+    now: datetime | None = None,
+) -> float:
+    if not math.isfinite(minimum_age_seconds) or minimum_age_seconds < 0:
+        raise ValueError("Foundry trace evaluation minimum age must be a finite non-negative value")
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        raise ValueError("Current time used for trace evaluation must include a timezone")
+    age_seconds = (current_time.astimezone(timezone.utc) - generated_at).total_seconds()
+    return max(0.0, minimum_age_seconds - age_seconds)
 
 
 def _build_conversation_trace_testing_criteria(
@@ -108,6 +132,12 @@ async def run_foundry_eval() -> None:
     max_traces = int(trace_cfg.get("max_traces", 10))
     if max_traces < 1:
         raise ValueError("backend/eval.yaml trace_evaluation.max_traces must be positive")
+    minimum_trace_age_seconds = float(
+        os.getenv(
+            "FOUNDRY_EVAL_MIN_TRACE_AGE_SECONDS",
+            trace_cfg.get("minimum_trace_age_seconds", 90),
+        )
+    )
 
     evaluator_values = foundry_cfg.get("evaluators")
     if not isinstance(evaluator_values, list) or not all(
@@ -122,7 +152,11 @@ async def run_foundry_eval() -> None:
     timeout = float(os.getenv("FOUNDRY_EVAL_TIMEOUT", foundry_cfg.get("timeout", 900)))
 
     evidence_path = root / evidence_uri
-    started_at, conversation_ids = _load_hosted_e2e_evidence(evidence_path)
+    started_at, generated_at, conversation_ids = _load_hosted_e2e_evidence(evidence_path)
+    trace_materialization_delay = _trace_materialization_delay(
+        generated_at,
+        minimum_trace_age_seconds,
+    )
     report_path = foundry_root / "results" / "foundry-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, object] = {
@@ -131,9 +165,13 @@ async def run_foundry_eval() -> None:
         "evaluators": evaluators,
         "conversation_ids": conversation_ids,
         "e2e_started_at": started_at.isoformat(),
+        "e2e_generated_at": generated_at.isoformat(),
+        "trace_materialization_delay_seconds": trace_materialization_delay,
     }
 
     try:
+        if trace_materialization_delay:
+            await asyncio.sleep(trace_materialization_delay)
         models_cfg = get_foundry_models_config()
         if models_cfg is None:
             raise RuntimeError(
@@ -185,6 +223,8 @@ async def run_foundry_eval() -> None:
             "evaluators": evaluators,
             "conversation_ids": conversation_ids,
             "e2e_started_at": started_at.isoformat(),
+            "e2e_generated_at": generated_at.isoformat(),
+            "trace_materialization_delay_seconds": trace_materialization_delay,
             "result_counts": _to_jsonable(getattr(eval_run, "result_counts", None)),
             "report_url": (
                 f"{models_cfg.project_endpoint.rstrip('/')}/evaluation/evaluations/{eval_object.id}/runs/{eval_run.id}"

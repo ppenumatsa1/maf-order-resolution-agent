@@ -28,7 +28,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 flowchart LR
      U[Support Agent or Operator]
      UI[React Workflow Studio]
-     API[FastAPI Backend]
+     API[FastAPI API]
      ORCH[MAF Sequential Workflow]
      HITL[HITL Approval Handler]
      MCP[MCP and Local Tools]
@@ -96,16 +96,37 @@ ASCII fallback (if Mermaid rendering is unavailable):
 Live updates: FastAPI Backend -> SSE event stream by thread -> UI timeline
 ```
 
-## Runtime mapping (Local API + Foundry hosted entrypoint)
+## Public hosted topology
+
+The public browser path keeps the same HTTP and SSE contracts while moving
+workflow execution to the hosted Foundry Responses agent:
+
+```text
+Browser
+  -> external React/Nginx Container App
+  -> same-origin /api proxy
+  -> internal FastAPI responses-wrapper Container App
+  -> managed-identity Foundry Responses invocation
+  -> shared PostgreSQL workflow/checkpoint/approval/event state
+```
+
+The backend creates a Foundry `conv_...` conversation before initial dispatch
+and persists that identifier as the UI-visible thread. The agent and wrapper are
+separate processes, so wrapper-mode SSE reads persisted workflow events rather
+than an in-memory event bus. The browser never receives a Foundry credential or
+calls Foundry directly.
+
+## Runtime mapping (local API and hosted wrapper)
 
 There is one business workflow implementation (`OrderResolutionWorkflow`) and one
-service entrypoint (`OrderResolutionService`). FastAPI and Foundry-hosted paths both
-invoke this same service/workflow behavior.
+service entrypoint (`OrderResolutionService`). Local FastAPI and the
+Foundry-hosted path invoke the same service/workflow behavior.
 
 ```mermaid
 flowchart TD
-    A[FastAPI /api/chat/run] --> SVC[OrderResolutionService]
+    A[Local FastAPI /api/chat/run] --> SVC[OrderResolutionService]
     B[Foundry Responses host\nbackend/foundry/main.py] --> SVC
+    C[Hosted FastAPI wrapper] -->|Responses protocol| B
     SVC --> RUN[OrderResolutionMafRunner]
     RUN --> WF[OrderResolutionWorkflow]
     WF --> EX[Triage + Policy + Resolution + HITL executors]
@@ -119,7 +140,8 @@ flowchart TD
 ### Shared vs distinct
 
 - **Shared:** business tools, HITL semantics, stable event contracts, persistence projections.
-- **Distinct wrappers:** FastAPI route layer vs Foundry Responses protocol wrapper in `backend/foundry/main.py`.
+- **Distinct wrappers:** local FastAPI route layer, the hosted FastAPI
+  Responses-wrapper, and the Foundry Responses host in `backend/foundry/main.py`.
 
 ## Core Business Flow
 
@@ -175,10 +197,13 @@ Required commands:
 
 The same business flow runs across:
 
-1. local FastAPI/SSE/UI runtime (implemented),
-2. public Foundry-hosted Responses-native runtime (deployed through `azd up`).
+1. local FastAPI/SSE/UI runtime,
+2. public Foundry-hosted Responses-native runtime,
+3. public browser runtime through frontend ACA -> internal FastAPI wrapper ACA ->
+   Foundry Responses.
 
-FastAPI/SSE remains a local contract surface. Foundry Responses is a distinct
-hosted protocol wrapper, not a public replacement for those HTTP routes.
+Foundry Responses is not a public replacement for the API routes. The hosted
+wrapper preserves the browser's API/SSE contract and uses PostgreSQL for durable
+event projection.
 
 Process/governance authority for delivery and verification is documented in `docs/design/engineering-operating-model.md`.

@@ -27,7 +27,7 @@ Verify history through `GET /api/workflows/{thread_id}` and
 `workflow_runs`, `workflow_events`, `conversation_messages`, `checkpoints`, and
 `approvals`.
 
-## Public Foundry hosted workflow
+## Public Foundry hosted workflow and browser
 
 The hosted agent uses the Responses protocol rather than the FastAPI/SSE UI.
 Run the authenticated release sequence:
@@ -39,3 +39,16 @@ make foundry-release
 It covers ORD-1001, ORD-1009 approval, damaged-item rejection, and duplicate
 HITL response behavior. Conversation evidence is written to
 `backend/.foundry/results/hosted-e2e-evidence.json`.
+
+The public browser entrypoint is
+`https://ora-public-dev2-frontend.greentree-dc9ce897.eastus2.azurecontainerapps.io/`.
+Verify that it uses the same-origin API proxy and validates the complete UI
+contract with:
+
+```bash
+PLAYWRIGHT_BASE_URL="https://ora-public-dev2-frontend.greentree-dc9ce897.eastus2.azurecontainerapps.io" \
+make test-e2e
+```
+
+The backend Container App is internal-only. Do not configure a browser to call
+the Foundry Responses endpoint or backend FQDN directly.

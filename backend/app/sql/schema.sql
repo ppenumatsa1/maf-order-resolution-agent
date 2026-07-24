@@ -87,6 +87,19 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE INDEX IF NOT EXISTS idx_idempotency_keys_run_step
     ON idempotency_keys (workflow_run_id, step_name);
 
+CREATE TABLE IF NOT EXISTS responses_dispatches (
+    idempotency_key TEXT PRIMARY KEY,
+    request_hash TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_responses_dispatches_thread_id
+    ON responses_dispatches (thread_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
     customer_id TEXT,

@@ -61,7 +61,9 @@ PLAYWRIGHT_BASE_URL="<frontend-https-url>" make test-e2e
 - Validate RBAC live: ACR image pull, Key Vault secret reads, PostgreSQL connectivity, and observability ingestion where applicable.
 - Validate `ORD-1001` completes without `hitl.request`.
 - Validate `ORD-1009` emits `hitl.request` and completes the expected approval/resume path.
-- Report fully qualified HTTPS endpoints for frontend, backend/API, health, and any documented smoke target.
+- Report the frontend HTTPS endpoint, its `/health` and proxied `/api/health`
+  endpoints, and any hosted-agent smoke target. Identify the backend API FQDN
+  as internal-only rather than presenting it as browser-accessible.
 
 ## Output
 

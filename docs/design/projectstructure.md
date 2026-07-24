@@ -10,6 +10,7 @@ maf-order-resolution-agent/
       core/
       infrastructure/
         events/
+        foundry/
         mcp/
         persistence/
         rag/
@@ -51,4 +52,6 @@ maf-order-resolution-agent/
 - `backend/app/modules/order_resolution/*`: application service, domain models, ports, projections.
 - `backend/app/maf/*`: MAF runtime internals (prompts, agents, executors, workflow, runner).
 - `backend/app/infrastructure/*`: persistence and external adapters.
+- `backend/app/infrastructure/foundry/*`: managed-identity Foundry Responses
+  client used by the internal API wrapper.
 - `backend/foundry/main.py`: Foundry-hosted Responses adapter that invokes the shared service/workflow path.

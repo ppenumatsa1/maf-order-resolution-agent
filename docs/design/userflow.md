@@ -6,13 +6,15 @@ The product journey is:
 
 1. Local MAF runtime (current default)
 2. Public Foundry-hosted runtime
+3. Public browser runtime through the API wrapper
 
 Current status:
 
-| Stage            | Status      | What is actually wired today                                                                                     |
-| ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
-| Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
+| Stage | Status | What is actually wired today |
+| --- | --- | --- |
+| Local MAF | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
 | Public Foundry-hosted | Implemented | Responses-native hosted entrypoint runs the same shared MAF workflow. |
+| Public browser wrapper | Validated | External frontend ACA proxies same-origin API/SSE traffic to an internal FastAPI wrapper, which invokes Foundry Responses using managed identity. |
 
 The hosted release and current evidence are recorded in
 `docs/design/issues-changes-fixes.md`.
@@ -37,7 +39,7 @@ For Foundry-hosted conversations, the same behavior is preserved through Respons
 
 If the same approval/rejection request is accidentally submitted more than once for a checkpoint, backend handling is idempotent and does not emit duplicate terminal events.
 
-## End-to-End Happy Path (UI -> API -> Backend -> Postgres)
+## End-to-End Happy Path (local UI -> API -> MAF -> Postgres)
 
 Mermaid:
 
@@ -114,6 +116,13 @@ UI -> GET /api/workflows, /api/workflows/{thread_id}, /api/sessions/{session_id}
 ```
 
 Primary file touchpoints in this path:
+
+For the hosted UI topology, the frontend Container App keeps this API contract
+by proxying `/api` to the internal FastAPI wrapper. The wrapper creates a
+Foundry `conv_...` conversation and delegates to the Responses endpoint using
+managed identity. It tails PostgreSQL workflow events for SSE because the hosted
+agent runs in a separate process. The initial dispatch is non-streaming; while
+the durable projection is being created, the UI polls the selected thread.
 
 - UI: `frontend/src/App.tsx`, `frontend/src/components/*`
 - API: `backend/app/api/v1/routers/chat.py`, `backend/app/api/v1/routers/workflows.py`, `backend/app/api/v1/routers/sessions.py`

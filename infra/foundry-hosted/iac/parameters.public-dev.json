@@ -6,10 +6,19 @@
       "value": "eastus2"
     },
     "foundryProjectName": {
-      "value": "order-resolution-public-managed-dev"
+      "value": "order-resolution-public-managed-dev2"
     },
     "hostedAgentName": {
       "value": "order-resolution-hosted"
+    },
+    "containerAppsEnvironmentName": {
+      "value": "ora-public-dev2-aca"
+    },
+    "backendContainerAppName": {
+      "value": "ora-public-dev2-backend"
+    },
+    "frontendContainerAppName": {
+      "value": "ora-public-dev2-frontend"
     },
     "foundryEvaluationDeploymentName": {
       "value": "gpt-4o-mini-evaluation"

@@ -12,6 +12,6 @@ fi
 
 rm -rf "${TARGET_DIR}"
 mkdir -p "${TARGET_DIR}"
-tar --exclude='.venv' --exclude='tests' --exclude='.pytest_cache' --exclude='__pycache__' \
+tar --exclude='.env' --exclude='.venv' --exclude='tests' --exclude='.pytest_cache' --exclude='__pycache__' \
   --exclude='.foundry/results' --exclude='tmp-foundry-sample' \
   -C "${SOURCE_DIR}" -cf - . | tar -C "${TARGET_DIR}" -xf -

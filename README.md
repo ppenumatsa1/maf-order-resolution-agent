@@ -41,6 +41,7 @@ If someone starts from this README, this path should let them understand and run
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
 | Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Foundry hosted agent | Implemented | Shared workflow hosted at `backend/foundry/main.py` with public Responses protocol conversation turns |
+| Hosted UI/API wrapper | Validated | External frontend ACA proxies the stable API/SSE contract to an internal FastAPI ACA, which invokes Foundry Responses |
 
 MAF internals are split for maintainability into `backend/app/maf/prompts`,
 `agents`, `tools`, `executors`, `runner`, and `workflows`.
@@ -48,8 +49,13 @@ MAF internals are split for maintainability into `backend/app/maf/prompts`,
 ## Hosted deployment boundary
 
 - **Local full stack** owns browser, FastAPI, SSE, and workflow-history testing.
+- **Public hosted UI** uses an external frontend ACA and internal FastAPI ACA.
+  The browser calls only same-origin `/api` routes; the backend uses managed
+  identity to invoke Foundry Responses and PostgreSQL for durable state.
 - **Public Foundry** owns hosted Responses-agent deployment, conversation/HITL
   verification, Foundry evaluation, and Application Insights telemetry.
+- **Public UI URL:** `https://ora-public-dev2-frontend.greentree-dc9ce897.eastus2.azurecontainerapps.io/`.
+  The backend URL is internal-only and is intentionally not a browser endpoint.
 - Evidence is tracked in [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md).
 
 ## Quick Start (Local)
@@ -102,6 +108,21 @@ make test-e2e
 `make test` and `make eval-backend` now auto-start the local Docker `postgres`
 service when `DATABASE_URL` points to localhost and PostgreSQL is not already running.
 
+`make eval-foundry` reads only its non-secret model configuration from the
+selected nested `infra/foundry-hosted` AZD environment; it does not source AZD
+`.env` files or print values. Run `make eval-foundry-config` to verify this
+local configuration without creating an evaluation. To use a non-default local
+AZD environment without changing the selected environment, run
+`FOUNDRY_AZD_ENV_NAME=<environment> make eval-foundry`.
+
+`make test-e2e` creates its own short-lived Docker Compose project and dynamically
+selects host ports for its backend, PostgreSQL, and mock MCP services. It does not
+use or stop a process already listening on the normal developer ports (8000, 5432,
+or 8011). To reserve known ports for a run, set
+`E2E_BACKEND_HOST_PORT`, `E2E_POSTGRES_HOST_PORT`, and
+`E2E_MOCK_MCP_HOST_PORT`. `make docker-test` also accepts
+`E2E_FRONTEND_HOST_PORT`. Normal `make up` defaults remain unchanged.
+
 Baseline behavior checks:
 
 - ORD-1001 should usually complete without HITL.
@@ -128,10 +149,17 @@ azd ai agent invoke order-resolution-hosted "Why was that resolution selected?" 
 ```
 
 For high-risk requests, continue the same conversation with `Approve` or `Reject`.
+Run the browser contract suite against the public UI after deployment:
+
+```bash
+PLAYWRIGHT_BASE_URL="https://ora-public-dev2-frontend.greentree-dc9ce897.eastus2.azurecontainerapps.io" \
+make test-e2e
+```
 
 ## Environment Model Configuration
 
-For app-hosted model client mode (maf_sdk + foundry_models), model/deployment config is read from backend environment:
+For local MAF model-client mode (`maf_sdk` + `foundry_models`), model/deployment
+configuration is read from the backend environment:
 
 - FOUNDRY_PROJECTS_ENDPOINT
 - FOUNDRY_MODEL_DEPLOYMENT_NAME

@@ -55,7 +55,7 @@ runtime_password="$(
   TARGET_POSTGRES_DATABASE="$TARGET_POSTGRES_DATABASE" \
   python3 - <<'PY'
 import os
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 parsed = urlsplit(os.environ["RUNTIME_DATABASE_URL"])
 expected_host = os.environ["EXPECTED_HOST"]
@@ -71,7 +71,7 @@ if (
 ):
     raise SystemExit("RUNTIME_DATABASE_URL does not match the canonical private PostgreSQL target.")
 
-print(parsed.password)
+print(unquote(parsed.password))
 PY
 )"
 

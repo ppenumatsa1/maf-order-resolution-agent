@@ -73,11 +73,17 @@ expected_postgres_fqdn="${postgres_server_name,,}.postgres.database.azure.com"
   exit 1
 }
 
-az postgres flexible-server db show \
-  --resource-group "$TARGET_RESOURCE_GROUP" \
-  --server-name "$postgres_server_name" \
-  --database-name "$TARGET_POSTGRES_DATABASE" \
-  --output none
+database_count="$(
+  az postgres flexible-server db list \
+    --resource-group "$TARGET_RESOURCE_GROUP" \
+    --server-name "$postgres_server_name" \
+    --query "[?name=='${TARGET_POSTGRES_DATABASE}'] | length(@)" \
+    --output tsv
+)"
+[[ "$database_count" == "1" ]] || {
+  echo "The selected PostgreSQL database does not exist exactly once."
+  exit 1
+}
 
 runtime_database_url="$(require_env_value RUNTIME_DATABASE_URL)"
 runtime_database_host="$(

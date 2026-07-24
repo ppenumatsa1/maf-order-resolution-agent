@@ -16,6 +16,11 @@ on:
         required: true
         type: boolean
         default: false
+      repair_postgres_admin_password:
+        description: Reset the canonical PostgreSQL administrator password to the protected runtime connection credential.
+        required: true
+        type: boolean
+        default: false
       run_smoke:
         description: Run the hosted-agent smoke check after deployment.
         required: true
@@ -90,6 +95,10 @@ jobs:
 
       - name: Verify the selected private deployment environment
         run: ./scripts/foundry/validate_private_runner_environment.sh
+
+      - name: Repair PostgreSQL runtime credential
+        if: ${{ inputs.repair_postgres_admin_password }}
+        run: ./scripts/foundry/repair_private_postgres_admin_password.sh
 
       - name: Verify private ACR deployment target
         run: |

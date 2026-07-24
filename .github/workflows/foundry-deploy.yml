@@ -95,20 +95,27 @@ jobs:
         run: |
           set -euo pipefail
           cd infra/foundry-hosted
-          acr_login_server="$(azd env get-value containerRegistryLoginServer)"
           backend_app="$(azd env get-value BACKEND_CONTAINER_APP_NAME)"
           frontend_app="$(azd env get-value FRONTEND_CONTAINER_APP_NAME)"
-          [[ "$acr_login_server" == *.azurecr.io ]]
           [[ -n "$backend_app" && -n "$frontend_app" ]]
-          acr_name="${acr_login_server%%.*}"
-          actual_login_server="$(
-            az acr show \
+          mapfile -t acr_login_servers < <(
+            az acr list \
               --resource-group "$TARGET_RESOURCE_GROUP" \
-              --name "$acr_name" \
-              --query loginServer \
+              --query '[].loginServer' \
               --output tsv
-          )"
-          [[ "$actual_login_server" == "$acr_login_server" ]]
+          )
+          [[ "${#acr_login_servers[@]}" == "1" ]] || {
+            echo "Expected exactly one private ACR in the selected resource group."
+            exit 1
+          }
+          acr_login_server="${acr_login_servers[0]}"
+          [[ "$acr_login_server" == *.azurecr.io ]]
+          configured_login_server="$(azd env get-value containerRegistryLoginServer 2>/dev/null || true)"
+          [[ -z "$configured_login_server" || "$configured_login_server" == "$acr_login_server" ]] || {
+            echo "AZD environment ACR output does not match the selected private registry."
+            exit 1
+          }
+          azd env set containerRegistryLoginServer "$acr_login_server"
 
       - name: Deploy backend and frontend Container Apps
         run: make foundry-app-deploy

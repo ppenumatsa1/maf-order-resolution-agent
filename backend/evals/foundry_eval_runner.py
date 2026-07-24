@@ -141,14 +141,10 @@ def _build_conversation_trace_testing_criteria(
 
 def _build_conversation_trace_run(
     conversation_ids: list[str],
-    application_insights_resource_id: str,
 ) -> dict[str, object]:
-    if not application_insights_resource_id:
-        raise ValueError("APPINSIGHTS_RESOURCE_ID is required for trace evaluations")
     return {
         "data_source": {
             "type": "azure_ai_trace_data_source_preview",
-            "application_insights_resource_id": application_insights_resource_id,
             "trace_source": {
                 "type": "conversation_id_source",
                 "conversation_ids": conversation_ids,
@@ -195,7 +191,6 @@ async def run_foundry_eval() -> None:
         evidence_path,
         max_age_seconds=max_evidence_age,
     )
-    application_insights_resource_id = os.getenv("APPINSIGHTS_RESOURCE_ID", "").strip()
     report_path = foundry_root / "results" / "foundry-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, object] = {
@@ -239,10 +234,7 @@ async def run_foundry_eval() -> None:
                     "e2e_generated_at": generated_at.isoformat(),
                     "conversation_count": str(len(conversation_ids)),
                 },
-                **_build_conversation_trace_run(
-                    conversation_ids,
-                    application_insights_resource_id,
-                ),
+                **_build_conversation_trace_run(conversation_ids),
             )
             start = asyncio.get_running_loop().time()
             while str(eval_run.status) not in _TERMINAL_EVAL_STATUSES:

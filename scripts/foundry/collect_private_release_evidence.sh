@@ -26,8 +26,7 @@ fi
 
 cd "$ROOT_DIR"
 ./scripts/github/foundry_hosted_e2e.sh
-APPINSIGHTS_RESOURCE_ID="$application_insights_target" \
-  FOUNDRY_EVAL_ENFORCE_PASS=true \
+FOUNDRY_EVAL_ENFORCE_PASS=true \
 FOUNDRY_EVAL_MAX_ERRORED=0 \
 make eval-foundry
 AZURE_RESOURCE_GROUP="$resource_group" \

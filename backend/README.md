@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | Local FastAPI host | Implemented | Runs the shared MAF workflow and exposes stable API/SSE/HITL contracts. |
 | Foundry hosted agent | Implemented (private VNet lane retained) | `backend/foundry/main.py` hosts the same workflow with Responses protocol (`backend/agent.yaml`). |
+| Private ACA wrapper | Implemented locally; private-release validation pending | Internal FastAPI Container App uses managed identity to dispatch to private Foundry Responses and tails persisted workflow events for SSE. |
 
 There is one business workflow path rooted at `backend/app/maf/workflows/order_resolution.py`,
 with modular internals in `backend/app/maf/prompts/`, `agents/`, `tools/`, `executors/`,
@@ -34,6 +35,17 @@ Model client selection:
 
 - Set `FOUNDRY_PROJECTS_ENDPOINT` and `FOUNDRY_MODEL_DEPLOYMENT_NAME` to use Foundry models for triage agents.
 - If those values are absent, only the deterministic triage summary fallback is used (the workflow path itself remains MAF).
+
+### Private Responses wrapper
+
+Set `RUNTIME_TARGET=responses_wrapper` only in the internal Container App. It
+requires `FOUNDRY_RESPONSES_ENDPOINT`, creates a Foundry `conv_...`
+conversation, stores dispatch idempotency in `responses_dispatches`, and resumes
+HITL through a checkpoint-keyed `function_call_output`. The wrapper does not
+create a second workflow implementation: the hosted Responses agent remains the
+canonical MAF executor and PostgreSQL remains the durable event/checkpoint
+projection. The external frontend proxies same-origin `/api` and SSE to this
+internal app; browser configuration contains neither a backend nor Foundry URL.
 
 ## Foundry hosted agent (Responses)
 

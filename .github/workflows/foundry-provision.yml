@@ -1,57 +1,60 @@
-name: Foundry Provision (Private)
+name: Foundry Private Infrastructure Provision
 
 on:
   workflow_dispatch:
     inputs:
-      runner_label:
-        description: Optional self-hosted runner label override
-        required: false
-        default: ""
-      environment:
-        description: Optional GitHub environment override
-        required: false
-        default: ""
+      confirmation:
+        description: Select provision to apply private Foundry infrastructure changes.
+        required: true
+        type: choice
+        default: cancel
+        options:
+          - cancel
+          - provision
       provision_no_state:
-        description: Run azd provision with --no-state
-        required: false
-        default: "false"
-  workflow_call:
-    inputs:
-      runner_label:
-        required: false
-        type: string
-        default: ""
-      environment:
-        required: false
-        type: string
-        default: ""
-      provision_no_state:
-        required: false
-        type: string
-        default: "false"
+        description: Run azd provision with --no-state.
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
 
 concurrency:
-  group: foundry-provision-private
-  cancel-in-progress: true
+  group: foundry-private-infrastructure-provision
+  cancel-in-progress: false
+
+env:
+  AZD_ENVIRONMENT_NAME: foundry-private-env
+  TARGET_RESOURCE_GROUP: rg-maf-ora-foundry-v2
+  TARGET_FOUNDRY_PROJECT: order-resolution
+  TARGET_POSTGRES_DATABASE: maf_workflow
 
 jobs:
   provision:
-    name: Provision Foundry Infra (private lane)
+    if: ${{ inputs.confirmation == 'provision' }}
     runs-on:
       - self-hosted
-      - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
-    environment: ${{ inputs.environment || github.event.inputs.environment || 'foundry-private-env' }}
+      - foundry-private-v2
+    environment: foundry-private-env
     defaults:
       run:
         shell: bash
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
-      - uses: azure/login@v2
+      - name: Clean workspace while retaining the private azd environment
+        run: git clean -ffdx -e infra/foundry-hosted/.azure/
+
+      - name: Authenticate with the runner's federated Azure identity
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -59,78 +62,25 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
-      - name: Configure azd to use Azure CLI auth
-        run: azd config set auth.useAzCliAuth true
-
-      - name: Install Foundry azd extension
-        run: azd ext install azure.ai.agents --no-prompt
-
-      - name: Install Foundry connections extension
-        run: azd ext install azure.ai.connections --no-prompt
-
-      - name: Select private azd environment
-        env:
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      - name: Configure azd for Azure CLI OIDC authentication
         run: |
           set -euo pipefail
-          azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
-          cd infra/foundry-hosted
-          azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
-          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          azd env set NETWORK_MODE "private"
-          azd env set AZURE_RESOURCE_GROUP "${{ vars.FOUNDRY_RESOURCE_GROUP || '' }}"
-          azd env set AZURE_LOCATION "${{ vars.AZURE_LOCATION || 'eastus2' }}"
-          azd env set FOUNDRY_LOCATION "${{ vars.FOUNDRY_LOCATION || vars.AZURE_LOCATION || 'eastus2' }}"
-          azd env set FOUNDRY_PROJECT_NAME "${{ vars.FOUNDRY_PROJECT_NAME || 'order-resolution' }}"
-          azd env set HOSTED_AGENT_NAME "${{ vars.HOSTED_AGENT_NAME || 'order-resolution-hosted' }}"
-          azd env set AZURE_AI_PROJECT_ID "${{ vars.AZURE_AI_PROJECT_ID || vars.FOUNDRY_PROJECT_ID || '' }}"
-          azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID || vars.AZURE_AI_PROJECT_ID || '' }}"
-          azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT || vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
-          azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT || '' }}"
-          azd env set NAME_PREFIX "${{ vars.NAME_PREFIX || 'maffnd' }}"
-          azd env set POSTGRES_SERVER_NAME "${{ vars.POSTGRES_SERVER_NAME || 'maffndpg7930' }}"
-          azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
-          azd env set FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_CHAT_DEPLOYMENT_CAPACITY || '30' }}"
-          azd env set FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY || '2' }}"
-          if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
-            azd env set POSTGRES_ADMIN_PASSWORD "${POSTGRES_ADMIN_PASSWORD}"
-          fi
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          azd config set auth.useAzCliAuth true
+          azd ext install azure.ai.agents --no-prompt
+          azd ext install azure.ai.connections --no-prompt
 
-      - name: Ensure private defaults
-        run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
+      - name: Verify the selected private deployment environment
+        run: ./scripts/foundry/validate_private_runner_environment.sh
 
       - name: Provision private Foundry infrastructure
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.provision_no_state || github.event.inputs.provision_no_state || 'false' }}" == "true" ]]; then
+          if [[ "${{ inputs.provision_no_state }}" == "true" ]]; then
             FOUNDRY_PROVISION_NO_STATE=true make foundry-provision
           else
             make foundry-provision
           fi
 
-      - name: Verify Application Insights project connection
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          connection_json="$(azd ai connection show ApplicationInsights --output json --no-prompt)"
-          kind="$(printf '%s' "$connection_json" | jq -r '.kind // .category // .properties.category // empty')"
-          target="$(printf '%s' "$connection_json" | jq -r '.target // .metadata.ResourceId // .properties.target // empty')"
-          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
-          if [[ "$kind" != "AppInsights" ]]; then
-            echo "Application Insights connection kind mismatch: ${kind:-<empty>}"
-            exit 1
-          fi
-          if [[ -z "$target" ]]; then
-            echo "Application Insights connection target is empty."
-            exit 1
-          fi
-          resolved_target="$(az resource show --ids "$target" --query id -o tsv)"
-          target_type="$(az resource show --ids "$target" --query type -o tsv)"
-          expected_rg_segment="/resourcegroups/${resource_group,,}/"
-          if [[ "${resolved_target,,}" != "${target,,}" ||
-                "${target_type,,}" != "microsoft.insights/components" ||
-                "${target,,}" != *"$expected_rg_segment"* ]]; then
-            echo "Application Insights connection target mismatch."
-            exit 1
-          fi
-          echo "Verified ApplicationInsights project connection targeting $resolved_target"
+      - name: Re-verify canonical private deployment environment
+        run: ./scripts/foundry/validate_private_runner_environment.sh

@@ -24,6 +24,18 @@ Canonical contract: `docs/design/engineering-operating-model.md`.
 
 Current hosted gate posture is private-lane-first. Use private Foundry as the default hosted validation/deployment lane unless a documented contract update explicitly re-enables public-lane hosted gates.
 
+The private browser topology is external frontend ACA -> same-origin proxy ->
+internal FastAPI ACA -> private Foundry Responses -> private PostgreSQL. Only
+the frontend has external ingress. Keep the ACA environment VNet-integrated on
+a dedicated subnet; do not reuse the Foundry agent-host subnet. The backend
+uses managed identity, persisted workflow events, and stable native SSE types.
+For PostgreSQL privatization, use the canonical server FQDN and private DNS
+output contract. `POSTGRES_SERVER_NAME` and `RUNTIME_DATABASE_URL` must name
+the same FQDN; public access and the Azure-services firewall rule may be
+removed only after fresh explicit ACA and hosted-agent connectivity proof.
+Only the generated proof artifact may authorize lockdown; it must not be
+replaced by a manual environment flag.
+
 ## Workflow Guardrails
 
 - Keep API, application service, MAF runtime, and infrastructure concerns separated:

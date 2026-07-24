@@ -60,6 +60,24 @@ class McpKnowledgePort(Protocol):
     async def search(self, query: str) -> dict[str, Any]: ...
 
 
+class ResponsesWorkflowPort(Protocol):
+    async def start_workflow(
+        self,
+        *,
+        thread_id: str,
+        message: str,
+        create_conversation: bool = True,
+    ) -> str: ...
+
+    async def respond_to_hitl(
+        self,
+        *,
+        thread_id: str,
+        checkpoint_id: str,
+        decision: str,
+    ) -> None: ...
+
+
 class WorkflowRunRepositoryPort(Protocol):
     def create_workflow_run(
         self,
@@ -89,3 +107,16 @@ class WorkflowRunRepositoryPort(Protocol):
     def update_latest_output(self, thread_id: str, output: dict[str, Any]) -> None: ...
 
     def get_pending_approval_context(self, checkpoint_id: str) -> dict[str, Any] | None: ...
+
+    def create_or_get_responses_dispatch(
+        self,
+        *,
+        idempotency_key: str,
+        request_hash: str,
+        run_id: str,
+        thread_id: str,
+    ) -> dict[str, Any]: ...
+
+    def update_responses_dispatch_status(self, idempotency_key: str, status: str) -> None: ...
+
+    def update_responses_dispatch_thread(self, idempotency_key: str, thread_id: str) -> None: ...

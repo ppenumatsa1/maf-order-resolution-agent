@@ -8,6 +8,15 @@ This file describes expected behavior for coding agents working in this reposito
 - Foundry hosted entrypoint: `backend/foundry/main.py` (Responses protocol via `backend/agent.yaml`).
 - Current hosted gate posture is private-lane-first; use private Foundry for hosted validation/deployment unless the canonical operating model is explicitly revised.
 - Frontend: React + Vite, consumes SSE workflow events.
+- Private browser delivery: external frontend ACA proxies same-origin `/api` to
+  internal FastAPI ACA; the backend reaches private Foundry Responses and
+  PostgreSQL through the VNet. Do not expose a backend ingress or browser
+  credentials, and do not reuse the Foundry agent-host subnet for ACA.
+- PostgreSQL public access and the Azure-services firewall rule remain in place
+  until the canonical server's private endpoint/DNS path has explicit ACA and
+  hosted-agent connectivity proof. `POSTGRES_SERVER_NAME` and
+  `RUNTIME_DATABASE_URL` must identify that same FQDN; only the generated,
+  current connectivity-proof artifact can authorize lockdown.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
 - Backend package boundaries:

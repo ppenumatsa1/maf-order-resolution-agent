@@ -41,11 +41,12 @@ If someone starts from this README, this path should let them understand and run
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
 | Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Foundry hosted agent | Implemented (private VNet lane retained) | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
+| Private web delivery | Implemented locally; private-release validation pending | Public frontend ACA proxies same-origin `/api` and SSE to an internal FastAPI ACA, which calls private Foundry Responses and PostgreSQL. |
 
 MAF internals are split for maintainability into `backend/app/maf/prompts`,
 `agents`, `tools`, `executors`, `runner`, and `workflows`.
 
-## Latest Foundry trace status (2026-07-23)
+## Latest Foundry trace status (2026-07-24)
 
 - Private Foundry workflow, PostgreSQL state, and HITL behavior have prior hosted
   E2E evidence.
@@ -53,6 +54,9 @@ MAF internals are split for maintainability into `backend/app/maf/prompts`,
   `ApplicationInsights` project connection and removes manual connection-string
   aliases. A fresh private provision/deploy is still required to record final
   App Insights and Foundry trace-evaluation evidence.
+- The private web extension is implemented locally. Its authenticated release
+  still requires private-runner validation, current PostgreSQL connectivity
+  proof, and only then PostgreSQL public-access lockdown.
 - Current private telemetry RCA and run evidence are tracked in:
   - [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)
 
@@ -63,6 +67,34 @@ MAF internals are split for maintainability into `backend/app/maf/prompts`,
 ```bash
 make bootstrap
 ```
+
+## Private VNet web release
+
+The private deployment exposes only the frontend Container App. The browser never
+receives a Foundry or database credential: Nginx proxies `/api` to the
+internal-ingress FastAPI Container App, and the backend uses managed identity
+for the private Foundry Responses endpoint.
+
+PR validation remains credential-free. Protected manual workflows
+`foundry-provision.yml` and `foundry-deploy.yml` run only on the
+`foundry-private-v2` self-hosted runner in `foundry-private-env`, using Azure
+OIDC and the runner's retained private AZD environment. The local in-VNet
+operator flow remains available:
+
+```bash
+make foundry-provision-preview
+FOUNDRY_REFRESH_HOSTED_AGENT=true make foundry-release
+```
+
+`foundry-release` records ACA and hosted-agent connectivity in
+`backend/.foundry/results/private-connectivity-proof.json` before it disables
+PostgreSQL public access and removes the temporary Azure-services firewall rule.
+For a manual staged run, execute `make foundry-connectivity-proof` before
+`make foundry-postgres-lockdown`; the lockdown target rejects missing, stale, or
+mismatched proof for the canonical `POSTGRES_SERVER_NAME` FQDN. The current
+recorded target is
+`maffndpgv20722.postgres.database.azure.com`; preflight is authoritative if
+the AZD environment changes.
 
 2. Configure backend environment.
 

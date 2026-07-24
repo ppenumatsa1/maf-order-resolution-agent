@@ -20,6 +20,18 @@
     "createPrivateEndpoints": {
       "value": true
     },
+    "enableContainerApps": {
+      "value": true
+    },
+    "containerAppsEnvironmentName": {
+      "value": "maforanieus2-private-aca"
+    },
+    "backendContainerAppName": {
+      "value": "maforanieus2-private-backend"
+    },
+    "frontendContainerAppName": {
+      "value": "maforanieus2-private-frontend"
+    },
     "createNatGateway": {
       "value": true
     },
@@ -93,7 +105,9 @@
         "privatelink.documents.azure.com",
         "privatelink.services.ai.azure.com",
         "privatelink.cognitiveservices.azure.com",
-        "privatelink.openai.azure.com"
+        "privatelink.openai.azure.com",
+        "privatelink.azurecr.io",
+        "privatelink.postgres.database.azure.com"
       ]
     }
   }

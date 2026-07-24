@@ -18,7 +18,28 @@ This model is Pareto-first: start with the minimum enforceable contract and expa
 Hosted validation and deployment are private-lane-first in the current operating posture:
 
 - **Default hosted lane:** private Foundry (`foundry-private-env` / private runner path).
+- **Deployment control plane:** PR/static validation is credential-free. The
+  protected manual provision/deploy workflows run only on
+  `self-hosted,foundry-private-v2` in `foundry-private-env` using Azure OIDC;
+  no Azure or database secret is stored in the workflow.
 - No additional hosted lane is part of the required gate path unless explicitly re-enabled by a documented decision update.
+- **Private web ingress:** one external frontend ACA and one internal FastAPI
+  ACA share a VNet-integrated environment on a dedicated subnet. Foundry,
+  PostgreSQL, ACR, and application data planes remain private; Azure Monitor
+  uses managed ingestion for telemetry.
+- **PostgreSQL cutover:** target the canonical Flexible Server FQDN, bind its
+  `postgresqlServer` private endpoint to
+  `privatelink.postgres.database.azure.com`, and retain public access plus the
+  Azure-services firewall rule until documented ACA and hosted-agent
+  connectivity proof is supplied. `POSTGRES_SERVER_NAME` and
+  `RUNTIME_DATABASE_URL` must resolve to that same canonical FQDN; do not reuse
+  a historical server name.
+- **Lockdown authority:** only `make foundry-connectivity-proof` may create the
+  proof consumed by `make foundry-postgres-lockdown`. By default it must be no
+  more than one hour old, name the canonical FQDN, and record passed ACA and
+  hosted-agent connectivity. Lockdown then verifies the approved private
+  endpoint, `postgresqlServer` group, private-DNS A record, and VNet link before
+  disabling public access and deleting `allow-azure-services`.
 
 ## Inputs and authority
 
@@ -77,6 +98,7 @@ A change is done only when all applicable items are true:
 | MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E evidence + enforced conversation trace evaluation + correlated telemetry verification |
 | IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
 | Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
+| Private browser/ACA/network change | local gates + IaC review + Bicep preview | Private-runner deployment, public-frontend Playwright, private DNS/public-access checks, and telemetry correlation |
 
 `make eval-foundry` remains report-only for ad hoc/local use. The private release
 workflow first exercises low-risk and HITL scenarios once, then enforces Foundry

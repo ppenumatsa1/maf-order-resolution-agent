@@ -52,3 +52,4 @@ resource privateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
 }
 
 output id string = enabled ? resourceId('Microsoft.Network/privateEndpoints', name) : ''
+output name string = enabled ? privateEndpoint.name : ''

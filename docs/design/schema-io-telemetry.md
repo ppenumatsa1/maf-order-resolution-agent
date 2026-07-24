@@ -42,6 +42,12 @@ The legacy SSE stream is unchanged at `/api/chat/stream/{thread_id}`. A parallel
 
 Native workflow events remain the source of truth. The rich stream maps stages to step lifecycle events, tool calls to tool lifecycle/result events, terminal outputs to assistant text and run-finished events, HITL/checkpoints to custom events, failures to run-error events, and unknown native events to raw events. Each SSE frame contains one rich envelope with one or more AG-UI-compatible events; clients that need native AG-UI framing should flatten `events` in order. The stream emits `RUN_STARTED` in the first rich envelope for each subscription.
 
+In the private ACA lane, the browser reaches both streams through the frontend's
+same-origin `/api` proxy. The internal Responses wrapper tails the persisted
+workflow-event projection for both native and rich streams; it does not rename
+or replace native event types, and browser configuration contains no backend or
+Foundry endpoint.
+
 ## HITL Response Request
 
 ```json
@@ -68,6 +74,12 @@ Native workflow events remain the source of truth. The rich stream maps stages t
 ## App Insights Wiring
 
 Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Local processes can set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. Hosted private agents receive the same canonical variable from the Foundry project's supported `ApplicationInsights` connection; `backend/agent.yaml` does not map connection-string aliases or reconstruct split fields. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
+
+The internal FastAPI wrapper accepts either the canonical or full
+`APPINSIGHTS_CONNECTION_STRING` alias, preferring the region-aware full value.
+FastAPI instrumentation excludes health probes and chat SSE transport requests
+so App Insights keeps workflow, model, checkpoint, and HITL correlation signal
+without Container Apps probe noise.
 
 MAF workflow stream events are observed from `workflow.run(..., stream=True)` for `executor_invoked`, `executor_completed`, and terminal `output` events. Full event payload/content is not recorded unless `OTEL_RECORD_CONTENT=true`.
 

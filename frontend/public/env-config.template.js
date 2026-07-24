@@ -1,3 +1,1 @@
-window.__APP_CONFIG__ = {
-  API_BASE: "${API_BASE}",
-};
+window.__APP_CONFIG__ = {};

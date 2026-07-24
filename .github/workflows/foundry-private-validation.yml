@@ -1,0 +1,49 @@
+name: Foundry Private Workflow Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/foundry-*.yml"
+      - "infra/foundry-hosted/**"
+      - "scripts/foundry/**"
+      - "scripts/github/bootstrap_foundry_github_config.sh"
+      - "scripts/github/validate_private_runner_workflows.py"
+      - "Makefile"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-contracts:
+    name: Validate credential-free workflow contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate private runner workflow contracts
+        run: python3 scripts/github/validate_private_runner_workflows.py
+
+  private-infrastructure:
+    name: Validate private infrastructure without Azure credentials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell release assets
+        run: |
+          set -euo pipefail
+          bash -n scripts/foundry/ensure_foundry_azd_defaults.sh
+          bash -n scripts/foundry/preflight_private_release.sh
+          bash -n scripts/foundry/validate_private_runner_environment.sh
+          bash -n scripts/foundry/verify_private_connectivity.sh
+          bash -n scripts/foundry/harden_postgres_private_access.sh
+          bash -n scripts/foundry/collect_private_release_evidence.sh
+      - name: Validate deployment parameter JSON
+        run: |
+          set -euo pipefail
+          python3 -m json.tool infra/foundry-hosted/iac/main.parameters.json >/dev/null
+          python3 -m json.tool infra/foundry-hosted/iac/parameters.dev.json >/dev/null
+      - name: Compile private Bicep
+        run: az bicep build --file infra/foundry-hosted/iac/main.bicep --stdout >/dev/null

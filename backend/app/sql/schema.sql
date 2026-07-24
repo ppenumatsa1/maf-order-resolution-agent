@@ -16,6 +16,19 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
 CREATE INDEX IF NOT EXISTS idx_workflow_runs_status_created_at
     ON workflow_runs (status, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS responses_dispatches (
+    idempotency_key TEXT PRIMARY KEY,
+    request_hash TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_responses_dispatches_thread_id
+    ON responses_dispatches (thread_id);
+
 CREATE TABLE IF NOT EXISTS workflow_events (
     id UUID PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES workflow_runs(thread_id) ON DELETE CASCADE,

@@ -14,6 +14,21 @@
     "hostedAgentName": {
       "value": "${HOSTED_AGENT_NAME}"
     },
+    "containerAppsEnvironmentName": {
+      "value": "${CONTAINER_APPS_ENVIRONMENT_NAME}"
+    },
+    "backendContainerAppName": {
+      "value": "${BACKEND_CONTAINER_APP_NAME}"
+    },
+    "frontendContainerAppName": {
+      "value": "${FRONTEND_CONTAINER_APP_NAME}"
+    },
+    "backendImageName": {
+      "value": "${SERVICE_BACKEND_IMAGE_NAME}"
+    },
+    "frontendImageName": {
+      "value": "${SERVICE_FRONTEND_IMAGE_NAME}"
+    },
     "networkMode": {
       "value": "${NETWORK_MODE}"
     },
@@ -22,6 +37,15 @@
     },
     "createPrivateEndpoints": {
       "value": "${CREATE_PRIVATE_ENDPOINTS}"
+    },
+    "enableContainerApps": {
+      "value": "${ENABLE_CONTAINER_APPS}"
+    },
+    "enablePostgresPrivateEndpoint": {
+      "value": "${ENABLE_POSTGRES_PRIVATE_ENDPOINT}"
+    },
+    "createPostgresAzureServicesFirewall": {
+      "value": "${CREATE_POSTGRES_AZURE_SERVICES_FIREWALL}"
     },
     "createNatGateway": {
       "value": "${CREATE_NAT_GATEWAY}"

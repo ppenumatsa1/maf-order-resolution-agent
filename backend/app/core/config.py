@@ -9,6 +9,7 @@ WorkflowMode = Literal["maf_sdk"]
 StoreProvider = Literal["postgres", "azure_postgres", "app_db"]
 RagProvider = Literal["pgvector", "azure_ai_search", "foundry_vector", "foundry_iq"]
 MemoryProvider = Literal["postgres", "foundry_memory"]
+RuntimeTarget = Literal["local_maf", "responses_wrapper"]
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class AppConfig:
     store_provider: StoreProvider
     rag_provider: RagProvider
     memory_provider: MemoryProvider
+    runtime_target: RuntimeTarget = "local_maf"
 
 
 def _normalized(name: str, default: str) -> str:
@@ -44,6 +46,13 @@ def _memory_provider() -> MemoryProvider:
     raise ValueError(f"Unsupported MEMORY_PROVIDER: {value}")
 
 
+def _runtime_target() -> RuntimeTarget:
+    value = _normalized("RUNTIME_TARGET", "local_maf")
+    if value in {"local_maf", "responses_wrapper"}:
+        return value
+    raise ValueError(f"Unsupported RUNTIME_TARGET: {value}")
+
+
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     return AppConfig(
@@ -51,4 +60,5 @@ def get_config() -> AppConfig:
         store_provider=_store_provider(),
         rag_provider=_rag_provider(),
         memory_provider=_memory_provider(),
+        runtime_target=_runtime_target(),
     )

@@ -78,6 +78,7 @@ resource runnerSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = i
   name: runnerSubnetName
   properties: {
     addressPrefix: runnerSubnetPrefix
+    privateEndpointNetworkPolicies: 'Disabled'
     networkSecurityGroup: {
       id: runnerNsg.id
     }
@@ -94,6 +95,7 @@ resource bastionSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = 
   name: bastionSubnetName
   properties: {
     addressPrefix: bastionSubnetPrefix
+    privateEndpointNetworkPolicies: 'Disabled'
   }
 }
 
@@ -153,7 +155,7 @@ resource runnerVm 'Microsoft.Compute/virtualMachines@2023-09-01' = if (createRun
       osDisk: {
         createOption: 'FromImage'
         managedDisk: {
-          storageAccountType: 'Premium_LRS'
+          storageAccountType: 'Standard_LRS'
         }
       }
     }

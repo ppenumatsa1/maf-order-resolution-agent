@@ -196,6 +196,9 @@ export default function App() {
         setEvents(details.events ?? []);
         setPendingApprovals(details.pending_approvals ?? []);
         setLatestOutput(details.latest_output ?? null);
+      } catch {
+        // A hosted run can be accepted before its persisted workflow record exists.
+        // The active-run polling effect will retry until the record is available.
       } finally {
         if (selectionVersionRef.current === expectedSelectionVersion) {
           setIsDetailsLoading(false);
@@ -223,10 +226,11 @@ export default function App() {
   }, [isComposingNewRun, selectedThreadId, loadWorkflowDetails]);
 
   useEffect(() => {
-    if (isComposingNewRun || !selectedThreadId || !selectedWorkflowDetails) {
+    if (isComposingNewRun || !selectedThreadId) {
       return;
     }
     if (
+      selectedWorkflowDetails &&
       !["running", "waiting_approval"].includes(selectedWorkflowDetails.status)
     ) {
       return;
@@ -234,7 +238,7 @@ export default function App() {
 
     const timer = window.setInterval(() => {
       void loadWorkflowDetails(selectedThreadId, selectionVersionRef.current);
-    }, 2500);
+    }, 1000);
 
     return () => {
       window.clearInterval(timer);

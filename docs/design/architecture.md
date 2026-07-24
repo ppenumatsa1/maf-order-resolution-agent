@@ -24,6 +24,27 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 
 ## High-Level Runtime Architecture
 
+The private web topology has one public application ingress and private
+application data planes:
+
+```text
+Browser
+  -> external frontend Container App
+  -> same-origin /api and SSE proxy
+  -> internal FastAPI Container App
+  -> managed identity + private DNS
+  -> private Foundry Responses hosted MAF agent
+  -> private PostgreSQL workflow state
+```
+
+The Container Apps environment is VNet-integrated on a dedicated infrastructure
+subnet. It must not reuse the Foundry agent-host subnet. The frontend is the
+only external-ingress app; the backend, Foundry, ACR, and PostgreSQL remain
+private. In wrapper mode the internal backend invokes the hosted Responses
+conversation and replays its persisted PostgreSQL workflow events through the
+unchanged native SSE contract. Azure Monitor retains managed ingestion for
+correlated telemetry.
+
 ```mermaid
 flowchart LR
      U[Support Agent or Operator]
@@ -120,6 +141,10 @@ flowchart TD
 
 - **Shared:** business tools, HITL semantics, stable event contracts, persistence projections.
 - **Distinct wrappers:** FastAPI route layer vs Foundry Responses protocol wrapper in `backend/foundry/main.py`.
+- **Private browser dispatch:** `RUNTIME_TARGET=responses_wrapper` makes the
+  internal FastAPI app dispatch idempotently to Foundry Responses and replay
+  persisted PostgreSQL events over the stable SSE surface. It does not change
+  native event names or HITL policy.
 
 ## Core Business Flow
 

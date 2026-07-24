@@ -1,141 +1,70 @@
-name: Foundry Deploy (Private)
+name: Foundry Private Application Deploy
 
 on:
   workflow_dispatch:
     inputs:
-      runner_label:
-        description: Optional self-hosted runner label override
-        required: false
-        default: ""
-      environment:
-        description: Optional GitHub environment override
-        required: false
-        default: ""
+      confirmation:
+        description: Select deploy to publish backend and frontend images to the private ACR.
+        required: true
+        type: choice
+        default: cancel
+        options:
+          - cancel
+          - deploy
+      refresh_hosted_agent:
+        description: Also refresh the Foundry-hosted agent after the ACA deployment.
+        required: true
+        type: boolean
+        default: false
       run_smoke:
-        description: Run smoke invoke after deploy
-        required: false
-        default: "true"
-      run_e2e:
-        description: Run hosted E2E after smoke
-        required: false
-        default: "false"
-      run_eval:
-        description: Judge the hosted E2E conversations with Foundry evaluation
-        required: false
-        default: "true"
-      probe_only:
-        description: Run lightweight hosted invoke probe only
-        required: false
-        default: "false"
-      probe_message:
-        description: Probe message
-        required: false
-        default: Resolve delayed order ORD-1001
-      probe_agent_name:
-        description: Hosted agent name
-        required: false
-        default: order-resolution-hosted
-  workflow_call:
-    inputs:
-      runner_label:
-        required: false
-        type: string
-        default: ""
-      environment:
-        required: false
-        type: string
-        default: ""
-      run_smoke:
-        required: false
-        type: string
-        default: "true"
-      run_e2e:
-        required: false
-        type: string
-        default: "false"
-      run_eval:
-        required: false
-        type: string
-        default: "true"
-      probe_only:
-        required: false
-        type: string
-        default: "false"
-      probe_message:
-        required: false
-        type: string
-        default: Resolve delayed order ORD-1001
-      probe_agent_name:
-        required: false
-        type: string
-        default: order-resolution-hosted
+        description: Run the hosted-agent smoke check after deployment.
+        required: true
+        type: boolean
+        default: true
+      run_evidence:
+        description: Run hosted E2E, evaluation, and telemetry evidence collection.
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
 
 concurrency:
-  group: foundry-deploy-private
-  cancel-in-progress: true
+  group: foundry-private-application-deploy
+  cancel-in-progress: false
+
+env:
+  AZD_ENVIRONMENT_NAME: foundry-private-env
+  TARGET_RESOURCE_GROUP: rg-maf-ora-foundry-v2
+  TARGET_FOUNDRY_PROJECT: order-resolution
+  TARGET_POSTGRES_DATABASE: maf_workflow
 
 jobs:
-  probe:
-    if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') == 'true' }}
-    runs-on:
-      - self-hosted
-      - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
-    environment: ${{ inputs.environment || github.event.inputs.environment || 'foundry-private-env' }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - uses: Azure/setup-azd@v2
-
-      - name: Configure azd to use Azure CLI auth
-        run: azd config set auth.useAzCliAuth true
-
-      - name: Install Foundry azd extension
-        run: azd ext install azure.ai.agents --no-prompt
-
-      - name: Install Foundry connections extension
-        run: azd ext install azure.ai.connections --no-prompt
-
-      - name: Select private azd environment
-        env:
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
-          cd infra/foundry-hosted
-          azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
-
-      - name: Invoke probe message
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          azd ai agent invoke "${{ inputs.probe_agent_name || github.event.inputs.probe_agent_name || 'order-resolution-hosted' }}" "${{ inputs.probe_message || github.event.inputs.probe_message || 'Resolve delayed order ORD-1001' }}" --protocol responses --new-conversation --new-session --no-prompt
-
   deploy:
-    if: ${{ (inputs.probe_only || github.event.inputs.probe_only || 'false') != 'true' }}
+    if: ${{ inputs.confirmation == 'deploy' }}
     runs-on:
       - self-hosted
-      - ${{ inputs.runner_label || github.event.inputs.runner_label || vars.RUNNER_LABEL || 'foundry-private' }}
-    environment: ${{ inputs.environment || github.event.inputs.environment || 'foundry-private-env' }}
+      - foundry-private-v2
+    environment: foundry-private-env
     defaults:
       run:
         shell: bash
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
-      - uses: azure/login@v2
+      - name: Clean workspace while retaining the private azd environment
+        run: git clean -ffdx -e infra/foundry-hosted/.azure/
+
+      - name: Authenticate with the runner's federated Azure identity
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -143,147 +72,68 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
-      - name: Configure azd to use Azure CLI auth
-        run: azd config set auth.useAzCliAuth true
-
-      - name: Install Foundry azd extension
-        run: azd ext install azure.ai.agents --no-prompt
-
-      - name: Install Foundry connections extension
-        run: azd ext install azure.ai.connections --no-prompt
-
-      - name: Select private azd environment
-        env:
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      - name: Configure azd for Azure CLI OIDC authentication
         run: |
           set -euo pipefail
-          azd_env_name="${{ vars.FOUNDRY_AZD_ENV_NAME || 'foundry-private-env' }}"
-          cd infra/foundry-hosted
-          azd env select "$azd_env_name" --no-prompt || azd env new "$azd_env_name" --no-prompt
-          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          azd env set NETWORK_MODE "private"
-          azd env set AZURE_RESOURCE_GROUP "${{ vars.FOUNDRY_RESOURCE_GROUP || '' }}"
-          azd env set AZURE_LOCATION "${{ vars.AZURE_LOCATION || 'eastus2' }}"
-          azd env set FOUNDRY_LOCATION "${{ vars.FOUNDRY_LOCATION || vars.AZURE_LOCATION || 'eastus2' }}"
-          azd env set FOUNDRY_PROJECT_NAME "${{ vars.FOUNDRY_PROJECT_NAME || 'order-resolution' }}"
-          azd env set HOSTED_AGENT_NAME "${{ vars.HOSTED_AGENT_NAME || 'order-resolution-hosted' }}"
-          azd env set AZURE_AI_PROJECT_ID "${{ vars.AZURE_AI_PROJECT_ID || vars.FOUNDRY_PROJECT_ID || '' }}"
-          azd env set FOUNDRY_PROJECT_ID "${{ vars.FOUNDRY_PROJECT_ID || vars.AZURE_AI_PROJECT_ID || '' }}"
-          azd env set FOUNDRY_PROJECT_ENDPOINT "${{ vars.FOUNDRY_PROJECT_ENDPOINT || vars.FOUNDRY_PROJECTS_ENDPOINT || '' }}"
-          azd env set FOUNDRY_PROJECTS_ENDPOINT "${{ vars.FOUNDRY_PROJECTS_ENDPOINT || vars.FOUNDRY_PROJECT_ENDPOINT || '' }}"
-          azd env set NAME_PREFIX "${{ vars.NAME_PREFIX || 'maffnd' }}"
-          azd env set POSTGRES_SERVER_NAME "${{ vars.POSTGRES_SERVER_NAME || 'maffndpg7930' }}"
-          azd env set POSTGRES_LOCATION "${{ vars.POSTGRES_LOCATION || 'centralus' }}"
-          azd env set FOUNDRY_CHAT_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_CHAT_DEPLOYMENT_CAPACITY || '30' }}"
-          azd env set FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY "${{ vars.FOUNDRY_EMBEDDINGS_DEPLOYMENT_CAPACITY || '2' }}"
-          azd env set FOUNDRY_TRACE_EVALUATION_RECORD_CONTENT "${{ inputs.run_eval || github.event.inputs.run_eval || 'true' }}"
-          if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
-            azd env set POSTGRES_ADMIN_PASSWORD "${POSTGRES_ADMIN_PASSWORD}"
-          fi
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          azd config set auth.useAzCliAuth true
+          azd ext install azure.ai.agents --no-prompt
+          azd ext install azure.ai.connections --no-prompt
 
-      - name: Ensure private defaults
-        run: ./scripts/foundry/ensure_foundry_azd_defaults.sh
+      - name: Verify the selected private deployment environment
+        run: ./scripts/foundry/validate_private_runner_environment.sh
 
-      - name: Sync runtime DB URL from Foundry connection
+      - name: Verify private ACR deployment target
         run: |
           set -euo pipefail
           cd infra/foundry-hosted
-          connection_database_url="$(azd ai connection show orderresolutionruntimesecrets --show-credentials --output json --no-prompt | jq -r '.credentials.database_url // empty')"
-          if [[ -n "${connection_database_url}" ]]; then
-            azd env set RUNTIME_DATABASE_URL "${connection_database_url}"
-            azd env set DATABASE_URL "${connection_database_url}"
-          fi
+          acr_login_server="$(azd env get-value containerRegistryLoginServer)"
+          backend_app="$(azd env get-value BACKEND_CONTAINER_APP_NAME)"
+          frontend_app="$(azd env get-value FRONTEND_CONTAINER_APP_NAME)"
+          [[ "$acr_login_server" == *.azurecr.io ]]
+          [[ -n "$backend_app" && -n "$frontend_app" ]]
+          acr_name="${acr_login_server%%.*}"
+          actual_login_server="$(
+            az acr show \
+              --resource-group "$TARGET_RESOURCE_GROUP" \
+              --name "$acr_name" \
+              --query loginServer \
+              --output tsv
+          )"
+          [[ "$actual_login_server" == "$acr_login_server" ]]
 
-      - name: Validate runtime DB host wiring
+      - name: Deploy backend and frontend Container Apps
+        run: make foundry-app-deploy
+
+      - name: Verify active Container Apps use private ACR images
         run: |
           set -euo pipefail
           cd infra/foundry-hosted
-          postgres_server="$(azd env get-value POSTGRES_SERVER_NAME || true)"
-          runtime_database_url="$(azd env get-value RUNTIME_DATABASE_URL || true)"
-          runtime_db_host="$(printf "%s" "$runtime_database_url" | sed -E 's#^[a-zA-Z0-9+.-]+://[^@]*@([^:/?]+).*#\1#')"
-          expected_host="${postgres_server}.postgres.database.azure.com"
-          echo "runtime_db_host=${runtime_db_host:-<empty>}"
-          echo "expected_db_host=${expected_host:-<empty>}"
-          if [[ -n "${runtime_db_host}" && "${runtime_db_host}" != "${expected_host}" ]]; then
-            echo "runtime database host mismatch in azd env"
-            exit 1
-          fi
+          acr_login_server="$(azd env get-value containerRegistryLoginServer)"
+          backend_app="$(azd env get-value BACKEND_CONTAINER_APP_NAME)"
+          frontend_app="$(azd env get-value FRONTEND_CONTAINER_APP_NAME)"
+          for app in "$backend_app" "$frontend_app"; do
+            image="$(
+              az containerapp show \
+                --resource-group "$TARGET_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.template.containers[0].image' \
+                --output tsv
+            )"
+            [[ "$image" == "$acr_login_server/"* ]] || {
+              echo "Container App image is not sourced from the selected private ACR."
+              exit 1
+            }
+          done
 
-      - name: Deploy hosted agent
+      - name: Refresh hosted agent
+        if: ${{ inputs.refresh_hosted_agent }}
         run: make foundry-deploy
 
-      - name: Smoke invoke
-        if: ${{ (inputs.run_smoke || github.event.inputs.run_smoke || 'true') == 'true' }}
+      - name: Run hosted-agent smoke check
+        if: ${{ inputs.run_smoke }}
         run: make foundry-smoke
 
-      - name: Hosted E2E evidence
-        if: ${{ (inputs.run_e2e || github.event.inputs.run_e2e || 'false') == 'true' || (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: ./scripts/github/foundry_hosted_e2e.sh
-
-      - name: Ensure Python venv dependency for eval
-        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: |
-          set -euo pipefail
-          if command -v apt-get >/dev/null 2>&1; then
-            if ! python3 -m venv /tmp/foundry-eval-venv-check >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y python3-venv
-            fi
-            rm -rf /tmp/foundry-eval-venv-check
-          fi
-
-      - name: Foundry trace evaluation
-        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          set -a
-          eval "$(azd env get-values)"
-          set +a
-          if [[ -z "${FOUNDRY_PROJECTS_ENDPOINT:-}" && -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ]]; then
-            export FOUNDRY_PROJECTS_ENDPOINT="${FOUNDRY_PROJECT_ENDPOINT}"
-          fi
-          if [[ -z "${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}" && -n "${FOUNDRY_EVAL_MODEL:-}" ]]; then
-            export FOUNDRY_MODEL_DEPLOYMENT_NAME="${FOUNDRY_EVAL_MODEL}"
-          fi
-          eval_endpoint="${FOUNDRY_PROJECTS_ENDPOINT:-${FOUNDRY_PROJECT_ENDPOINT:-${AZURE_AI_PROJECT_ENDPOINT:-}}}"
-          eval_model="${FOUNDRY_MODEL_DEPLOYMENT_NAME:-${AZURE_AI_MODEL_DEPLOYMENT_NAME:-${FOUNDRY_EVAL_MODEL:-gpt-4.1-mini}}}"
-          cd ../..
-          FOUNDRY_PROJECTS_ENDPOINT="${eval_endpoint}" \
-          FOUNDRY_MODEL_DEPLOYMENT_NAME="${eval_model}" \
-          FOUNDRY_EVAL_ENFORCE_PASS=true \
-          FOUNDRY_EVAL_MAX_ERRORED=0 \
-          make eval-foundry
-
-      - name: Install Application Insights CLI extension
-        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: az extension add --name application-insights --upgrade --yes --only-show-errors
-
-      - name: Verify correlated Application Insights telemetry
-        if: ${{ (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        run: |
-          set -euo pipefail
-          cd infra/foundry-hosted
-          resource_group="$(azd env get-value AZURE_RESOURCE_GROUP)"
-          connection_json="$(azd ai connection show ApplicationInsights --output json --no-prompt)"
-          application_insights_target="$(printf '%s' "$connection_json" | jq -r '.target // .metadata.ResourceId // .properties.target // empty')"
-          if [[ -z "$application_insights_target" ]]; then
-            echo "ApplicationInsights project connection target is empty."
-            exit 1
-          fi
-          application_insights_name="${application_insights_target##*/}"
-          cd ../..
-          AZURE_RESOURCE_GROUP="$resource_group" \
-          APPLICATION_INSIGHTS_NAME="$application_insights_name" \
-          ./scripts/foundry/verify_telemetry.sh
-
-      - name: Upload hosted validation evidence
-        if: ${{ always() && (inputs.run_eval || github.event.inputs.run_eval || 'true') == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: foundry-validation-private
-          path: |
-            backend/.foundry/results/hosted-e2e-evidence.json
-            backend/.foundry/results/foundry-report.json
-            backend/.foundry/results/telemetry-verification.json
-          if-no-files-found: error
+      - name: Collect hosted release evidence
+        if: ${{ inputs.run_evidence }}
+        run: make foundry-evidence

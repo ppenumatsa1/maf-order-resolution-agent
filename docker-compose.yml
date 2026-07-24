@@ -12,7 +12,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
@@ -24,7 +24,7 @@ services:
       MOCK_MCP_API_KEY: demo-api-key
       MOCK_MCP_BEARER_TOKEN: demo-bearer-token
     ports:
-      - "8011:8011"
+      - "${MCP_PORT:-8011}:8011"
     volumes:
       - ./:/app
 
@@ -38,15 +38,13 @@ services:
       mock-mcp:
         condition: service_started
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
       APP_ENV: docker
       OTEL_SERVICE_NAME: maf-customer-resolution
-      WORKFLOW_MODE: ${WORKFLOW_MODE:-maf_sdk}
-      FOUNDRY_HOSTED_INVOCATIONS_URL: ${FOUNDRY_HOSTED_INVOCATIONS_URL:-}
-      FOUNDRY_HOSTED_API_KEY: ${FOUNDRY_HOSTED_API_KEY:-}
-      FOUNDRY_HOSTED_TIMEOUT_SECONDS: ${FOUNDRY_HOSTED_TIMEOUT_SECONDS:-30}
-      FOUNDRY_EVENT_CALLBACK_TOKEN: ${FOUNDRY_EVENT_CALLBACK_TOKEN:-}
+      RUNTIME_TARGET: ${RUNTIME_TARGET:-local_maf}
+      FOUNDRY_RESPONSES_ENDPOINT: ${FOUNDRY_RESPONSES_ENDPOINT:-}
+      FOUNDRY_RESPONSES_TIMEOUT_SECONDS: ${FOUNDRY_RESPONSES_TIMEOUT_SECONDS:-60}
       FOUNDRY_PROJECTS_ENDPOINT: ${FOUNDRY_PROJECTS_ENDPOINT:-}
       FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME:-}
       MCP_SERVER_URL: http://mock-mcp:8011/mcp
@@ -62,14 +60,12 @@ services:
     depends_on:
       - backend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      API_BASE: ${API_URL:-}
       NGINX_API_UPSTREAM: http://backend:8000
-      VITE_PROXY_TARGET: http://backend:8000
 
   playwright:
-    image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    image: mcr.microsoft.com/playwright:v1.60.0-jammy
     profiles: ["test"]
     depends_on:
       - backend
@@ -77,10 +73,10 @@ services:
     working_dir: /workspace/scripts/playwright
     environment:
       PLAYWRIGHT_BASE_URL: http://frontend:5173
-      PLAYWRIGHT_ARTIFACTS_DIR: /tmp/maf-playwright-artifacts
+      PLAYWRIGHT_ARTIFACTS_DIR: /workspace/playwright-report/docker
     volumes:
       - ./:/workspace
-    command: bash -lc "npm install && npx playwright install --with-deps && npm run test:e2e"
+    command: bash -lc "npm ci && npm run test:e2e"
 
 volumes:
   postgres-data:

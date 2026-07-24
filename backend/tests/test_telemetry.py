@@ -221,7 +221,12 @@ def test_fastapi_instrumentation_excludes_stream_route(
     app = object()
 
     assert telemetry.instrument_fastapi_app(app) is True
-    assert calls == [{"app": app, "excluded_urls": r".*/api/chat/stream/.*"}]
+    assert calls == [
+        {
+            "app": app,
+            "excluded_urls": r".*/(?:api/)?health(?:\?.*)?$|.*/api/chat/stream/.*",
+        }
+    ]
 
 
 def test_observe_maf_workflow_event_records_sample_event_types_without_content(

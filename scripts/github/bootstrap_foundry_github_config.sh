@@ -10,12 +10,10 @@ set -euo pipefail
 #   export AZURE_CLIENT_ID=...
 #   export AZURE_TENANT_ID=...
 #   export AZURE_SUBSCRIPTION_ID=...
-#   export FOUNDRY_RESOURCE_GROUP=rg-maf-ora-ni-eus-07080910
-#   export FOUNDRY_PROJECT_ID=/subscriptions/.../accounts/.../projects/order-resolution-ni
-#   export FOUNDRY_PROJECT_ENDPOINT=https://...services.ai.azure.com/api/projects/order-resolution-ni
-#   export APPINSIGHTS_APP_ID=...
-#   export AZURE_CLIENT_SECRET=...   # required when deploy auth mode is service-principal
-#   export FOUNDRY_DATABASE_URL=postgresql://...  # required for hosted runtime DB connection
+#   export FOUNDRY_RESOURCE_GROUP=rg-maf-ora-foundry-v2
+#   export FOUNDRY_PROJECT_NAME=order-resolution
+#   export POSTGRES_SERVER_NAME=<canonical-private-flexible-server>
+#   export POSTGRES_DATABASE_NAME=maf_workflow
 #   ./scripts/github/bootstrap_foundry_github_config.sh
 
 require_bin() {
@@ -33,16 +31,12 @@ require_bin jq
 : "${AZURE_TENANT_ID:?AZURE_TENANT_ID is required}"
 : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID is required}"
 : "${FOUNDRY_RESOURCE_GROUP:?FOUNDRY_RESOURCE_GROUP is required}"
-: "${FOUNDRY_PROJECT_ID:?FOUNDRY_PROJECT_ID is required}"
-: "${FOUNDRY_PROJECT_ENDPOINT:?FOUNDRY_PROJECT_ENDPOINT is required}"
-: "${APPINSIGHTS_APP_ID:?APPINSIGHTS_APP_ID is required}"
+: "${POSTGRES_SERVER_NAME:?POSTGRES_SERVER_NAME is required}"
 
-ENV_NAME="${ENV_NAME:-foundry-private-env}"
-RUNNER_LABEL="${RUNNER_LABEL:-foundry-private}"
-FOUNDRY_AZD_ENV_NAME="${FOUNDRY_AZD_ENV_NAME:-foundry-private-env}"
-FOUNDRY_LOCATION="${FOUNDRY_LOCATION:-eastus2}"
-FOUNDRY_DEPLOY_AUTH_MODE="${FOUNDRY_DEPLOY_AUTH_MODE:-service-principal}"
-FOUNDRY_DATABASE_URL="${FOUNDRY_DATABASE_URL:-}"
+ENV_NAME="foundry-private-env"
+RUNNER_LABEL="foundry-private-v2"
+FOUNDRY_PROJECT_NAME="${FOUNDRY_PROJECT_NAME:-order-resolution}"
+POSTGRES_DATABASE_NAME="${POSTGRES_DATABASE_NAME:-maf_workflow}"
 
 if [[ -z "$REPO" ]]; then
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
@@ -56,8 +50,10 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-if [[ -z "$FOUNDRY_DATABASE_URL" ]]; then
-  echo "FOUNDRY_DATABASE_URL is required."
+if [[ "$FOUNDRY_RESOURCE_GROUP" != "rg-maf-ora-foundry-v2" ||
+      "$FOUNDRY_PROJECT_NAME" != "order-resolution" ||
+      "$POSTGRES_DATABASE_NAME" != "maf_workflow" ]]; then
+  echo "This bootstrap script only configures the canonical foundry-private-env target."
   exit 1
 fi
 
@@ -73,31 +69,20 @@ fi
 echo "Creating/updating environment: $ENV_NAME"
 gh api -X PUT "repos/$REPO/environments/$ENV_NAME" >/dev/null
 
-echo "Setting repository variables"
-gh variable set RUNNER_LABEL -R "$REPO" -b "$RUNNER_LABEL"
-gh variable set AZURE_CLIENT_ID -R "$REPO" -b "$AZURE_CLIENT_ID"
-gh variable set AZURE_TENANT_ID -R "$REPO" -b "$AZURE_TENANT_ID"
-gh variable set AZURE_SUBSCRIPTION_ID -R "$REPO" -b "$AZURE_SUBSCRIPTION_ID"
-gh variable set FOUNDRY_RESOURCE_GROUP -R "$REPO" -b "$FOUNDRY_RESOURCE_GROUP"
-gh variable set FOUNDRY_PROJECT_ID -R "$REPO" -b "$FOUNDRY_PROJECT_ID"
-gh variable set FOUNDRY_PROJECT_ENDPOINT -R "$REPO" -b "$FOUNDRY_PROJECT_ENDPOINT"
-gh variable set FOUNDRY_AZD_ENV_NAME -R "$REPO" -b "$FOUNDRY_AZD_ENV_NAME"
-gh variable set FOUNDRY_LOCATION -R "$REPO" -b "$FOUNDRY_LOCATION"
-gh variable set FOUNDRY_DEPLOY_AUTH_MODE -R "$REPO" -b "$FOUNDRY_DEPLOY_AUTH_MODE"
-gh variable set APPINSIGHTS_APP_ID -R "$REPO" -b "$APPINSIGHTS_APP_ID"
-
-echo "Setting environment secret FOUNDRY_DATABASE_URL in $ENV_NAME"
-gh secret set FOUNDRY_DATABASE_URL -R "$REPO" -e "$ENV_NAME" -b "$FOUNDRY_DATABASE_URL"
-if [[ "$FOUNDRY_DEPLOY_AUTH_MODE" == "service-principal" ]]; then
-  : "${AZURE_CLIENT_SECRET:?AZURE_CLIENT_SECRET is required when FOUNDRY_DEPLOY_AUTH_MODE=service-principal}"
-  echo "Setting environment secret AZURE_CLIENT_SECRET in $ENV_NAME"
-  gh secret set AZURE_CLIENT_SECRET -R "$REPO" -e "$ENV_NAME" -b "$AZURE_CLIENT_SECRET"
-fi
+echo "Setting environment-scoped OIDC and target variables"
+gh variable set AZURE_CLIENT_ID -R "$REPO" --env "$ENV_NAME" -b "$AZURE_CLIENT_ID"
+gh variable set AZURE_TENANT_ID -R "$REPO" --env "$ENV_NAME" -b "$AZURE_TENANT_ID"
+gh variable set AZURE_SUBSCRIPTION_ID -R "$REPO" --env "$ENV_NAME" -b "$AZURE_SUBSCRIPTION_ID"
+gh variable set FOUNDRY_RESOURCE_GROUP -R "$REPO" --env "$ENV_NAME" -b "$FOUNDRY_RESOURCE_GROUP"
+gh variable set FOUNDRY_PROJECT_NAME -R "$REPO" --env "$ENV_NAME" -b "$FOUNDRY_PROJECT_NAME"
+gh variable set POSTGRES_SERVER_NAME -R "$REPO" --env "$ENV_NAME" -b "$POSTGRES_SERVER_NAME"
+gh variable set POSTGRES_DATABASE_NAME -R "$REPO" --env "$ENV_NAME" -b "$POSTGRES_DATABASE_NAME"
+gh variable set RUNNER_LABEL -R "$REPO" --env "$ENV_NAME" -b "$RUNNER_LABEL"
 
 echo "Validation: variables"
-gh variable list -R "$REPO" --json name | jq -r '.[].name' | grep -E 'RUNNER_LABEL|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID|FOUNDRY_RESOURCE_GROUP|FOUNDRY_PROJECT_ID|FOUNDRY_PROJECT_ENDPOINT|FOUNDRY_AZD_ENV_NAME|FOUNDRY_LOCATION|FOUNDRY_DEPLOY_AUTH_MODE|APPINSIGHTS_APP_ID' || true
+gh variable list -R "$REPO" --env "$ENV_NAME" --json name | jq -r '.[].name' | grep -E 'RUNNER_LABEL|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID|FOUNDRY_RESOURCE_GROUP|FOUNDRY_PROJECT_NAME|POSTGRES_SERVER_NAME|POSTGRES_DATABASE_NAME' || true
 
 echo "Validation: environment exists"
 gh api "repos/$REPO/environments/$ENV_NAME" --jq '.name'
 
-echo "Done. GitHub configuration is bootstrapped for Foundry private pipelines."
+echo "Done. The private runner must retain the selected AZD environment and its secrets locally."

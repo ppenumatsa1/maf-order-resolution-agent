@@ -13,6 +13,7 @@ Current status:
 | ---------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | Local MAF        | Implemented | FastAPI composes the shared workflow directly from `backend/app/maf/workflows/order_resolution.py`. |
 | Foundry-hosted   | Implemented | Responses-native hosted entrypoint runs the same shared MAF workflow. |
+| Private web path | Implemented locally; private-release validation pending | External frontend ACA proxies same-origin API/SSE requests to the internal FastAPI wrapper, which dispatches to private Foundry Responses and replays persisted PostgreSQL events. |
 
 Operational status note (2026-07-18):
 
@@ -37,6 +38,17 @@ Operational status note (2026-07-18):
 For Foundry-hosted conversations, the same behavior is preserved through Responses turns in the same `conversation_id`, including explanation follow-ups such as “Why was that resolution selected?”.
 
 If the same approval/rejection request is accidentally submitted more than once for a checkpoint, backend handling is idempotent and does not emit duplicate terminal events.
+
+## Private VNet browser path
+
+In the hosted private lane, the public React/Nginx frontend uses a same-origin
+`/api` proxy to the internal FastAPI Container App. The backend creates the
+Foundry Responses conversation with managed identity, and the hosted MAF agent
+persists workflow events/checkpoints in PostgreSQL. The frontend polls a newly
+created conversation until its durable projection is available, then consumes
+the unchanged native SSE events. Browser runtime configuration contains no
+backend or Foundry endpoint; only the internal wrapper reaches private data
+planes.
 
 ## End-to-End Happy Path (UI -> API -> Backend -> Postgres)
 

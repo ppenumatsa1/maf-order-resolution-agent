@@ -16,12 +16,14 @@ def test_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STORE_PROVIDER", raising=False)
     monkeypatch.delenv("RAG_PROVIDER", raising=False)
     monkeypatch.delenv("MEMORY_PROVIDER", raising=False)
+    monkeypatch.delenv("RUNTIME_TARGET", raising=False)
 
     cfg = get_config()
     assert cfg.workflow_mode == "maf_sdk"
     assert cfg.store_provider == "postgres"
     assert cfg.rag_provider == "pgvector"
     assert cfg.memory_provider == "postgres"
+    assert cfg.runtime_target == "local_maf"
 
 
 def test_config_uses_env_for_store_rag_and_memory(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,3 +43,9 @@ def test_config_ignores_workflow_mode_override(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("WORKFLOW_MODE", "invalid-mode")
     cfg = get_config()
     assert cfg.workflow_mode == "maf_sdk"
+
+
+def test_config_selects_responses_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNTIME_TARGET", "responses_wrapper")
+
+    assert get_config().runtime_target == "responses_wrapper"

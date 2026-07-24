@@ -4,6 +4,55 @@ Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from the private network path in
 `rg-maf-ora-foundry-v2`.
 
+## Current status (2026-07-24, private runner recovery)
+
+- Private ACA infrastructure provision succeeded.
+- Local ACR access denial is expected because the registry is private-network
+  accessible.
+- The manual runner workflow restore was user-approved and is scoped to
+  `foundry-private-v2` and the GitHub `foundry-private-env` environment.
+- The current V2 environment has federated identity configured and its runner
+  is online.
+- Release dispatch, deployment, and live validation remain next; no deployment
+  success is claimed here.
+
+## Latest implementation update (2026-07-24, private browser-wrapper extension)
+
+### Implemented locally
+
+1. Added the `responses_wrapper` runtime target to the FastAPI application:
+   - managed-identity dispatch to the private Foundry Responses endpoint;
+   - Foundry conversation creation and checkpoint-keyed HITL resume;
+   - idempotent dispatch persistence in `responses_dispatches`;
+   - stable native and rich SSE streams replayed from persisted workflow events.
+2. Changed the hosted UI contract to same-origin browser calls:
+   - frontend Nginx proxies `/api` to the internal backend ACA;
+   - browser runtime config no longer contains a backend or Foundry URL;
+   - hosted Playwright uses a larger HTTPS budget and can enforce same-origin
+     API assertions.
+3. Extended private Bicep and AZD configuration with:
+   - dedicated ACA subnet, external frontend, internal backend, ACR pull
+     identity, and backend Foundry User role;
+   - PostgreSQL private endpoint and DNS zone for the canonical existing server;
+   - staged database public-access lockdown script with endpoint, DNS, and
+     explicit ACA/hosted-agent connectivity-proof gates;
+   - health and chat-SSE telemetry request suppression.
+4. Local evidence:
+   - `make test`: 112 passed;
+   - `make eval-backend`: 10/10 passed;
+   - `make test-e2e`: 7/7 passed;
+   - Bicep compilation and `azd provision --preview` passed.
+
+### Deployment safety finding
+
+The private `azd provision --preview` also reported pre-existing drift on
+Foundry connections and several dependent resources. The deployment must be
+reviewed from the authenticated private runner before applying it; no ACA,
+PostgreSQL network, or Foundry resource was changed by this implementation
+update. The staged PostgreSQL lockdown remains blocked until ACA and hosted
+agent connectivity are proven through the approved private endpoint and its
+private DNS record.
+
 ## Latest execution update (2026-07-23, supported telemetry fix implemented)
 
 ### Implemented
@@ -3386,7 +3435,10 @@ Lookback window: `45m` after capacity increase.
 ### Rubber-duck review findings (high-signal)
 
 1. Verification should be considered against a reviewable commit/diff, not only a dirty working tree snapshot.
-2. `infra/foundry-hosted/iac/main.bicep` keeps storage account `publicNetworkAccess: 'Enabled'` with `networkAcls` deny+AzureServices bypass in private mode; this is an intentional exception and should remain explicitly documented/accepted as risk posture.
+2. `infra/foundry-hosted/iac/main.bicep` must keep Storage
+   `publicNetworkAccess: 'Disabled'` in private mode and explicitly retain
+   Cosmos DB `enableAutomaticFailover: true`; neither setting may drift during
+   private-lane additions.
 3. E2E failure must be root-caused to environment/startup availability vs branch regressions before sign-off.
 
 ### Outstanding tasks (autopilot handoff)

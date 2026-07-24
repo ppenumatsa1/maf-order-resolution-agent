@@ -5,7 +5,8 @@ COMPOSE_ENV_FILE ?= backend/.env
 	run-backend run-frontend format lint test test-backend eval-backend eval-foundry eval-all test-e2e manual-matrix \
 	parity-all run-mock-mcp up down logs ps docker-test \
 	validate-quick validate-full clean \
-	foundry-up foundry-provision foundry-deploy foundry-smoke foundry-access-path
+	foundry-up foundry-preflight foundry-provision-preview foundry-provision foundry-deploy foundry-hosted-refresh \
+	foundry-app-deploy foundry-connectivity-proof foundry-postgres-lockdown foundry-evidence foundry-release foundry-smoke foundry-access-path
 
 help:
 	@echo "Available targets:"
@@ -31,8 +32,16 @@ help:
 	@echo "  validate-quick  - Fast redeploy validation (Playwright + smoke if API_URL set)"
 	@echo "  validate-full   - Full validation (test + eval + e2e + design-review)"
 	@echo "  foundry-up      - Self-contained Foundry hosted-agent azd up (BYO VNET + private deps)"
+	@echo "  foundry-preflight - Verify private release inputs without changing Azure"
+	@echo "  foundry-provision-preview - Preview private infrastructure changes without applying them"
 	@echo "  foundry-provision - Provision self-contained Foundry hosted-agent infra only"
 	@echo "  foundry-deploy  - Deploy hosted agent to Foundry (after provision/up)"
+	@echo "  foundry-hosted-refresh - Optionally refresh the hosted agent (FOUNDRY_REFRESH_HOSTED_AGENT=true)"
+	@echo "  foundry-app-deploy - Deploy private backend and public frontend Container Apps"
+	@echo "  foundry-connectivity-proof - Record ACA and hosted-agent PostgreSQL connectivity proof"
+	@echo "  foundry-postgres-lockdown - Disable PostgreSQL public access using recorded connectivity proof"
+	@echo "  foundry-evidence - Collect hosted E2E, evaluation, and telemetry evidence"
+	@echo "  foundry-release - Preflight, provision, deploy apps, optional agent refresh, proof, lockdown, evidence"
 	@echo "  foundry-smoke   - Invoke hosted agent health check via responses protocol"
 	@echo "  foundry-access-path - Deploy private runner/Bastion access path via Bicep"
 	@echo "  clean           - Remove caches and test artifacts"
@@ -130,7 +139,7 @@ test-e2e:
 			echo "Backend failed to become ready for E2E. See $${backend_log}"; \
 			exit 1; \
 		fi; \
-		(cd frontend && VITE_PROXY_TARGET="$${backend_url}" VITE_API_BASE="$${backend_url}" node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "$${frontend_log}" 2>&1 & \
+		(cd frontend && VITE_PROXY_TARGET="$${backend_url}" node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "$${frontend_log}" 2>&1 & \
 		frontend_pid="$$!"; \
 		disown "$${frontend_pid}" 2>/dev/null || true; \
 		for _ in {1..30}; do \
@@ -193,7 +202,15 @@ ps:
 	docker compose --env-file $(COMPOSE_ENV_FILE) ps
 
 docker-test:
-	docker compose --env-file $(COMPOSE_ENV_FILE) --profile test up --build --abort-on-container-exit playwright
+	@set -euo pipefail; \
+	project="maf-order-resolution-agent-test"; \
+	backend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+	frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+	postgres_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+	mcp_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+	trap 'docker compose -p "$$project" --env-file $(COMPOSE_ENV_FILE) --profile test down --volumes --remove-orphans >/dev/null 2>&1 || true' EXIT; \
+	BACKEND_PORT="$$backend_port" FRONTEND_PORT="$$frontend_port" POSTGRES_PORT="$$postgres_port" MCP_PORT="$$mcp_port" \
+		docker compose -p "$$project" --env-file $(COMPOSE_ENV_FILE) --profile test up --build --abort-on-container-exit playwright
 
 validate-quick:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
@@ -215,7 +232,15 @@ foundry-up:
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
 	cd infra/foundry-hosted && azd up --no-prompt
 
+foundry-preflight:
+	./scripts/foundry/preflight_private_release.sh
+
+foundry-provision-preview: foundry-preflight
+	./scripts/foundry/ensure_foundry_azd_defaults.sh
+	cd infra/foundry-hosted && azd provision --preview --no-prompt $(if $(FOUNDRY_PROVISION_NO_STATE),--no-state,)
+
 foundry-provision:
+	$(MAKE) foundry-preflight
 	./scripts/foundry/ensure_foundry_azd_defaults.sh
 	cd infra/foundry-hosted && azd provision --no-prompt $(if $(FOUNDRY_PROVISION_NO_STATE),--no-state,)
 
@@ -228,6 +253,51 @@ foundry-deploy:
 	set -a && eval "$$(azd env get-values)" && set +a && \
 	azd deploy "$$agent_name" --no-prompt --timeout "$${FOUNDRY_DEPLOY_TIMEOUT_SECONDS:-1800}" && \
 	azd ai agent show "$$agent_name" --output json --no-prompt >/dev/null
+
+foundry-app-deploy:
+	@test -f backend/Dockerfile
+	@test -f frontend/Dockerfile
+	cd infra/foundry-hosted && azd deploy backend --no-prompt
+	cd infra/foundry-hosted && azd deploy frontend --no-prompt
+
+foundry-hosted-refresh:
+	@if [[ "$${FOUNDRY_REFRESH_HOSTED_AGENT:-false}" == "true" ]]; then \
+		$(MAKE) foundry-deploy; \
+	else \
+		echo "Skipping hosted-agent refresh (set FOUNDRY_REFRESH_HOSTED_AGENT=true to deploy it)."; \
+	fi
+
+foundry-connectivity-proof:
+	./scripts/foundry/verify_private_connectivity.sh
+
+foundry-postgres-lockdown:
+	@set -euo pipefail; \
+	cd infra/foundry-hosted && \
+	resource_group="$${FOUNDRY_RESOURCE_GROUP:-$${AZURE_RESOURCE_GROUP:-$$(azd env get-value AZURE_RESOURCE_GROUP)}}"; \
+	postgres_server="$${POSTGRES_SERVER_NAME:-$$(azd env get-value POSTGRES_SERVER_NAME 2>/dev/null || true)}"; \
+	postgres_fqdn="$${POSTGRES_SERVER_FQDN:-$$(azd env get-value POSTGRES_SERVER_FQDN 2>/dev/null || true)}"; \
+	private_endpoint="$${POSTGRES_PRIVATE_ENDPOINT_NAME:-$$(azd env get-value POSTGRES_PRIVATE_ENDPOINT_NAME 2>/dev/null || true)}"; \
+	private_dns_zone="$${POSTGRES_PRIVATE_DNS_ZONE_NAME:-$$(azd env get-value POSTGRES_PRIVATE_DNS_ZONE_NAME 2>/dev/null || true)}"; \
+	AZURE_RESOURCE_GROUP="$$resource_group" \
+	POSTGRES_SERVER_NAME="$$postgres_server" \
+	POSTGRES_SERVER_FQDN="$$postgres_fqdn" \
+	POSTGRES_PRIVATE_ENDPOINT_NAME="$$private_endpoint" \
+	POSTGRES_PRIVATE_DNS_ZONE_NAME="$$private_dns_zone" \
+	POSTGRES_CONNECTIVITY_EVIDENCE_FILE="$${POSTGRES_CONNECTIVITY_EVIDENCE_FILE:-../../backend/.foundry/results/private-connectivity-proof.json}" \
+	"../../scripts/foundry/harden_postgres_private_access.sh"
+
+foundry-evidence:
+	./scripts/foundry/collect_private_release_evidence.sh
+
+foundry-release:
+	$(MAKE) validate-full
+	$(MAKE) foundry-provision-preview
+	$(MAKE) foundry-provision
+	$(MAKE) foundry-app-deploy
+	$(MAKE) foundry-hosted-refresh
+	$(MAKE) foundry-connectivity-proof
+	$(MAKE) foundry-postgres-lockdown
+	$(MAKE) foundry-evidence
 
 foundry-smoke:
 	@set -euo pipefail; \

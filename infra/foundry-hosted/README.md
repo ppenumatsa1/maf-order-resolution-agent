@@ -12,15 +12,16 @@ This branch keeps one hosted deployment lane:
 
 ## What this stack includes
 
-- `azure.yaml` service host: `azure.ai.agent` (`order-resolution-hosted`)
+- `azure.yaml` service hosts: internal `backend`, external `frontend`, and
+  `azure.ai.agent` (`order-resolution-hosted`)
 - `azure.yaml` deploy source path: `./agent` (generated from `backend/` by sync helper)
 - Bicep orchestration in `iac/main.bicep` for:
   - Foundry account/project + model deployments
-  - VNet + agent subnet + private endpoint subnet
+  - VNet + dedicated Container Apps subnet + agent subnet + private endpoint subnet
   - private DNS zones and private endpoints
   - NAT gateway
   - optional private runner access (runner subnet, Bastion, VM, UAMI, subscription RBAC)
-  - Storage, Search, Cosmos, ACR, Log Analytics, App Insights
+  - Storage, Search, Cosmos, ACR, Log Analytics, App Insights, and PostgreSQL private endpoint/DNS
   - capability-host and connection modules
 
 ## Parameter profiles
@@ -35,26 +36,48 @@ This branch keeps one hosted deployment lane:
 
 Provisioning now reads `iac/main.parameters.json`, which maps AZD environment keys (for example `NETWORK_MODE`) into Bicep parameters. The helper script `scripts/foundry/ensure_foundry_azd_defaults.sh` backfills missing keys so ad-hoc `make foundry-provision` and CI runs stay deterministic.
 
-## Deployment flow
+## Private release flow
 
-Use authenticated local commands from this repository for the private runner path:
+PR validation is credential-free through
+`.github/workflows/foundry-private-validation.yml`. Authenticated infrastructure
+and application deployment is available only by manually dispatching
+`foundry-provision.yml` or `foundry-deploy.yml`; both are protected by the
+`foundry-private-env` GitHub environment and run only on
+`self-hosted,foundry-private-v2` with Azure OIDC. They use the runner's retained
+selected AZD environment, so do not recreate that environment or place its
+database credentials in GitHub workflow configuration.
+Before the first dispatch, configure the environment-scoped nonsecret OIDC and
+target variables with `scripts/github/bootstrap_foundry_github_config.sh` and
+enable the required GitHub environment protection rules.
 
-1. `make foundry-provision`
-2. `make foundry-deploy`
-3. `make foundry-smoke`
+The release target executes this fixed sequence:
 
-## Authentication mode
-
-Workflow auth mode is controlled by repo variable `FOUNDRY_DEPLOY_AUTH_MODE`.
-
-- `service-principal` (default): requires environment secret `AZURE_CLIENT_SECRET`
-- `managed-identity`: uses VM UAMI login
-
-Bootstrap GitHub variables/secrets with:
+1. local validation and private release preflight;
+2. non-mutating provisioning preview, then infrastructure provisioning;
+3. backend then frontend ACA deployment;
+4. optional hosted-agent refresh (`FOUNDRY_REFRESH_HOSTED_AGENT=true`);
+5. ACA readiness plus hosted-agent workflow proof of PostgreSQL connectivity;
+6. PostgreSQL public-network lockdown and removal of the Azure-services firewall rule;
+7. hosted E2E, Foundry evaluation, and correlated telemetry evidence.
 
 ```bash
-./scripts/github/bootstrap_foundry_github_config.sh
+make foundry-provision-preview  # no Azure resource changes
+FOUNDRY_REFRESH_HOSTED_AGENT=true make foundry-release
 ```
+
+The frontend is the only external ingress and proxies browser `/api` traffic to
+the internal backend ACA. Lockdown consumes
+`backend/.foundry/results/private-connectivity-proof.json`, produced by
+`make foundry-connectivity-proof`; it cannot be authorized with a manually set
+environment flag. The proof must report the same canonical FQDN as
+`POSTGRES_SERVER_NAME`/`RUNTIME_DATABASE_URL`; by default it expires after one
+hour. Lockdown additionally verifies that the approved `postgresqlServer`
+private endpoint, private-DNS A record, and VNet link all target that server.
+
+The latest recorded target is
+`maffndpgv20722.postgres.database.azure.com`. This is an operational record,
+not a template default: `make foundry-preflight` and the selected AZD
+environment are authoritative if the canonical server changes.
 
 ## Private runner bootstrap
 
@@ -72,8 +95,13 @@ Required environment variables include:
 
 Optional defaults:
 
-- `RUNNER_LABEL` (default: `foundry-private`)
+- `RUNNER_LABEL` (active target: `foundry-private-v2`)
 - `RUNNER_VERSION` (default: `2.328.0`)
+
+The private runner is the only GitHub Actions host permitted to run the manual
+provision/deployment lane and remains an in-VNet operator host for the local
+release flow. Dispatch provision before application deployment; use the local
+release flow for the full proof and PostgreSQL lockdown sequence.
 
 ## Runner readiness check
 
@@ -81,19 +109,19 @@ Verify GitHub sees an online runner for the required label:
 
 ```bash
 REPO=ppenumatsa1/maf-order-resolution-agent \
-RUNNER_LABEL=foundry-private \
+RUNNER_LABEL=foundry-private-v2 \
 ./scripts/github/verify_foundry_runner_ready.sh
 ```
 
 ## Existing VM runbook
 
-Run this on the retained private runner VM (`vm-maffnd-runner`) via SSH/Bastion:
+Run this on the active private runner VM via SSH/Bastion:
 
 ```bash
 cd /path/to/repo
 export GH_RUNNER_PAT=<github_pat_with_repo_workflow_scope>
 export REPO=ppenumatsa1/maf-order-resolution-agent
-export RUNNER_LABEL=foundry-private
+export RUNNER_LABEL=foundry-private-v2
 
 ./scripts/github/bootstrap_vm_runner_host.sh
 ./scripts/github/register_vm_runner.sh
@@ -114,7 +142,8 @@ gh api repos/ppenumatsa1/maf-order-resolution-agent/actions/runners \
 - Azure RunCommand reports `Conflict ... execution is in progress`:
   - Use direct SSH/Bastion for bootstrap/register actions.
 - Runner label mismatch:
-  - Ensure runner is configured with `self-hosted,foundry-private`.
+  - Ensure the active runner is configured with
+    `self-hosted,foundry-private-v2`.
 - Missing tools on runner host:
   - Re-run `./scripts/github/bootstrap_vm_runner_host.sh`.
 

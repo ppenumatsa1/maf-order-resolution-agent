@@ -1,8 +1,11 @@
 # Azure Deployment Plan
 
-> **Status:** Validated for Foundry Private VNET Deployment
+> **Status:** Validated for authenticated private release; deployment is pending.
+> The IaC explicitly preserves private Storage/Cosmos networking and Cosmos
+> automatic failover; the corrected authenticated preview passed without either
+> unsafe change.
 
-Current target (2026-07-23):
+Current target (2026-07-24):
 
 - AZD project: `infra/foundry-hosted`
 - AZD environment: `foundry-private-env`
@@ -10,11 +13,44 @@ Current target (2026-07-23):
 - private runner label: `foundry-private-v2`
 - resource group: `rg-maf-ora-foundry-v2`
 - location: `eastus2` with PostgreSQL in `centralus`
-- deployment path: private provision -> immutable hosted-agent deploy -> smoke ->
-  hosted E2E evidence -> Foundry conversation trace evaluation -> correlated
-  Application Insights verification
+- latest recorded canonical PostgreSQL server:
+  `maffndpgv20722.postgres.database.azure.com`; release preflight remains the
+  authority and requires `RUNTIME_DATABASE_URL` to match the current
+  `POSTGRES_SERVER_NAME` FQDN exactly
+- deployment path: local preflight -> non-mutating private provision preview ->
+  private provision -> backend/frontend ACA deploy -> optional hosted-agent refresh
+  -> ACA/hosted PostgreSQL connectivity proof -> explicit PostgreSQL public-access
+  lockdown -> hosted E2E evidence -> Foundry conversation trace evaluation ->
+  correlated Application Insights verification
 - telemetry source: supported Foundry `ApplicationInsights` project connection;
   no manual hosted connection-string aliases or fallback payloads
+
+Private web extension (2026-07-24):
+
+- one VNet-integrated Container Apps environment on a dedicated
+  `snet-container-apps` subnet;
+- external frontend ACA only, with same-origin `/api` and SSE proxying;
+- internal FastAPI ACA with managed-identity access to private Foundry
+  Responses and PostgreSQL;
+- PostgreSQL private endpoint and
+  `privatelink.postgres.database.azure.com` DNS are provisioned first;
+- `scripts/foundry/harden_postgres_private_access.sh` disables PostgreSQL public
+  access and removes `allow-azure-services` only after
+  `private-connectivity-proof.json` records ACA and hosted-agent private
+  database connectivity for the canonical FQDN. The proof is fresh for at most
+  one hour by default, and lockdown also verifies the approved
+  `postgresqlServer` private endpoint and its private-DNS record.
+- GitHub Actions PR/static validation is credential-free. Protected manual
+  provision/deploy dispatches use Azure OIDC only on
+  `self-hosted,foundry-private-v2` in `foundry-private-env`; the runner retains
+  the selected AZD environment and no Azure or database secret is in workflow
+  configuration. The local `make foundry-release` flow remains the full
+  provision, proof, lockdown, and evidence path.
+
+The corrected authenticated 2026-07-24 preview plans the frontend/backend ACA,
+ACA environment, PostgreSQL private endpoint, and VNet subnet additions. It
+keeps Storage `publicNetworkAccess` disabled in private mode and Cosmos DB
+`enableAutomaticFailover` true, matching the existing secure resources.
 
 The older Azure Container Apps evidence below is retained as historical context;
 it is not the target of this private Foundry deployment.

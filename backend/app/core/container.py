@@ -4,6 +4,7 @@ from app.core.config import get_config
 from app.core.database import postgres_db
 from app.core.telemetry import record_workflow_event
 from app.infrastructure.events import EventBus
+from app.infrastructure.foundry import ResponsesWorkflowClient
 from app.infrastructure.mcp import MCPKnowledgeTool
 from app.infrastructure.persistence import CheckpointStore, WorkflowRunRepository
 from app.infrastructure.persistence.session_memory import create_memory_store
@@ -43,4 +44,9 @@ workflow = create_workflow(
 order_resolution_service = OrderResolutionService(
     workflow=workflow,
     workflow_run_repository=workflow_run_repository,
+    responses_client=(
+        ResponsesWorkflowClient.from_environment()
+        if config.runtime_target == "responses_wrapper"
+        else None
+    ),
 )

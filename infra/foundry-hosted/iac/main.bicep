@@ -68,6 +68,30 @@ param privateEndpointSubnetName string = 'snet-private-endpoints'
 @description('Private endpoint subnet prefix')
 param privateEndpointSubnetPrefix string = '10.90.2.0/24'
 
+@description('Azure Container Apps infrastructure subnet name')
+param containerAppsSubnetName string = 'snet-container-apps'
+
+@description('Azure Container Apps infrastructure subnet prefix. Consumption environments require at least /23.')
+param containerAppsSubnetPrefix string = '10.90.6.0/23'
+
+@description('Enable the public frontend and internal backend Container Apps.')
+param enableContainerApps bool = true
+
+@description('Container Apps environment name')
+param containerAppsEnvironmentName string = 'maffnd-private-aca'
+
+@description('Internal FastAPI Container App name')
+param backendContainerAppName string = 'maffnd-private-backend'
+
+@description('External React frontend Container App name')
+param frontendContainerAppName string = 'maffnd-private-frontend'
+
+@description('Backend bootstrap or azd-published container image')
+param backendImageName string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
+@description('Frontend bootstrap or azd-published container image')
+param frontendImageName string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
 @description('Create NAT gateway for controlled outbound from the agent subnet.')
 param createNatGateway bool = true
 
@@ -134,6 +158,7 @@ param privateDnsZoneNames array = [
   'privatelink.cognitiveservices.azure.com'
   'privatelink.openai.azure.com'
   'privatelink.azurecr.io'
+  'privatelink.postgres.database.azure.com'
 ]
 
 @description('Create private DNS VNet links.')
@@ -206,11 +231,12 @@ param runtimeConnectionName string = 'orderresolutionruntimesecrets'
 @secure()
 param runtimeDatabaseUrl string = ''
 
-@description('Create PostgreSQL Flexible Server for workflow persistence.')
-param createPostgresServer bool = true
+@description('Create PostgreSQL Flexible Server for workflow persistence. Set false when connecting the private endpoint to an existing canonical server.')
+param createPostgresServer bool = false
 
-@description('Optional override for PostgreSQL server name.')
-param postgresServerName string = 'maffndpg7930'
+@description('Canonical PostgreSQL Flexible Server name. Required whether creating or using an existing server.')
+@minLength(3)
+param postgresServerName string
 
 @description('PostgreSQL administrator username.')
 param postgresAdminUsername string = 'pgadmin'
@@ -224,6 +250,12 @@ param postgresDatabaseName string = 'maf_workflow'
 
 @description('PostgreSQL server location.')
 param postgresLocation string = 'centralus'
+
+@description('Enable the PostgreSQL private endpoint and DNS zone.')
+param enablePostgresPrivateEndpoint bool = true
+
+@description('Keep the temporary Azure-services PostgreSQL firewall rule during staged cutover.')
+param createPostgresAzureServicesFirewall bool = true
 
 var suffix = toLower(uniqueString(resourceGroup().id))
 var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
@@ -241,6 +273,10 @@ var effectiveStorageConnectionName = '${effectiveStorageAccountName}-${foundryPr
 var effectiveAiSearchConnectionName = '${effectiveAiSearchName}-${foundryProjectName}'
 var effectiveRuntimeConnectionName = runtimeConnectionName
 var effectivePostgresServerName = toLower(postgresServerName)
+var postgresFullyQualifiedDomainName = '${effectivePostgresServerName}.postgres.database.azure.com'
+var effectivePrivateDnsZoneNames = union(privateDnsZoneNames, [
+  'privatelink.postgres.database.azure.com'
+])
 var effectiveCosmosLocation = empty(cosmosLocation) ? location : cosmosLocation
 var privateNetworking = networkMode == 'private'
 var enableNat = privateNetworking && createNatGateway
@@ -248,6 +284,7 @@ var enablePrivateDns = privateNetworking
 var enablePrivateEndpoints = privateNetworking && createPrivateEndpoints
 var enableAgentNetworkInjection = privateNetworking && enableStandardAgentNetworkInjection
 var enablePrivateRunnerAccess = privateNetworking && createPrivateRunnerAccess
+var enablePrivateContainerApps = privateNetworking && enableContainerApps
 var agentSubnetResourceId = resourceId('Microsoft.Network/virtualNetworks/subnets', effectiveVirtualNetworkName, agentSubnetName)
 var foundryNetworkInjectionProperties = enableAgentNetworkInjection ? {
   #disable-next-line BCP037
@@ -283,6 +320,7 @@ var foundryServicesZoneIndex = indexOf(privateDnsZoneNames, foundryServicesZoneN
 var foundryCognitiveZoneIndex = indexOf(privateDnsZoneNames, foundryCognitiveZoneName)
 var foundryOpenAiZoneIndex = indexOf(privateDnsZoneNames, foundryOpenAiZoneName)
 var acrZoneIndex = indexOf(privateDnsZoneNames, 'privatelink.azurecr.io')
+var postgresZoneIndex = indexOf(effectivePrivateDnsZoneNames, 'privatelink.postgres.database.azure.com')
 var resolvedProjectPrincipalId = manageProjectConnections ? projectConnections!.outputs.projectPrincipalId : foundryProject.identity.principalId
 var resolvedProjectWorkspaceId = manageProjectConnections ? projectConnections!.outputs.projectWorkspaceId : ''
 var resolvedCosmosConnectionName = manageProjectConnections ? projectConnections!.outputs.cosmosConnection : effectiveCosmosConnectionName
@@ -336,8 +374,9 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
-    // Keep private endpoint path while allowing trusted Azure service ingress needed by Foundry eval assetstore.
-    publicNetworkAccess: 'Enabled'
+    // The private deployment uses the blob private endpoint; do not reopen an
+    // existing private Storage account for Azure-service traffic.
+    publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
     networkAcls: privateNetworking ? {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
@@ -372,7 +411,11 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' =
   }
 }
 
-resource postgresAzureServicesFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (createPostgresServer) {
+resource existingPostgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' existing = if (!createPostgresServer) {
+  name: effectivePostgresServerName
+}
+
+resource postgresAzureServicesFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (createPostgresServer && createPostgresAzureServicesFirewall) {
   name: 'allow-azure-services'
   parent: postgresServer
   properties: {
@@ -415,6 +458,7 @@ resource cosmosDB 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-preview' = {
       }
     ]
     publicNetworkAccess: privateNetworking ? 'Disabled' : 'Enabled'
+    enableAutomaticFailover: true
     disableLocalAuth: true
   }
 }
@@ -575,6 +619,11 @@ module virtualNetwork './modules/vnet.bicep' = if (privateNetworking) {
     natGatewayResourceId: enableNat ? natGateway.id : ''
     privateEndpointSubnetName: privateEndpointSubnetName
     privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
+    // Keep this subnet declared even when apps are disabled on a rerun, so the
+    // VNet deployment cannot prune an environment's infrastructure subnet.
+    createContainerAppsSubnet: true
+    containerAppsSubnetName: containerAppsSubnetName
+    containerAppsSubnetPrefix: containerAppsSubnetPrefix
     // Keep runner subnet declared in VNet to avoid destructive subnet pruning on shared reruns.
     createRunnerSubnet: true
     runnerSubnetName: runnerSubnetName
@@ -633,7 +682,7 @@ module privateDns './modules/private-dns.bicep' = if (enablePrivateDns) {
   params: {
     enabled: true
     virtualNetworkId: virtualNetwork!.outputs.id
-    zoneNames: privateDnsZoneNames
+    zoneNames: effectivePrivateDnsZoneNames
     createVnetLinks: createPrivateDnsVnetLinks
   }
 }
@@ -725,6 +774,332 @@ module acrPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivate
   }
 }
 
+module postgresPrivateEndpoint './modules/private-endpoint.bicep' = if (enablePrivateEndpoints && enablePostgresPrivateEndpoint) {
+  name: 'private-endpoint-postgres'
+  params: {
+    enabled: true
+    location: location
+    name: '${namePrefix}-postgres-pe-${suffix}'
+    subnetId: virtualNetwork!.outputs.privateEndpointSubnetId
+    targetResourceId: createPostgresServer ? postgresServer!.id : existingPostgresServer!.id
+    groupIds: [
+      'postgresqlServer'
+    ]
+    privateDnsZoneIds: [
+      privateDns!.outputs.zoneIds[postgresZoneIndex]
+    ]
+  }
+}
+
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = if (enablePrivateContainerApps) {
+  name: containerAppsEnvironmentName
+  location: location
+  properties: {
+    vnetConfiguration: {
+      infrastructureSubnetId: virtualNetwork!.outputs.containerAppsSubnetId
+      internal: false
+    }
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+  }
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource containerAppsRegistryPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (enablePrivateContainerApps) {
+  name: '${containerAppsEnvironmentName}-acr-pull'
+  location: location
+}
+
+resource containerAppsRegistryPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enablePrivateContainerApps) {
+  name: guid(containerRegistry.id, containerAppsRegistryPullIdentity!.id, 'acr-pull')
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalId: containerAppsRegistryPullIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendContainerApp 'Microsoft.App/containerApps@2024-03-01' = if (enablePrivateContainerApps) {
+  name: backendContainerAppName
+  location: location
+  tags: {
+    'azd-service-name': 'backend'
+  }
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${containerAppsRegistryPullIdentity!.id}': {}
+    }
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment!.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          identity: containerAppsRegistryPullIdentity!.id
+        }
+      ]
+      secrets: [
+        {
+          name: 'database-url'
+          value: runtimeDatabaseUrl
+        }
+        {
+          name: 'application-insights-connection-string'
+          value: applicationInsights.properties.ConnectionString
+        }
+      ]
+      ingress: {
+        external: false
+        allowInsecure: false
+        targetPort: 8000
+        transport: 'http'
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'backend'
+          image: backendImageName
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'APP_ENV'
+              value: 'aca-private'
+            }
+            {
+              name: 'STORE_PROVIDER'
+              value: 'postgres'
+            }
+            {
+              name: 'RUNTIME_TARGET'
+              value: 'responses_wrapper'
+            }
+            {
+              name: 'FOUNDRY_RESPONSES_ENDPOINT'
+              value: foundryHostedResponsesUrl
+            }
+            {
+              name: 'FOUNDRY_RESPONSES_TIMEOUT_SECONDS'
+              value: '120'
+            }
+            {
+              name: 'FOUNDRY_PROJECTS_ENDPOINT'
+              value: foundryProjectEndpoint
+            }
+            {
+              name: 'FOUNDRY_MODEL_DEPLOYMENT_NAME'
+              value: foundryChatDeploymentName
+            }
+            {
+              name: 'ENABLE_TELEMETRY'
+              value: 'true'
+            }
+            {
+              name: 'ENABLE_INSTRUMENTATION'
+              value: 'true'
+            }
+            {
+              name: 'OTEL_SERVICE_NAME'
+              value: 'maf-order-resolution-private-aca-backend'
+            }
+            {
+              name: 'OTEL_SERVICE_NAMESPACE'
+              value: 'maf-order-resolution'
+            }
+            {
+              name: 'OTEL_RECORD_CONTENT'
+              value: 'false'
+            }
+            {
+              name: 'DATABASE_URL'
+              secretRef: 'database-url'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'application-insights-connection-string'
+            }
+            {
+              name: 'APPINSIGHTS_CONNECTION_STRING'
+              secretRef: 'application-insights-connection-string'
+            }
+          ]
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: 8000
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 24
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: 8000
+              }
+              initialDelaySeconds: 15
+              periodSeconds: 10
+              timeoutSeconds: 3
+              failureThreshold: 3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: 8000
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 6
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 2
+      }
+    }
+  }
+  dependsOn: [
+    containerAppsRegistryPullRoleAssignment
+    postgresPrivateEndpoint
+  ]
+}
+
+resource backendContainerAppFoundryUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enablePrivateContainerApps) {
+  name: guid(foundryAccount.id, backendContainerApp!.id, 'backend-foundry-user')
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+    principalId: backendContainerApp!.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource frontendContainerApp 'Microsoft.App/containerApps@2024-03-01' = if (enablePrivateContainerApps) {
+  name: frontendContainerAppName
+  location: location
+  tags: {
+    'azd-service-name': 'frontend'
+  }
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${containerAppsRegistryPullIdentity!.id}': {}
+    }
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment!.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          identity: containerAppsRegistryPullIdentity!.id
+        }
+      ]
+      ingress: {
+        external: true
+        allowInsecure: false
+        targetPort: 5173
+        transport: 'http'
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'frontend'
+          image: frontendImageName
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            {
+              name: 'NGINX_API_UPSTREAM'
+              value: 'https://${backendContainerApp!.properties.configuration.ingress.fqdn}'
+            }
+          ]
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: 5173
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 24
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: 5173
+              }
+              initialDelaySeconds: 15
+              periodSeconds: 10
+              timeoutSeconds: 3
+              failureThreshold: 3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: 5173
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 6
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 2
+      }
+    }
+  }
+  dependsOn: [
+    backendContainerApp
+  ]
+}
+
 module projectConnections './modules/foundry-project-existing-connections.bicep' = if (manageProjectConnections) {
   name: 'project-connections-${suffix}'
   params: {
@@ -743,7 +1118,6 @@ module projectConnections './modules/foundry-project-existing-connections.bicep'
     cosmosConnectionName: effectiveCosmosConnectionName
     storageConnectionName: effectiveStorageConnectionName
     aiSearchConnectionName: effectiveAiSearchConnectionName
-    applicationInsightsName: applicationInsights.name
     applicationInsightsResourceId: applicationInsights.id
   }
   dependsOn: [
@@ -882,13 +1256,23 @@ var isCrossRegionAiSearch = toLower(effectiveAiSearchLocation) != toLower(locati
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryProjectEndpoint string = foundryProjectEndpoint
+// Keep the deployment's canonical project coordinates in the AZD environment.
+// These legacy aliases are consumed by the hosted-agent CLI and release tooling.
+output AZURE_AI_PROJECT_ID string = foundryProject.id
+output FOUNDRY_PROJECT_ID string = foundryProject.id
+output AZURE_AI_PROJECT_ENDPOINT string = foundryProjectEndpoint
+output FOUNDRY_PROJECT_ENDPOINT string = foundryProjectEndpoint
 output foundryNetworkInjectionCount int = enableAgentNetworkInjection ? length(foundryAccount.properties.networkInjections) : 0
 output natGatewayId string = enableNat ? natGateway.id : ''
 output foundryHostedResponsesUrl string = foundryHostedResponsesUrl
 output foundryEventCallbackTokenSettingName string = foundryEventCallbackTokenSettingName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
-output postgresFullyQualifiedDomainName string = createPostgresServer ? postgresServer!.properties.fullyQualifiedDomainName : ''
+output postgresFullyQualifiedDomainName string = postgresFullyQualifiedDomainName
 output postgresDatabaseName string = postgresDatabaseName
+output POSTGRES_SERVER_NAME string = effectivePostgresServerName
+output POSTGRES_SERVER_FQDN string = postgresFullyQualifiedDomainName
+output POSTGRES_PRIVATE_DNS_ZONE_NAME string = 'privatelink.postgres.database.azure.com'
+output POSTGRES_PRIVATE_ENDPOINT_NAME string = (enablePrivateEndpoints && enablePostgresPrivateEndpoint) ? postgresPrivateEndpoint!.outputs.name : ''
 output accountCapabilityHost string = createAccountCapabilityHost ? addAccountCapabilityHost!.outputs.accountCapabilityHostName : ''
 output projectCapabilityHost string = createProjectCapabilityHost ? addProjectCapabilityHost!.outputs.projectCapabilityHostName : ''
 output projectPrincipalId string = resolvedProjectPrincipalId
@@ -906,11 +1290,13 @@ output virtualNetwork object = privateNetworking ? {
   id: virtualNetwork!.outputs.id
   agentSubnetId: virtualNetwork!.outputs.agentSubnetId
   privateEndpointSubnetId: virtualNetwork!.outputs.privateEndpointSubnetId
+  containerAppsSubnetId: virtualNetwork!.outputs.containerAppsSubnetId
 } : {
   name: ''
   id: ''
   agentSubnetId: ''
   privateEndpointSubnetId: ''
+  containerAppsSubnetId: ''
 }
 output privateEndpointIds object = enablePrivateEndpoints ? {
   storage: storagePrivateEndpoint!.outputs.id
@@ -918,13 +1304,20 @@ output privateEndpointIds object = enablePrivateEndpoints ? {
   cosmos: cosmosPrivateEndpoint!.outputs.id
   foundry: foundryPrivateEndpoint!.outputs.id
   acr: acrPrivateEndpoint!.outputs.id
+  postgres: postgresPrivateEndpoint!.outputs.id
 } : {
   storage: ''
   aiSearch: ''
   cosmos: ''
   foundry: ''
   acr: ''
+  postgres: ''
 }
+output AZURE_CONTAINER_ENVIRONMENT_NAME string = enablePrivateContainerApps ? containerAppsEnvironment!.name : ''
+output SERVICE_BACKEND_NAME string = enablePrivateContainerApps ? backendContainerApp!.name : ''
+output BACKEND_INTERNAL_FQDN string = enablePrivateContainerApps ? backendContainerApp!.properties.configuration.ingress.fqdn : ''
+output SERVICE_FRONTEND_NAME string = enablePrivateContainerApps ? frontendContainerApp!.name : ''
+output WEB_URL string = enablePrivateContainerApps ? 'https://${frontendContainerApp!.properties.configuration.ingress.fqdn}' : ''
 output aiSearchTopologyWarning string = (privateNetworking && isCrossRegionAiSearch) ? 'WARNING: AI Search location differs from deployment location; this introduces a cross-region private-link data path and should be reviewed for latency/residency requirements.' : ''
 output privateRunnerAccess object = enablePrivateRunnerAccess ? {
   enabled: true

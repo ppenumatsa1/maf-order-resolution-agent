@@ -19,12 +19,20 @@ async function submitWorkflowMessage(page: Page, message: string) {
 }
 
 async function openStudioWithHealthyHistory(page: Page) {
+  const historyResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/workflows",
+  );
   await page.goto("/");
+  const response = await historyResponse;
 
   const sidebar = page.locator(".sidebar-history");
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByText("Loading workflow history...")).toBeHidden();
   await expect(sidebar.locator(".error-text")).toHaveCount(0);
+  expect(new URL(response.url()).origin).toBe(new URL(page.url()).origin);
+  await expect.poll(() =>
+    page.evaluate(() => window.__APP_CONFIG__),
+  ).toEqual({});
   await expect(
     page.getByText(/Unexpected token|not valid JSON|<!doctype/i),
   ).toHaveCount(0);

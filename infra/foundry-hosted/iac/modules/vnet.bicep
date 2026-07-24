@@ -25,6 +25,15 @@ param privateEndpointSubnetName string = 'pe-subnet'
 @description('Address prefix for the private endpoint subnet')
 param privateEndpointSubnetPrefix string = '192.168.1.0/24'
 
+@description('Whether to include a dedicated Azure Container Apps infrastructure subnet')
+param createContainerAppsSubnet bool = false
+
+@description('Azure Container Apps infrastructure subnet name')
+param containerAppsSubnetName string = 'snet-container-apps'
+
+@description('Azure Container Apps infrastructure subnet prefix')
+param containerAppsSubnetPrefix string = '192.168.6.0/23'
+
 @description('Whether to include runner subnet in the VNet subnet collection')
 param createRunnerSubnet bool = false
 
@@ -64,6 +73,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
           name: agentSubnetName
           properties: {
             addressPrefix: agentSubnetPrefix
+            privateEndpointNetworkPolicies: 'Disabled'
             natGateway: empty(natGatewayResourceId) ? null : {
               id: natGatewayResourceId
             }
@@ -90,11 +100,29 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
           }
         }
       ],
+      createContainerAppsSubnet ? [
+        {
+          name: containerAppsSubnetName
+          properties: {
+            addressPrefix: containerAppsSubnetPrefix
+            privateEndpointNetworkPolicies: 'Disabled'
+            delegations: [
+              {
+                name: 'Microsoft.App-environments'
+                properties: {
+                  serviceName: 'Microsoft.App/environments'
+                }
+              }
+            ]
+          }
+        }
+      ] : [],
       createRunnerSubnet ? [
         {
           name: runnerSubnetName
           properties: {
             addressPrefix: runnerSubnetPrefix
+            privateEndpointNetworkPolicies: 'Disabled'
             networkSecurityGroup: empty(runnerSubnetNsgResourceId) ? null : {
               id: runnerSubnetNsgResourceId
             }
@@ -109,6 +137,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = if (enabled) {
           name: bastionSubnetName
           properties: {
             addressPrefix: bastionSubnetPrefix
+            privateEndpointNetworkPolicies: 'Disabled'
           }
         }
       ] : []
@@ -120,3 +149,4 @@ output id string = resourceId('Microsoft.Network/virtualNetworks', vnetName)
 output name string = vnetName
 output agentSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, agentSubnetName)
 output privateEndpointSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, privateEndpointSubnetName)
+output containerAppsSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, containerAppsSubnetName)

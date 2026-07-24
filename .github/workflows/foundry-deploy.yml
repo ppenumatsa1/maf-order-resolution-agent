@@ -111,6 +111,7 @@ jobs:
           acr_login_server="${acr_login_servers[0]}"
           [[ "$acr_login_server" == *.azurecr.io ]]
           azd env set containerRegistryLoginServer "$acr_login_server"
+          azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "$acr_login_server"
 
       - name: Deploy backend and frontend Container Apps
         run: make foundry-app-deploy

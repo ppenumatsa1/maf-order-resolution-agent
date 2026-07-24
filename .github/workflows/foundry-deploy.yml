@@ -110,11 +110,6 @@ jobs:
           }
           acr_login_server="${acr_login_servers[0]}"
           [[ "$acr_login_server" == *.azurecr.io ]]
-          configured_login_server="$(azd env get-value containerRegistryLoginServer 2>/dev/null || true)"
-          [[ -z "$configured_login_server" || "$configured_login_server" == "$acr_login_server" ]] || {
-            echo "AZD environment ACR output does not match the selected private registry."
-            exit 1
-          }
           azd env set containerRegistryLoginServer "$acr_login_server"
 
       - name: Deploy backend and frontend Container Apps

@@ -80,6 +80,14 @@ jobs:
           azd ext install azure.ai.agents --no-prompt
           azd ext install azure.ai.connections --no-prompt
 
+      - name: Initialize missing private release defaults
+        run: |
+          set -euo pipefail
+          cd infra/foundry-hosted
+          azd env select "$AZD_ENVIRONMENT_NAME" --no-prompt
+          cd ../..
+          ./scripts/foundry/ensure_foundry_azd_defaults.sh
+
       - name: Verify the selected private deployment environment
         run: ./scripts/foundry/validate_private_runner_environment.sh
 

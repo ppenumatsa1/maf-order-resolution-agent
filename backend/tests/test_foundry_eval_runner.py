@@ -137,12 +137,19 @@ def test_conversation_trace_criteria_use_messages_mapping() -> None:
 
 def test_trace_run_reuses_exact_conversations_at_conversation_level() -> None:
     conversation_ids = ["conv-low", "conv-high", "conv-damaged"]
+    application_insights_resource_id = (
+        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Insights/components/app-insights"
+    )
 
-    trace_run = _build_conversation_trace_run(conversation_ids)
+    trace_run = _build_conversation_trace_run(
+        conversation_ids,
+        application_insights_resource_id,
+    )
 
     assert trace_run == {
         "data_source": {
             "type": "azure_ai_trace_data_source_preview",
+            "application_insights_resource_id": application_insights_resource_id,
             "trace_source": {
                 "type": "conversation_id_source",
                 "conversation_ids": conversation_ids,
@@ -151,6 +158,11 @@ def test_trace_run_reuses_exact_conversations_at_conversation_level() -> None:
         "extra_body": {"evaluation_level": "conversation"},
     }
     assert "target" not in trace_run["data_source"]
+
+
+def test_trace_run_requires_application_insights_resource_id() -> None:
+    with pytest.raises(ValueError, match="APPINSIGHTS_RESOURCE_ID"):
+        _build_conversation_trace_run(["conv-low"], "")
 
 
 def test_terminal_eval_statuses_use_openai_canceled_spelling() -> None:

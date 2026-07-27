@@ -32,6 +32,20 @@ private.
 - Correlated Application Insights telemetry was recorded for all hosted E2E
   conversations.
 
+## Telemetry noise verification (2026-07-27)
+
+Application deployment run
+[`30284034863`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30284034863)
+refreshed the private backend and hosted agent, then completed smoke, hosted
+E2E, trace evaluation, and telemetry verification. A live frontend Playwright
+run completed all seven scenarios against the external frontend.
+
+The post-deployment Application Insights query window contained zero
+`/api/workflows` request rows while retaining 68 correlated workflow spans,
+including model, checkpoint, HITL wait/resume/response, resolution, and output
+spans. Browser workflow-history and detail polling are therefore absent from
+the transaction view without suppressing end-to-end workflow visibility.
+
 ## Telemetry contract
 
 The private project-level `ApplicationInsights` connection is non-shared and

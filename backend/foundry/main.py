@@ -612,8 +612,9 @@ def _initialize_app() -> Any:
         telemetry_status.otlp_configured,
     )
     logger.info(
-        "Hosted env diagnostic: appinsights=%s database_url=%s runtime_database_url=%s",
+        "Hosted env diagnostic: appinsights=%s monitor_key=%s database_url=%s runtime_database_url=%s",
         _env_state("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+        _env_state("MAF_MONITOR_INSTRUMENTATION_KEY"),
         _env_state("DATABASE_URL"),
         _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),
     )
@@ -623,6 +624,9 @@ def _initialize_app() -> Any:
             {
                 "applicationinsights_connection_string": _env_state(
                     "APPLICATIONINSIGHTS_CONNECTION_STRING"
+                ),
+                "maf_monitor_instrumentation_key": _env_state(
+                    "MAF_MONITOR_INSTRUMENTATION_KEY"
                 ),
                 "database_url": _env_state("DATABASE_URL"),
                 "foundry_runtime_database_url": _env_state("FOUNDRY_RUNTIME_DATABASE_URL"),

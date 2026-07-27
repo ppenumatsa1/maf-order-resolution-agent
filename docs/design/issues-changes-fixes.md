@@ -54,6 +54,23 @@ browser wiring failure. The connection’s non-secret control-plane configuratio
 was read back after provisioning and matches the required project connection
 contract above.
 
+### Telemetry evidence gap
+
+The direct Application Insights verification for the same three conversations
+also did not pass:
+
+- correlation query window: `2026-07-27T13:23:32Z` through query time;
+- matched conversations: `0/3`;
+- correlated rows: `0`;
+- correlated exceptions: `0`.
+
+The configured component and Log Analytics workspace resolve correctly, but the
+component contains only two trace rows in the preceding 24 hours. This confirms
+the immediate issue is missing hosted-flow telemetry ingestion, rather than a
+KQL filter or a per-conversation exception. Telemetry validation remains
+blocked until private Foundry-hosted telemetry is emitted to the configured
+component and the three captured conversations can be correlated.
+
 ### Deferred until evaluation evidence is green
 
 Do **not** run PostgreSQL public-access lockdown yet. Fresh ACA and

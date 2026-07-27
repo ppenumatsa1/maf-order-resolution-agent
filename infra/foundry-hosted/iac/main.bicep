@@ -560,11 +560,26 @@ var logAnalyticsReaderRoleDefinitionId = subscriptionResourceId(
   '73c42c96-874c-492b-b04d-ab87d138a893'
 )
 
+var monitoringMetricsPublisherRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '3913510d-42f4-4e42-8a64-420c390055eb'
+)
+
 resource projectTraceReaderApplicationInsightsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(applicationInsights.id, foundryProject.id, logAnalyticsReaderRoleDefinitionId)
   scope: applicationInsights
   properties: {
     roleDefinitionId: logAnalyticsReaderRoleDefinitionId
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectTelemetryPublisherApplicationInsightsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(applicationInsights.id, foundryProject.id, monitoringMetricsPublisherRoleDefinitionId)
+  scope: applicationInsights
+  properties: {
+    roleDefinitionId: monitoringMetricsPublisherRoleDefinitionId
     principalId: foundryProject.identity.principalId
     principalType: 'ServicePrincipal'
   }

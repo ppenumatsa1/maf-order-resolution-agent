@@ -66,13 +66,17 @@ FOUNDRY_REFRESH_HOSTED_AGENT=true make foundry-release
 ```
 
 The frontend is the only external ingress and proxies browser `/api` traffic to
-the internal backend ACA. Lockdown consumes
+the internal backend ACA. Both Container Apps keep one minimum replica so the
+private connectivity proof can verify the backend's PostgreSQL schema startup
+without a scale-to-zero race. Lockdown consumes
 `backend/.foundry/results/private-connectivity-proof.json`, produced by
 `make foundry-connectivity-proof`; it cannot be authorized with a manually set
 environment flag. The proof must report the same canonical FQDN as
 `POSTGRES_SERVER_NAME`/`RUNTIME_DATABASE_URL`; by default it expires after one
 hour. Lockdown additionally verifies that the approved `postgresqlServer`
 private endpoint, private-DNS A record, and VNet link all target that server.
+It removes the Azure-services firewall rule before disabling public access
+because Flexible Server no longer permits firewall-rule operations afterward.
 
 The latest recorded target is
 `maffndpgv20722.postgres.database.azure.com`. This is an operational record,

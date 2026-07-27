@@ -996,7 +996,7 @@ resource backendContainerApp 'Microsoft.App/containerApps@2024-03-01' = if (enab
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: 1
         maxReplicas: 2
       }
     }
@@ -1105,7 +1105,7 @@ resource frontendContainerApp 'Microsoft.App/containerApps@2024-03-01' = if (ena
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: 1
         maxReplicas: 2
       }
     }

@@ -157,12 +157,43 @@ if [[ "${public_network_access}" != "Enabled" && "${public_network_access}" != "
 fi
 
 if [[ "${public_network_access}" == "Enabled" ]]; then
-az postgres flexible-server update \
-  --resource-group "${AZURE_RESOURCE_GROUP}" \
-  --name "${postgres_server_name}" \
-  --public-access Disabled \
-  --only-show-errors \
-  --output none
+  azure_services_rule="$(
+    az postgres flexible-server firewall-rule list \
+      --resource-group "${AZURE_RESOURCE_GROUP}" \
+      --name "${postgres_server_name}" \
+      --query "[?name=='allow-azure-services'].name" \
+      --output tsv
+  )"
+  if [[ "${azure_services_rule}" == "allow-azure-services" ]]; then
+    az postgres flexible-server firewall-rule delete \
+      --resource-group "${AZURE_RESOURCE_GROUP}" \
+      --name "${postgres_server_name}" \
+      --rule-name allow-azure-services \
+      --yes \
+      --only-show-errors \
+      --output none
+
+    azure_services_rule="$(
+      az postgres flexible-server firewall-rule list \
+        --resource-group "${AZURE_RESOURCE_GROUP}" \
+        --name "${postgres_server_name}" \
+        --query "[?name=='allow-azure-services'].name" \
+        --output tsv
+    )"
+    if [[ -n "${azure_services_rule}" ]]; then
+      echo "Azure-services firewall rule removal did not complete."
+      exit 1
+    fi
+  fi
+
+  # Firewall APIs are unavailable after public access is disabled, so remove
+  # the Azure-services rule while the endpoint is still queryable.
+  az postgres flexible-server update \
+    --resource-group "${AZURE_RESOURCE_GROUP}" \
+    --name "${postgres_server_name}" \
+      --public-access Disabled \
+      --only-show-errors \
+      --output none
 fi
 
 public_network_access="$(
@@ -173,37 +204,8 @@ public_network_access="$(
     --output tsv
 )"
 if [[ "${public_network_access}" != "Disabled" ]]; then
-  echo "PostgreSQL public access was not disabled; preserving the Azure-services firewall rule."
+  echo "PostgreSQL public access was not disabled."
   exit 1
-fi
-
-azure_services_rule="$(
-  az postgres flexible-server firewall-rule list \
-    --resource-group "${AZURE_RESOURCE_GROUP}" \
-    --name "${postgres_server_name}" \
-    --query "[?name=='allow-azure-services'].name" \
-    --output tsv
-)"
-if [[ "${azure_services_rule}" == "allow-azure-services" ]]; then
-  az postgres flexible-server firewall-rule delete \
-    --resource-group "${AZURE_RESOURCE_GROUP}" \
-    --name "${postgres_server_name}" \
-    --rule-name allow-azure-services \
-    --yes \
-    --only-show-errors \
-    --output none
-
-  azure_services_rule="$(
-    az postgres flexible-server firewall-rule list \
-      --resource-group "${AZURE_RESOURCE_GROUP}" \
-      --name "${postgres_server_name}" \
-      --query "[?name=='allow-azure-services'].name" \
-      --output tsv
-  )"
-  if [[ -n "${azure_services_rule}" ]]; then
-    echo "Azure-services firewall rule removal did not complete."
-    exit 1
-  fi
 fi
 
 echo "PostgreSQL public access disabled and Azure-services firewall rule removed."

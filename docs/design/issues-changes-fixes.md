@@ -4,7 +4,7 @@ Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from the private network path in
 `rg-maf-ora-foundry-v2`.
 
-## Current corrective change (2026-07-27, credentialed private App Insights association)
+## Resolved corrective change (2026-07-27, credentialed private App Insights association)
 
 The previous non-shared `ProjectManagedIdentity` project connection was valid
 in ARM but neither caused Foundry to inject
@@ -21,10 +21,23 @@ project-level `ApplicationInsights` connection with:
 The temporary `MAF_MONITOR_INSTRUMENTATION_KEY` custom-key mapping, telemetry
 bootstrap branch, hosted diagnostic state, and runtime secret have been
 removed. The only supported hosted telemetry source is Foundry's native
-injection of `APPLICATIONINSIGHTS_CONNECTION_STRING`. This corrective change
-has passed focused manifest/telemetry tests and Bicep compilation; it still
-requires private infrastructure provisioning, hosted-agent refresh, native
-injection diagnostics, trace evaluation, and correlated telemetry evidence.
+injection of `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+
+Private provision run
+[`30279268002`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30279268002)
+and application/evidence run
+[`30279570995`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30279570995)
+completed successfully. The latter produced:
+
+- three hosted E2E conversations;
+- a completed trace evaluation
+  `eval_4f266d5c26574777ad4b415114b92524` /
+  `evalrun_73f7470a32c743d58d44dbcb281c2c28`, with zero errored items;
+- 121 correlated Application Insights rows across all three conversations.
+
+This resolves the former `Application Insights resource id is required for
+trace evaluations` platform-association error and proves native hosted
+telemetry ingestion without a runtime fallback.
 
 ## Latest execution update (2026-07-27, private ACA deployment and E2E evidence)
 

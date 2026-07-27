@@ -202,7 +202,7 @@ def test_fastapi_instrumentation_respects_telemetry_flag(
     assert telemetry.instrument_fastapi_app(object()) is False
 
 
-def test_fastapi_instrumentation_excludes_stream_route(
+def test_fastapi_instrumentation_excludes_non_business_polling_routes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, Any]] = []
@@ -224,7 +224,11 @@ def test_fastapi_instrumentation_excludes_stream_route(
     assert calls == [
         {
             "app": app,
-            "excluded_urls": r".*/(?:api/)?health(?:\?.*)?$|.*/api/chat/stream/.*",
+            "excluded_urls": (
+                r".*/(?:api/)?health(?:\?.*)?$"
+                r"|.*/api/chat/stream/.*"
+                r"|.*/api/workflows(?:/.*)?(?:\?.*)?$"
+            ),
         }
     ]
 

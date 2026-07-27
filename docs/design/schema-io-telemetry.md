@@ -77,9 +77,10 @@ Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentatio
 
 The internal FastAPI wrapper accepts either the canonical or full
 `APPINSIGHTS_CONNECTION_STRING` alias, preferring the region-aware full value.
-FastAPI instrumentation excludes health probes and chat SSE transport requests
-so App Insights keeps workflow, model, checkpoint, and HITL correlation signal
-without Container Apps probe noise.
+FastAPI instrumentation excludes health probes, chat SSE transport, and
+workflow-history/detail polling requests. App Insights retains the correlated
+workflow, model, checkpoint, and HITL spans without browser polling or
+Container Apps probe noise.
 
 MAF workflow stream events are observed from `workflow.run(..., stream=True)` for `executor_invoked`, `executor_completed`, and terminal `output` events. Full event payload/content is not recorded unless `OTEL_RECORD_CONTENT=true`.
 

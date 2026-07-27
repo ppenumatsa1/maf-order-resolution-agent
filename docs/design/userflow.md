@@ -41,7 +41,7 @@ If the same approval/rejection request is accidentally submitted more than once 
 
 ## Private VNet browser path
 
-In the hosted private lane, the public React/Nginx frontend uses a same-origin
+In the hosted private lane, the external React/Nginx frontend uses a same-origin
 `/api` proxy to the internal FastAPI Container App. The backend creates the
 Foundry Responses conversation with managed identity, and the hosted MAF agent
 persists workflow events/checkpoints in PostgreSQL. The frontend polls a newly

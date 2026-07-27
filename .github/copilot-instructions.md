@@ -22,7 +22,9 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 
 Canonical contract: `docs/design/engineering-operating-model.md`.
 
-Current hosted gate posture is private-lane-first. Use private Foundry as the default hosted validation/deployment lane unless a documented contract update explicitly re-enables public-lane hosted gates.
+Current hosted gate posture uses private Foundry for all hosted validation and
+deployment. Do not introduce an additional hosted deployment path without a
+documented contract update.
 
 The private browser topology is external frontend ACA -> same-origin proxy ->
 internal FastAPI ACA -> private Foundry Responses -> private PostgreSQL. Only

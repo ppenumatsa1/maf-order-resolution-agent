@@ -103,7 +103,7 @@ A change is done only when all applicable items are true:
 | MAF/Foundry runtime change | local gates + focused hosted-entry tests + `make eval-backend` | Private Foundry deploy + smoke + E2E evidence + enforced conversation trace evaluation + correlated telemetry verification |
 | IaC/network/identity/deploy workflow change | local gates as applicable + IaC review | `azure-validation` -> `azure-deployment` -> `azure-telemetry-validation` |
 | Persistence/checkpoint/idempotency change | local gates + restart/resume/idempotency assertions | Hosted smoke for resume and duplicate HITL response behavior |
-| Private browser/ACA/network change | local gates + IaC review + Bicep preview | Private-runner deployment, public-frontend Playwright, private DNS/public-access checks, and telemetry correlation |
+| Private browser/ACA/network change | local gates + IaC review + Bicep preview | Private-runner deployment, external-frontend Playwright, private DNS/public-access checks, and telemetry correlation |
 
 `make eval-foundry` remains report-only for ad hoc/local use. The private release
 workflow first exercises low-risk and HITL scenarios once, then enforces Foundry

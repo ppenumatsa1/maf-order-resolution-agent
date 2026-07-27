@@ -24,7 +24,7 @@ Deliver a verifiable multi-agent workflow for customer order issue resolution th
 
 ## High-Level Runtime Architecture
 
-The private web topology has one public application ingress and private
+The private web topology has one external frontend ingress and private
 application data planes:
 
 ```text

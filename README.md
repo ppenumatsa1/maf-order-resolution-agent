@@ -41,22 +41,21 @@ If someone starts from this README, this path should let them understand and run
 | -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
 | Local MAF            | Implemented | Shared MAF workflow (`backend/app/maf/workflows/order_resolution.py`)                                       |
 | Foundry hosted agent | Implemented (private VNet lane retained) | Shared workflow hosted at `backend/foundry/main.py` with Responses protocol conversation turns              |
-| Private web delivery | Implemented locally; private-release validation pending | Public frontend ACA proxies same-origin `/api` and SSE to an internal FastAPI ACA, which calls private Foundry Responses and PostgreSQL. |
+| Private web delivery | Validated on the private release path | External frontend ACA proxies same-origin `/api` and SSE to an internal FastAPI ACA, which calls private Foundry Responses and PostgreSQL. |
 
 MAF internals are split for maintainability into `backend/app/maf/prompts`,
 `agents`, `tools`, `executors`, `runner`, and `workflows`.
 
-## Latest Foundry trace status (2026-07-24)
+## Latest Foundry trace status (2026-07-27)
 
-- Private Foundry workflow, PostgreSQL state, and HITL behavior have prior hosted
-  E2E evidence.
-- The current scratch-lane telemetry fix adds the supported
-  `ApplicationInsights` project connection and removes manual connection-string
-  aliases. A fresh private provision/deploy is still required to record final
-  App Insights and Foundry trace-evaluation evidence.
-- The private web extension is implemented locally. Its authenticated release
-  still requires private-runner validation, current PostgreSQL connectivity
-  proof, and only then PostgreSQL public-access lockdown.
+- The private Foundry workflow, PostgreSQL state, and HITL behavior have hosted
+  E2E and correlated Application Insights evidence.
+- Hosted monitoring uses the private project-level `ApplicationInsights`
+  connection and Foundry's native
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` injection; do not add runtime
+  connection-string aliases or instrumentation-key fallbacks.
+- Private release and database lockdown remain gated by a fresh ACA and
+  hosted-agent connectivity proof for the canonical PostgreSQL FQDN.
 - Current private telemetry RCA and run evidence are tracked in:
   - [docs/design/issues-changes-fixes.md](docs/design/issues-changes-fixes.md)
 

@@ -15,6 +15,11 @@ from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
 _OBSERVABILITY_CONFIGURED = False
 logger = logging.getLogger(__name__)
+_FASTAPI_EXCLUDED_URLS = (
+    r".*/(?:api/)?health(?:\?.*)?$"
+    r"|.*/api/chat/stream/.*"
+    r"|.*/api/workflows(?:/.*)?(?:\?.*)?$"
+)
 _SENSITIVE_ATTRIBUTE_KEYS = {
     "comments",
     "data",
@@ -185,7 +190,7 @@ def instrument_fastapi_app(app: Any) -> bool:
     try:
         FastAPIInstrumentor.instrument_app(
             app,
-            excluded_urls=r".*/(?:api/)?health(?:\?.*)?$|.*/api/chat/stream/.*",
+            excluded_urls=_FASTAPI_EXCLUDED_URLS,
         )
     except Exception:
         logger.exception("FastAPI telemetry instrumentation setup failed")

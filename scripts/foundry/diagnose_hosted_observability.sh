@@ -79,9 +79,14 @@ printf '%s\n' "$diagnostic_lines" |
     -e 's#([a-zA-Z][a-zA-Z0-9+.-]*://)[^[:space:]@]+@#\1***@#g' \
     -e 's/(password|token|secret|connection string)=([^[:space:]]+)/\1=***/Ig'
 
-if ! grep -q '"applicationinsights_connection_string":{"present":true' <<<"$diagnostic_lines"; then
-  echo "Foundry did not inject APPLICATIONINSIGHTS_CONNECTION_STRING into the hosted agent."
+if grep -q '"applicationinsights_connection_string":{"present":true' <<<"$diagnostic_lines"; then
+  echo "Hosted Application Insights platform injection is present."
+  exit 0
+fi
+
+if ! grep -q 'Hosted observability initialized:.*azure_monitor=True' <<<"$diagnostic_lines"; then
+  echo "Hosted telemetry is not configured by either platform injection or the protected fallback."
   exit 1
 fi
 
-echo "Hosted Application Insights injection is present."
+echo "Hosted telemetry is configured through the protected instrumentation-key fallback."

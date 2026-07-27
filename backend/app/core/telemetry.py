@@ -127,12 +127,6 @@ def setup_observability() -> ObservabilityStatus:
         app_insights_connection_string = alias_connection_string
     else:
         app_insights_connection_string = canonical_connection_string or alias_connection_string
-    if not app_insights_connection_string:
-        instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY") or os.getenv(
-            "APPINSIGHTS_INSTRUMENTATION_KEY"
-        ) or os.getenv("MAF_MONITOR_INSTRUMENTATION_KEY")
-        if instrumentation_key:
-            app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
     if app_insights_connection_string:
         app_insights_connection_string = app_insights_connection_string.strip().rstrip(";")
 

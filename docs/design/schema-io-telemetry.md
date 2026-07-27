@@ -73,7 +73,7 @@ Foundry endpoint.
 
 ## App Insights Wiring
 
-Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Local processes can set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. Hosted private agents retain the Foundry `ApplicationInsights` `ProjectManagedIdentity` connection for trace evaluation. When Foundry fails to inject its reserved connection string, the agent resolves a single instrumentation key through the protected `orderresolutionruntimesecrets` connection into `MAF_MONITOR_INSTRUMENTATION_KEY`; it never maps a connection string, API key, or telemetry value into browser-visible configuration. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
+Telemetry is enabled by default (`ENABLE_TELEMETRY=true`) and MAF instrumentation is enabled by default (`ENABLE_INSTRUMENTATION=true`). Local processes can set `APPLICATIONINSIGHTS_CONNECTION_STRING` to export through Azure Monitor Application Insights. The private Foundry project owns a non-shared `ApplicationInsights` connection using its protected App Insights connection-string credential; Foundry injects the reserved `APPLICATIONINSIGHTS_CONNECTION_STRING` into the hosted agent. The runtime has no custom instrumentation-key fallback. No telemetry credential is mapped into browser-visible configuration. Local OTLP tracing remains available through `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
 
 The internal FastAPI wrapper accepts either the canonical or full
 `APPINSIGHTS_CONNECTION_STRING` alias, preferring the region-aware full value.

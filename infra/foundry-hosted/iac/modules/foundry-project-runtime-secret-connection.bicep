@@ -14,10 +14,6 @@ param runtimeConnectionName string = 'orderresolutionruntimesecrets'
 @secure()
 param runtimeDatabaseUrl string
 
-@description('Application Insights instrumentation key to store under appinsights_instrumentation_key')
-@secure()
-param applicationInsightsInstrumentationKey string
-
 resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
   name: accountName
 }
@@ -35,7 +31,6 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-previ
       credentials: {
         keys: {
           database_url: runtimeDatabaseUrl
-          appinsights_instrumentation_key: applicationInsightsInstrumentationKey
         }
       }
       metadata: {

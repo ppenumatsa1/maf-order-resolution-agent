@@ -1134,6 +1134,7 @@ module projectConnections './modules/foundry-project-existing-connections.bicep'
     storageConnectionName: effectiveStorageConnectionName
     aiSearchConnectionName: effectiveAiSearchConnectionName
     applicationInsightsResourceId: applicationInsights.id
+    applicationInsightsConnectionString: applicationInsights.properties.ConnectionString
   }
   dependsOn: [
     foundryProject
@@ -1151,7 +1152,6 @@ module runtimeConnection './modules/foundry-project-runtime-secret-connection.bi
     location: location
     runtimeConnectionName: effectiveRuntimeConnectionName
     runtimeDatabaseUrl: runtimeDatabaseUrl
-    applicationInsightsInstrumentationKey: applicationInsights.properties.InstrumentationKey
   }
   dependsOn: [
     foundryProject

@@ -27,6 +27,11 @@ Hosted validation and deployment are private-lane-first in the current operating
   ACA share a VNet-integrated environment on a dedicated subnet. Foundry,
   PostgreSQL, ACR, and application data planes remain private; Azure Monitor
   uses managed ingestion for telemetry.
+ - **Private Foundry monitoring:** the project-level `ApplicationInsights`
+  connection remains non-shared and holds its protected connection-string
+  credential. Hosted agents rely only on the platform-injected
+  `APPLICATIONINSIGHTS_CONNECTION_STRING`; application manifests and runtime
+  secret connections must not introduce an instrumentation-key fallback.
 - **PostgreSQL cutover:** target the canonical Flexible Server FQDN, bind its
   `postgresqlServer` private endpoint to
   `privatelink.postgres.database.azure.com`, and retain public access plus the

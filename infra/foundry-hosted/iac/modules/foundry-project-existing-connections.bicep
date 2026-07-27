@@ -46,6 +46,10 @@ param aiSearchConnectionName string
 @description('Resource ID of the existing Application Insights resource')
 param applicationInsightsResourceId string
 
+@description('Application Insights connection string stored as the AppInsights connection credential')
+@secure()
+param applicationInsightsConnectionString string
+
 resource searchService 'Microsoft.Search/searchServices@2024-06-01-preview' existing = {
   name: aiSearchName
   scope: resourceGroup(aiSearchSubscriptionId, aiSearchResourceGroupName)
@@ -119,8 +123,11 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-previ
       category: 'AppInsights'
       target: applicationInsightsResourceId
       #disable-next-line BCP036
-      authType: 'ProjectManagedIdentity'
+      authType: 'ApiKey'
       isSharedToAll: false
+      credentials: {
+        key: applicationInsightsConnectionString
+      }
       metadata: {
         ApiType: 'Azure'
         ResourceId: applicationInsightsResourceId

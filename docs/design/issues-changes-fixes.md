@@ -4,6 +4,28 @@ Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from the private network path in
 `rg-maf-ora-foundry-v2`.
 
+## Current corrective change (2026-07-27, credentialed private App Insights association)
+
+The previous non-shared `ProjectManagedIdentity` project connection was valid
+in ARM but neither caused Foundry to inject
+`APPLICATIONINSIGHTS_CONNECTION_STRING` nor satisfied the trace-evaluation
+service association. The private infrastructure now configures the existing
+project-level `ApplicationInsights` connection with:
+
+- `authType: ApiKey`;
+- the protected App Insights connection string in `credentials.key`;
+- `isSharedToAll: false`;
+- the canonical component resource ID in both `target` and
+  `metadata.ResourceId`.
+
+The temporary `MAF_MONITOR_INSTRUMENTATION_KEY` custom-key mapping, telemetry
+bootstrap branch, hosted diagnostic state, and runtime secret have been
+removed. The only supported hosted telemetry source is Foundry's native
+injection of `APPLICATIONINSIGHTS_CONNECTION_STRING`. This corrective change
+has passed focused manifest/telemetry tests and Bicep compilation; it still
+requires private infrastructure provisioning, hosted-agent refresh, native
+injection diagnostics, trace evaluation, and correlated telemetry evidence.
+
 ## Latest execution update (2026-07-27, private ACA deployment and E2E evidence)
 
 ### Completed

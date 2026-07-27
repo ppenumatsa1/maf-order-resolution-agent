@@ -48,8 +48,27 @@ session_id="$(
     jq -r 'first(.. | objects | .id? | strings) // empty'
 )"
 if [[ -z "$session_id" ]]; then
-  echo "No hosted-agent session is available for observability diagnostics."
-  exit 1
+  # Browser Responses traffic does not create a session addressable through azd.
+  # Create one low-risk probe so the runner can retrieve its startup diagnostics.
+  diagnostic_message="${FOUNDRY_OBSERVABILITY_DIAGNOSTIC_MESSAGE:-Check the delivery status of order ORD-1001.}"
+  AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+    azd ai agent invoke "$AGENT_NAME" "$diagnostic_message" \
+      --protocol responses \
+      --new-conversation \
+      --new-session \
+      --no-prompt >/dev/null
+  sessions_json="$(
+    AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+      azd ai agent sessions list --agent-name "$AGENT_NAME" --limit 10 --output json --no-prompt
+  )"
+  session_id="$(
+    printf '%s' "$sessions_json" |
+      jq -r 'first(.. | objects | .id? | strings) // empty'
+  )"
+  if [[ -z "$session_id" ]]; then
+    echo "The low-risk diagnostic probe did not create a hosted-agent session."
+    exit 1
+  fi
 fi
 
 diagnostic_lines="$(

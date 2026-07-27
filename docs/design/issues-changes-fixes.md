@@ -71,6 +71,31 @@ KQL filter or a per-conversation exception. Telemetry validation remains
 blocked until private Foundry-hosted telemetry is emitted to the configured
 component and the three captured conversations can be correlated.
 
+### RBAC remediation retest (2026-07-27)
+
+To rule out telemetry-write authorization, private provision run
+[`30270637194`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30270637194)
+successfully granted the Foundry project identity `Monitoring Metrics Publisher`
+on the single Application Insights component. The identity now has both:
+
+- `Log Analytics Reader` for trace evaluation reads;
+- `Monitoring Metrics Publisher` for `Microsoft.Insights/Telemetry/Write` and
+  `Microsoft.Insights/Metrics/Write`.
+
+The hosted agent was refreshed and full evidence rerun
+[`30270954466`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30270954466)
+again passed deployment, private ACR validation, hosted smoke, and hosted
+browser E2E. The trace evaluator still failed with the same service response:
+
+- evaluation ID: `eval_990120384e9b443c8751e2006d42c784`;
+- evaluation run ID: `evalrun_464dd979fc674b27b9612752a24ccd00`;
+- error: `Application Insights resource id is required for trace evaluations.`
+
+Therefore the remaining blocker is not missing project-identity telemetry write
+RBAC. It is a Foundry trace-evaluation project-association/telemetry-ingestion
+issue that requires platform-level investigation before the evaluation,
+telemetry, connectivity-proof, and PostgreSQL-lockdown gates can proceed.
+
 ### Deferred until evaluation evidence is green
 
 Do **not** run PostgreSQL public-access lockdown yet. Fresh ACA and

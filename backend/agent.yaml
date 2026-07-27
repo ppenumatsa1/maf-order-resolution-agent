@@ -22,6 +22,8 @@ environment_variables:
       value: ${{connections.orderresolutionruntimesecrets.credentials.database_url}}
     - name: RUNTIME_DATABASE_URL
       value: ${{connections.orderresolutionruntimesecrets.credentials.database_url}}
+    - name: MAF_MONITOR_INSTRUMENTATION_KEY
+      value: ${{connections.orderresolutionruntimesecrets.credentials.appinsights_instrumentation_key}}
     - name: APP_ENV
       value: ${APP_ENV}
     - name: STORE_PROVIDER

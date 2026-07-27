@@ -172,7 +172,11 @@ def test_hosted_manifest_uses_private_safe_environment_settings() -> None:
     assert "name: APPLICATIONINSIGHTS_CONNECTION_STRING" not in manifest_text
     assert "APPINSIGHTS_CONNECTION_STRING" not in manifest_text
     assert "MAF_APPINSIGHTS_" not in manifest_text
-    assert "MAF_MONITOR_" not in manifest_text
+    assert (
+        "name: MAF_MONITOR_INSTRUMENTATION_KEY\n"
+        "      value: ${{connections.orderresolutionruntimesecrets.credentials."
+        "appinsights_instrumentation_key}}"
+    ) in manifest_text
     assert "name: FOUNDRY_PROJECTS_ENDPOINT\n      value: ${FOUNDRY_PROJECTS_ENDPOINT}" in (
         manifest_text
     )

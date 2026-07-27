@@ -1151,6 +1151,7 @@ module runtimeConnection './modules/foundry-project-runtime-secret-connection.bi
     location: location
     runtimeConnectionName: effectiveRuntimeConnectionName
     runtimeDatabaseUrl: runtimeDatabaseUrl
+    applicationInsightsInstrumentationKey: applicationInsights.properties.InstrumentationKey
   }
   dependsOn: [
     foundryProject

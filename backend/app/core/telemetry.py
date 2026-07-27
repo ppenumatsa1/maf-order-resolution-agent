@@ -130,7 +130,7 @@ def setup_observability() -> ObservabilityStatus:
     if not app_insights_connection_string:
         instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY") or os.getenv(
             "APPINSIGHTS_INSTRUMENTATION_KEY"
-        )
+        ) or os.getenv("MAF_MONITOR_INSTRUMENTATION_KEY")
         if instrumentation_key:
             app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
     if app_insights_connection_string:

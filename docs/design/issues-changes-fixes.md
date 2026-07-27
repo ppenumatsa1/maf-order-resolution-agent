@@ -155,6 +155,20 @@ for this private lane: it would replace `ProjectManagedIdentity` and
 private identity contract and escalate the platform discrepancy with the
 project connection ID, hosted version `23`, and diagnostic run ID above.
 
+### Protected instrumentation-key fallback (2026-07-27)
+
+Because the private runtime's connection-string injection is absent, the
+private Bicep deployment adds only the component instrumentation key to the
+existing protected `orderresolutionruntimesecrets` CustomKeys connection. The
+hosted manifest resolves it into the neutral
+`MAF_MONITOR_INSTRUMENTATION_KEY` variable. The telemetry bootstrap constructs
+the minimum `InstrumentationKey=<UUID>` connection string in process.
+
+This preserves the non-shared `ProjectManagedIdentity` `ApplicationInsights`
+project connection for Foundry trace evaluation, does not put a connection
+string in source, deployment output, browser configuration, or logs, and avoids
+the semicolon-delimited runtime-substitution failure.
+
 ### Deferred until evaluation evidence is green
 
 Do **not** run PostgreSQL public-access lockdown yet. Fresh ACA and

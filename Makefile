@@ -65,17 +65,67 @@ test-e2e:
 	@if [[ -n "$${PLAYWRIGHT_BASE_URL:-}" ]]; then \
 		cd scripts/playwright && npm run test:e2e; \
 	else \
-		health_json="$$(curl -fsS http://localhost:8000/api/health 2>/dev/null || true)"; \
-		if [[ -z "$$health_json" || "$$health_json" != *'"workflow_mode":"maf_sdk"'* ]]; then \
-			$(MAKE) COMPOSE_ENV_FILE=backend/.env.example up; \
-		fi; \
+		$(MAKE) ensure-backend-env ensure-test-postgres; \
+		backend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
+		backend_url="http://127.0.0.1:$${backend_port}"; \
+		backend_log="/tmp/maf-backend-e2e-$${backend_port}.log"; \
+		( \
+			cd backend && . .venv/bin/activate && \
+			APP_ENV=local \
+			WORKFLOW_MODE=maf_sdk \
+			STORE_PROVIDER=postgres \
+			MEMORY_PROVIDER=postgres \
+			MCP_SERVER_URL= \
+			uvicorn app.main:app --host 127.0.0.1 --port "$${backend_port}" \
+		) > "$${backend_log}" 2>&1 & \
+		backend_pid="$$!"; \
 		frontend_port="$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"; \
 		frontend_url="http://127.0.0.1:$${frontend_port}"; \
-		(cd frontend && node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "/tmp/maf-frontend-e2e-$${frontend_port}.log" 2>&1 & \
+		frontend_log="/tmp/maf-frontend-e2e-$${frontend_port}.log"; \
+		cleanup() { \
+			for pid in "$${backend_pid:-}" "$${frontend_pid:-}"; do \
+				[[ -n "$${pid}" ]] && kill "$${pid}" 2>/dev/null || true; \
+			done; \
+			for _ in {1..20}; do \
+				alive=0; \
+				for pid in "$${backend_pid:-}" "$${frontend_pid:-}"; do \
+					[[ -n "$${pid}" ]] && kill -0 "$${pid}" 2>/dev/null && alive=1; \
+				done; \
+				[[ "$${alive}" -eq 0 ]] && break; \
+				sleep 0.25; \
+			done; \
+			for pid in "$${backend_pid:-}" "$${frontend_pid:-}"; do \
+				[[ -n "$${pid}" ]] && kill -0 "$${pid}" 2>/dev/null && kill -KILL "$${pid}" 2>/dev/null || true; \
+			done; \
+			wait "$${backend_pid:-}" 2>/dev/null || true; \
+			wait "$${frontend_pid:-}" 2>/dev/null || true; \
+		}; \
+		trap cleanup EXIT; \
+		for _ in {1..45}; do \
+			health_json="$$(curl -fsS "$${backend_url}/api/health" 2>/dev/null || true)"; \
+			if [[ "$${health_json}" == *'"workflow_mode":"maf_sdk"'* ]]; then \
+				break; \
+			fi; \
+			sleep 1; \
+		done; \
+		health_json="$$(curl -fsS "$${backend_url}/api/health" 2>/dev/null || true)"; \
+		if [[ "$${health_json}" != *'"workflow_mode":"maf_sdk"'* ]]; then \
+			echo "Backend failed to become ready for E2E. See $${backend_log}"; \
+			exit 1; \
+		fi; \
+		(cd frontend && VITE_PROXY_TARGET="$${backend_url}" node_modules/.bin/vite --host 127.0.0.1 --port "$${frontend_port}" --strictPort) > "$${frontend_log}" 2>&1 & \
 		frontend_pid="$$!"; \
-		trap 'kill '"$$frontend_pid"' 2>/dev/null || true; wait '"$$frontend_pid"' 2>/dev/null || true' EXIT; \
 		for _ in {1..30}; do curl -fsS "$${frontend_url}" >/dev/null && break; sleep 1; done; \
-		PLAYWRIGHT_BASE_URL="$${frontend_url}" bash -c 'cd scripts/playwright && npm run test:e2e'; \
+		proxy_health="$$(curl -fsS "$${frontend_url}/api/health" 2>/dev/null || true)"; \
+		if [[ "$${proxy_health}" != *'"workflow_mode":"maf_sdk"'* || "$${proxy_health}" != *'"environment":"local"'* ]]; then \
+			echo "Frontend proxy is not targeting the isolated local backend. See $${frontend_log}"; \
+			exit 1; \
+		fi; \
+		cd scripts/playwright && PLAYWRIGHT_BASE_URL="$${frontend_url}" npm run test:e2e; \
+		e2e_status="$$?"; \
+		cleanup; \
+		trap - EXIT; \
+		exit "$${e2e_status}"; \
 	fi
 
 manual-matrix:

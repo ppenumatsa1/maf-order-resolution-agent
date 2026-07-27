@@ -2,182 +2,50 @@
 
 ## Purpose
 
-This document describes the business architecture for the order-resolution use case, including runtime components, key data flows, and verifiability checkpoints.
+The application resolves customer order issues while preserving deterministic
+human approval for risky actions, durable audit history, and an observable UI
+timeline.
 
-## Business Problem
+## Runtime
 
-Support teams need to resolve delivery and product issues quickly while keeping risky actions (refunds, sensitive resolutions) under explicit human control. The system must:
-
-- automate common low-risk cases,
-- escalate or gate high-risk actions with HITL,
-- preserve conversation and workflow history for auditability,
-- provide a transparent UI timeline for operators.
-
-## Project Goal
-
-Deliver a verifiable multi-agent workflow for customer order issue resolution that is:
-
-- operationally transparent (SSE timeline, workflow history),
-- business-safe (deterministic HITL triggers and approvals),
-- durable (Postgres-backed persistence for runs/events/messages/checkpoints),
-- extensible (one FastAPI-hosted MAF workflow locally and on Azure Container Apps, with Foundry used only for model calls and evaluations).
-
-## High-Level Runtime Architecture
+FastAPI is the sole application host for the MAF workflow. The React UI calls
+the API; the workflow uses tools and MCP as configured, persists state in
+PostgreSQL, and emits native SSE events. Foundry is limited to model inference
+and report-only evaluation of FastAPI workflow captures.
 
 ```mermaid
 flowchart LR
-     U[Support Agent or Operator]
-     UI[React Workflow Studio]
-     API[FastAPI Backend]
-     ORCH[MAF Sequential Workflow]
-     HITL[HITL Approval Handler]
-     MCP[MCP and Local Tools]
-     DB[(Postgres Persistence)]
-
-    U --> UI
-     UI -->|POST chat run| API
-    API --> ORCH
-    ORCH --> MCP
-     ORCH -->|checkpoint and hitl request| API
-     API -->|SSE event stream by thread| UI
-     UI -->|POST hitl respond| API
-    API --> HITL
-    HITL --> ORCH
-
-     API -->|read and write| DB
-    ORCH -->|events, messages, checkpoints| DB
-     UI -->|GET workflows list| API
-     UI -->|GET workflow details by thread| API
+    U[Support operator] --> UI[React UI]
+    UI --> API[FastAPI]
+    API --> MAF[MAF sequential workflow]
+    MAF --> TOOLS[Local tools and MCP]
+    MAF --> PG[(PostgreSQL)]
+    MAF --> MODEL[Foundry model inference]
+    API --> SSE[Native SSE and additive rich SSE]
+    SSE --> UI
+    UI --> HITL[Approval response]
+    HITL --> API
 ```
 
-ASCII fallback (if Mermaid rendering is unavailable):
+## Business flow
 
-```text
-+---------------------------+
-| Support Agent / Operator  |
-+-------------+-------------+
-              |
-              v
-+---------------------------+       GET workflows / details
-| React Workflow Studio UI  |------------------------------+
-+-------------+-------------+                              |
-              | POST chat run                             |
-              v                                           |
-+---------------------------+       read/write            |
-| FastAPI Backend           |<-------------------->+----------------------+
-+------+--------------------+                     | Postgres Persistence |
-       |                                          | runs/events/messages |
-       | start workflow                           | checkpoints/approvals|
-       v                                          +----------------------+
-+---------------------------+
-| MAF Sequential Workflow   |
-| Triage -> Policy ->       |
-| Resolution                |
-+------+---------------+----+
-       |               |
-       | tool calls    | checkpoint + hitl.request
-       v               v
-+----------------+   +---------------------------+
-| MCP/Local      |   | Human Approval Panel      |
-| Tools          |   | Approve / Reject          |
-+----------------+   +-------------+-------------+
-                                 |
-                                 | POST hitl respond
-                                 v
-                      +---------------------------+
-                      | HITL Approval Handler     |
-                      +-------------+-------------+
-                                    |
-                                    v
-                      +---------------------------+
-                      | Resume Workflow Execution |
-                      +---------------------------+
+1. The operator submits an order issue.
+2. The workflow performs triage, policy retrieval, and resolution.
+3. Low-risk resolutions emit `workflow.output`.
+4. Risky resolutions emit `checkpoint.created` and `hitl.request`, then pause.
+5. An approval or rejection resumes the checkpoint and produces terminal output.
+6. PostgreSQL preserves runs, events, messages, checkpoints, and approvals.
 
-Live updates: FastAPI Backend -> SSE event stream by thread -> UI timeline
-```
+## Stable contracts
 
-## Runtime mapping (Local and Azure app-hosted)
+- Native SSE types: `workflow.stage`, `tool.call`, `checkpoint.created`,
+  `hitl.request`, `hitl.response`, and `workflow.output`.
+- The rich SSE endpoint is additive and must preserve native event payloads.
+- HITL triggers are deterministic; see
+  [HITL approval conditions](hitl-approval-conditions.md).
 
-There is one business workflow implementation (`OrderResolutionWorkflow`) and one
-service entrypoint (`OrderResolutionService`). The FastAPI application hosts this
-same service/workflow locally and in Azure Container Apps.
+## Azure target
 
-```mermaid
-flowchart TD
-    A[FastAPI /api/chat/run] --> SVC[OrderResolutionService]
-    SVC --> RUN[OrderResolutionMafRunner]
-    RUN --> WF[OrderResolutionWorkflow]
-    WF --> EX[Triage + Policy + Resolution + HITL executors]
-    EX --> TOOLS[fetch_order_status / fetch_policy / submit_resolution]
-    WF --> EVT[workflow.stage/tool.call/checkpoint.created/hitl.request/hitl.response/workflow.output]
-    EVT --> BUS[EventBus + projector]
-    BUS --> DB[(workflow_runs/workflow_events/checkpoints/approvals)]
-    BUS --> SSE[SSE timelines to UI]
-```
-
-### Shared vs distinct
-
-- **Shared:** business tools, HITL semantics, stable event contracts, persistence projections.
-- **Runtime wrapper:** FastAPI route layer is the sole executable application host.
-
-## Core Business Flow
-
-1. User submits an order issue from the UI.
-2. Backend starts a sequential workflow: triage, policy retrieval/analysis, resolution decision.
-3. If the decision is low risk, workflow completes automatically and emits output.
-4. If risk threshold is met, workflow emits `checkpoint.created` + `hitl.request` and pauses.
-5. Reviewer approves/rejects in UI.
-6. Workflow resumes from checkpoint:
-
-- approve -> completes with final output,
-- reject -> emits escalated output/state.
-
-7. UI timeline and history endpoints display full execution trace.
-
-Detailed behavior and trigger conditions are aligned with `docs/design/userflow.md` and `docs/design/hitl-approval-conditions.md`.
-
-## Persistence and Auditability
-
-Durable state is stored in Postgres so runs survive backend restarts:
-
-- `workflow_runs`: query-friendly summary per thread,
-- `workflow_events`: append-only execution timeline,
-- `conversation_messages`: persisted transcript/context,
-- `checkpoints`: HITL pause/resume state,
-- `approvals`: reviewer decisions and audit trail.
-
-This enables deterministic replay of what happened, why it happened, and who approved/rejected critical actions.
-
-## Verifiability Model
-
-The architecture is verifiable at three levels:
-
-1. Functional tests:
-
-- backend tests cover low-risk and high-risk/HITL flows.
-
-2. Evaluation harness:
-
-- eval cases validate expected HITL/no-HITL outcomes across baseline scenarios.
-
-3. End-to-end UX checks:
-
-- Playwright tests verify timeline visibility, HITL approval/rejection paths, and terminal states.
-
-Required commands:
-
-- `make test`
-- `make eval-backend`
-- `make test-e2e`
-
-## Future Hosting Evolution
-
-The same business flow runs across:
-
-1. local MAF runtime (implemented),
-2. Azure app-hosted runtime (deployed),
-3. Azure Container Apps runtime with Foundry model/evaluation integration.
-
-Architecture keeps API and event contracts stable to simplify this progression while maintaining business traceability.
-
-Process/governance authority for delivery and verification is documented in `docs/design/engineering-operating-model.md`.
+The planned Container Apps package is `infra/azure-apphosted/`. Its target is
+`rg-maf-ora-azure` in North Central US. East US is excluded because Azure
+PostgreSQL has an offer restriction. No deployment is claimed.

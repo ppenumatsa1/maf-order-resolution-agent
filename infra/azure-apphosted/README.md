@@ -1,114 +1,61 @@
-# Azure App-Hosted Deployment
+# Azure App-Hosted Package
 
-This path prepares the current E2E-tested MAF order-resolution app for Azure app-hosted deployment with Azure Developer CLI, Bicep, Azure Container Apps, Azure PostgreSQL, Key Vault, ACR, Log Analytics, Application Insights, and Azure AI Foundry/Azure AI Services.
+This is the only Azure deployment package. It deploys the React frontend and
+FastAPI/MAF backend as Container Apps, with PostgreSQL, ACR, Log Analytics,
+Application Insights, and Foundry model/evaluation resources.
+
+FastAPI remains the sole application host. Foundry is limited to model
+inference and report-only evaluation; do not add agent, Responses, manifest,
+runner, or other application-hosting surfaces.
+
+## Status and target
+
+**Deployed.** Post-deployment smoke, hosted UI parity, and report-only
+evaluation use the environment outputs described in `.azure/deployment-plan.md`.
+
+| Setting | Value |
+| --- | --- |
+| Resource group | `rg-maf-ora-azure` |
+| AZD environment | `maf-ora-azure` |
+| Region | North Central US (`northcentralus`) |
+
+North Central US is required because Azure PostgreSQL is offer-restricted in
+East US for this target.
 
 ## Layout
 
-- `iac/main.bicep`: AZD-compatible subscription-scope deployment entry point.
-- `iac/main.parameters.json`: AZD parameter binding file.
-- `iac/modules/*.bicep`: reusable Azure resource modules.
-- `iac/parameters.dev.json`: sample parameters for direct Bicep experiments.
-- `runtime/.env.example`: provider/env wiring for app-hosted mode.
-- `runtime/entrypoint.sh`: backend runtime entrypoint for this path.
-- `runtime/smoke-test.sh`: post-start smoke checks for backend/frontend and ORD-1001/ORD-1009 parity.
+- `iac/main.bicep`: subscription-scope AZD entry point.
+- `iac/modules/`: Azure resource modules.
+- `iac/main.parameters.json`: AZD parameter binding.
+- `runtime/.env.example`: app-hosted runtime settings.
+- `runtime/smoke-test.sh`: backend/frontend and ORD-1001/ORD-1009 checks.
 
-## Runtime wiring
+## Runtime settings
 
-The first Azure cutover keeps runtime behavior identical to the local MAF path:
+The backend uses:
 
 - `WORKFLOW_MODE=maf_sdk`
 - `STORE_PROVIDER=postgres`
 - `MEMORY_PROVIDER=postgres`
-- `AZURE_POSTGRES_HOST`, `AZURE_POSTGRES_DATABASE`, and
-  `AZURE_POSTGRES_USER` for managed-identity Entra authentication
-- `FOUNDRY_PROJECTS_ENDPOINT`
-- `FOUNDRY_MODEL_DEPLOYMENT_NAME`
-- `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME`
-- `APPLICATIONINSIGHTS_CONNECTION_STRING`
-- `ENABLE_TELEMETRY=true`
-- `ENABLE_INSTRUMENTATION=true`
-- `OTEL_RECORD_CONTENT=false`
+- Azure PostgreSQL managed-identity variables
+- `FOUNDRY_PROJECTS_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT_NAME`, and
+  `FOUNDRY_EMBEDDINGS_DEPLOYMENT_NAME`
+- Application Insights settings with `OTEL_RECORD_CONTENT=false`
 
-`STORE_PROVIDER=azure_postgres` and `RAG_PROVIDER=azure_ai_search` remain future provider contracts, but they are not used for first Azure parity because provider switching and Azure AI Search retrieval are not fully wired yet.
+When model configuration is unavailable, deterministic triage remains within
+the same MAF workflow. HITL rules remain deterministic.
 
-The Bicep template also provisions a cost-conscious Foundry/Azure AI Services account (`AIServices`, `S0`), one project, a chat deployment, and an embeddings deployment. Model names, versions, deployment SKU names, deployment capacity, project name, and RAI policy name are Bicep parameters so deployments can be adjusted for target-region model availability and quota without changing the template.
+## Validate before any deployment
 
-The backend uses `DefaultAzureCredential` with the Container App managed
-identity to call the Foundry Models project endpoint. If the Foundry env vars
-are absent, the workflow keeps the same MAF path and uses deterministic triage
-for local/CI parity. HITL approvals are never model-decided; deterministic
-backend rules still gate checkpoints.
+Follow `.azure/deployment-plan.md`. At minimum, run the local test, evaluation,
+E2E, Docker, design-review, Bicep/AZD, IaC, and Azure readiness gates before
+deployment. Do not change the deployment-plan status until current code and IaC
+evidence exists.
 
-Application Insights export is configured through
-`APPLICATIONINSIGHTS_CONNECTION_STRING`. MAF executor telemetry is based on
-streamed workflow event observation (`executor_invoked`, `executor_completed`,
-and `output`), with content redaction controlled by `OTEL_RECORD_CONTENT`.
-FastAPI request telemetry is explicitly instrumented after app creation so
-hosted API traffic should appear in `AppRequests`. Workflow, HITL, MAF
-executor, and Foundry calls should appear in `AppDependencies`; HITL resume
-uses checkpoint-persisted trace context to correlate approval spans with the
-original waiting operation.
-
-## Prepare
-
-Create/select an AZD environment and set required values. The PostgreSQL Entra
-administrator must be a principal that can run the idempotent post-provision
-grant hook:
+After an authorized deployment, run:
 
 ```bash
-azd env new maf-order-resolution-dev
-azd env set AZURE_LOCATION eastus2
-azd env set POSTGRES_ENTRA_ADMIN_PRINCIPAL_NAME '<admin-upn-or-group-name>'
-azd env set POSTGRES_ENTRA_ADMIN_PRINCIPAL_ID '<admin-or-group-object-id>'
-azd env set POSTGRES_BOOTSTRAP_ALLOWED_IP '<azd-runner-public-ipv4>'
-azd env set MCP_SERVER_URL ''
-azd env set MCP_API_KEY ''
-azd env set MCP_BEARER_TOKEN ''
+infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
 ```
 
-The Bicep template intentionally omits Container Apps liveness/readiness probes during first provisioning. AZD provisions each Container App with a public placeholder image before `azd deploy` swaps in the real backend/frontend images; app-specific probes against ports 8000/5173 would fail against that placeholder revision. Runtime health is still validated by the backend/frontend `/health` endpoints and the app-hosted smoke script after deployment.
-
-`POSTGRES_BOOTSTRAP_ALLOWED_IP` creates one narrowly scoped PostgreSQL firewall
-rule for the machine running `azd`. It is required because the post-provision
-grant hook runs from that machine using the configured Entra administrator; the
-Azure-services firewall rule does not permit arbitrary developer workstations.
-The post-provision hook applies the Entra administrator in a separate,
-idempotent deployment after the server is reachable, then grants the backend
-managed identity database access.
-
-Key Vault is provisioned with RBAC and soft delete enabled for future secret
-externalization. The backend does not receive a database password: its stable
-user-assigned managed identity obtains a fresh Entra token when Psycopg opens a
-physical connection.
-
-The backend Container App system-assigned managed identity receives the built-in `Cognitive Services OpenAI User` role scoped to the generated Foundry/Azure AI Services account and `Foundry User` scoped to the generated project. The project managed identity receives `Foundry User` on the account. Local key authentication is disabled on the account, so backend model access should use managed identity.
-
-## Validate before deploying
-
-This repository follows:
-
-```text
-azure-prepare -> azure-validate -> azure-deploy
-```
-
-Do not run deployment commands directly during prepare. After the generated artifacts validate locally, `.azure/deployment-plan.md` is marked `Ready for Validation` and the Azure validation skill is invoked.
-
-## Smoke-test expectation
-
-`runtime/smoke-test.sh` expects:
-
-1. `/health` returns `200`.
-2. Low-risk `ORD-1001` request returns `workflow.output` and no `hitl.request`.
-3. High-risk `ORD-1009` request emits `hitl.request`.
-4. Optional `EXPECT_TRIAGE_MODE=foundry_models` validates that emitted triage
-   stage metadata is using the Foundry model-client path.
-
-Example after deployment:
-
-```bash
-EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
-```
-
-After smoke checks, run the `azure-telemetry-validation` skill to query the
-Application Insights workspace and confirm request rows, workflow/HITL
-dependency spans, trace hygiene, and absence of new workflow exceptions.
+Set `EXPECT_TRIAGE_MODE=foundry_models` only when verifying model inference.

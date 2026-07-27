@@ -15,6 +15,11 @@ from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
 _OBSERVABILITY_CONFIGURED = False
 logger = logging.getLogger(__name__)
+_FASTAPI_EXCLUDED_URLS = (
+    r".*/(?:api/)?health(?:\?.*)?$"
+    r"|.*/api/chat/stream/.*"
+    r"|.*/api/workflows(?:/.*)?(?:\?.*)?$"
+)
 _SENSITIVE_ATTRIBUTE_KEYS = {
     "comments",
     "data",
@@ -121,20 +126,7 @@ def setup_observability() -> ObservabilityStatus:
 
     service_name = os.getenv("OTEL_SERVICE_NAME", "maf-customer-resolution")
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-    canonical_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
-    alias_connection_string = os.getenv("APPINSIGHTS_CONNECTION_STRING", "").strip()
-    # Prefer alias when it carries the full region-aware connection string while
-    # the canonical variable is intentionally compacted for hosted runtime bootstrap.
-    if "IngestionEndpoint=" in alias_connection_string:
-        app_insights_connection_string = alias_connection_string
-    else:
-        app_insights_connection_string = canonical_connection_string or alias_connection_string
-    if not app_insights_connection_string:
-        instrumentation_key = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY") or os.getenv(
-            "APPINSIGHTS_INSTRUMENTATION_KEY"
-        )
-        if instrumentation_key:
-            app_insights_connection_string = f"InstrumentationKey={instrumentation_key}"
+    app_insights_connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
     if app_insights_connection_string:
         app_insights_connection_string = app_insights_connection_string.strip().rstrip(";")
 
@@ -191,7 +183,7 @@ def instrument_fastapi_app(app: Any) -> bool:
         return False
 
     try:
-        FastAPIInstrumentor.instrument_app(app, excluded_urls=r".*/api/chat/stream/.*")
+        FastAPIInstrumentor.instrument_app(app, excluded_urls=_FASTAPI_EXCLUDED_URLS)
     except Exception:
         logger.exception("FastAPI telemetry instrumentation setup failed")
         return False

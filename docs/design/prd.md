@@ -1,38 +1,29 @@
-# PRD - Customer Order Resolution Multi-Agent Demo
+# PRD - Customer Order Resolution Demo
 
 ## Objective
 
-Build a demo-ready multi-agent orchestration using Microsoft Agent Framework-aligned patterns with sequential workflow execution and production-style capabilities.
+Deliver a demo-ready, sequential MAF workflow for customer order resolution.
 
-## Core Features
+## Core features
 
-- Sequential multi-agent orchestration (triage -> policy -> resolution).
-- Tools integration (local deterministic tools).
-- MCP integration (remote when configured, local fallback otherwise).
-- Human-in-the-loop (HITL) approval before sensitive actions.
-- Memory/session state for multi-turn continuity.
-- Checkpointing and resume for durable pauses.
-- Observability with OTEL and App Insights-ready exporters.
-- Evals with baseline dataset and report.
-- AGUI-style streaming events over SSE.
-- FastAPI backend consumed by React + Vite UI.
+- Triage, policy, and resolution stages.
+- Local tools and optional MCP integration.
+- Deterministic HITL approval, checkpointing, and resume.
+- Durable workflow, message, and approval history in PostgreSQL.
+- Native SSE timeline with an additive rich stream.
+- Configurable telemetry and deterministic evaluation.
+- Optional Foundry model inference and report-only evaluation.
 
-## Non-Goals (v1)
+## Non-goals
 
-- Production auth/RBAC.
-- Full cloud deployment automation.
-- Parallel/branching orchestrations.
+- A second orchestration path.
+- Any Foundry application-hosting capability.
+- Production authentication and authorization.
 
-## Acceptance Criteria
+## Acceptance criteria
 
-1. User request triggers all 3 agent stages in order.
-2. At least one tool call and one MCP call event are emitted.
-3. HITL request is emitted for high-risk actions and can be approved/rejected.
-4. Workflow resumes from checkpoint and produces final output.
-5. Follow-up messages within the same thread use prior memory.
-6. OTEL traces are created and configurable for App Insights export.
-7. Eval harness produces report with pass/fail metrics.
-
-## Delivery contract
-
-Implementation authority and release evidence requirements are defined in `docs/design/engineering-operating-model.md`.
+1. The workflow runs all three stages in order.
+2. Low-risk cases complete without HITL.
+3. High-risk cases pause and resume after approval or rejection.
+4. Native SSE event names remain stable.
+5. The evaluation harness reports contract outcomes.

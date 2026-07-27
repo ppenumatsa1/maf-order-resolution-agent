@@ -11,7 +11,7 @@ declare global {
 export function getApiBase(): string {
   const runtimeBase = window.__APP_CONFIG__?.API_BASE?.trim();
   const viteBase = import.meta.env.VITE_API_BASE?.trim();
-  const base = runtimeBase ?? viteBase ?? "http://localhost:8000";
+  const base = runtimeBase ?? viteBase ?? "";
   return base.replace(/\/+$/, "");
 }
 

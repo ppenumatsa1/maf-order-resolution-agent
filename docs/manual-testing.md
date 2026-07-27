@@ -98,7 +98,7 @@ Current deterministic local-runtime caveat:
 | ORD-1007 | `Order ORD-1007 is late. Start this request in session manual-session-1007.`         | Session history continuity  | None                | Use a fixed `session_id`; verify `/api/sessions/manual-session-1007/messages` returns the user and assistant messages.                    |
 | ORD-1008 | `Order ORD-1008 arrived damaged. Please pause for supervisor review.`                | Pause/resume checkpoint     | Approve after delay | Wait on `waiting_approval`, refresh UI or reopen details, then approve; final status `completed`.                                         |
 | ORD-1009 | `Order ORD-1009 is delayed by 5 days. I need compensation.`                          | High-amount HITL            | Approve             | `amount=185.0`; `hitl.request` emitted; approval resumes to final `completed`; emitted order id is `ord-1009`.                            |
-| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | Post-migration smoke case   | None                | No HITL; final status `completed`; use this as a smoke test after the Azure app-hosted deployment.                                        |
+| ORD-1010 | `Order ORD-1010 has a normal late-delivery question and needs no refund escalation.` | App-hosted smoke case   | None                | No HITL; final status `completed`; use this after an authorized Azure deployment.                                        |
 
 For each row, capture:
 
@@ -110,16 +110,18 @@ For each row, capture:
 
 ## Azure App-Hosted Parity Smoke
 
-After Azure deployment, run the app-hosted smoke script with the deployed backend and frontend URLs:
+After an authorized Azure deployment, run the app-hosted smoke script with the
+backend and frontend URLs:
 
 ```bash
 infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
-EXPECT_TRIAGE_MODE=foundry_models infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
+EXPECT_TRIAGE_MODE=foundry_models \
+  infra/azure-apphosted/runtime/smoke-test.sh "$API_URL" "$WEB_URL"
 ```
 
 This validates:
 
-1. backend `/health`
+1. backend `/api/health`
 2. frontend `/health`
 3. low-risk `ORD-1001` emits `workflow.output` without `hitl.request`
 4. high-risk `ORD-1009` emits `hitl.request`
@@ -132,7 +134,7 @@ local and Azure app-hosted environments.
 
 Use the parity runner when you need one comparable pass/fail view across all endpoints.
 
-Required environment variables (can be loaded from `maf-ora-central` `.env` via `PARITY_ENV_FILE`):
+Required environment variables (which may be loaded with `PARITY_ENV_FILE`):
 
 ```bash
 PARITY_LOCAL_API_URL=http://localhost:8000

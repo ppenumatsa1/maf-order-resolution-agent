@@ -3,13 +3,13 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "eastus2"
+      "value": "northcentralus"
     },
     "namePrefix": {
-      "value": "mafappdev"
+      "value": "maf-ora-azure"
     },
     "environmentName": {
-      "value": "dev"
+      "value": "maf-ora-azure"
     },
     "postgresBootstrapAllowedIp": {
       "value": "REPLACE_WITH_AZD_RUNNER_PUBLIC_IPV4"

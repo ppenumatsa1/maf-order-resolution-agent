@@ -7,9 +7,9 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - Keep one MAF-based business workflow path (no deterministic fallback path).
 - Deterministic triage fallback is allowed only when Foundry Models env vars are
   absent; do not add a separate deterministic fallback orchestration path.
-- Keep the FastAPI-hosted MAF workflow as the only application runtime. Foundry
-  is limited to model calls and report-only evaluations; do not reintroduce
-  hosted agents, Responses endpoints, or invocation adapters.
+- Keep the FastAPI Container App as the only MAF application runtime. Foundry
+  is limited to model inference and report-only evaluations; do not add a
+  Foundry application runtime or alternate orchestration path.
 - Keep HITL behavior deterministic and testable.
 - Keep API response contracts stable for frontend and Playwright tests.
 - Keep the legacy SSE event stream stable; expose richer AG-UI-compatible events only as additive surfaces.
@@ -19,12 +19,14 @@ This repository implements a Microsoft Agent Framework (MAF SDK) customer order 
 - **You provide** architecture intent, business rules, and acceptance criteria.
 - **Skills provide** current Microsoft platform and SDK guidance.
 - **Copilot provides** implementation, tests, and infra/doc updates.
-- **Gates provide** release evidence for correctness, recovery, telemetry, and Foundry parity.
+- **Gates provide** release evidence for correctness, recovery, telemetry, and model/evaluation behavior.
 
 Canonical contract: `docs/design/engineering-operating-model.md`.
 
-The Azure deployment lane is one public app-hosted package: two Container Apps
-in one resource group with Foundry limited to models and evaluations.
+The Azure deployment lane is one app-hosted package: two Container Apps in
+`rg-maf-ora-azure` in North Central US, with Foundry limited to models and
+evaluations. East US is excluded because of the Azure PostgreSQL offer
+restriction. Do not claim deployment until current validation evidence exists.
 
 ## Workflow Guardrails
 
@@ -37,11 +39,10 @@ in one resource group with Foundry limited to models and evaluations.
   - `backend/app/maf/*` owns the MAF runtime namespace.
   - Within `backend/app/maf/*`, keep prompts/agents/tools/executors/runner/workflow
     separated; avoid reintroducing monolithic workflow-stage logic.
-- Do not add back removed legacy routes/modules such as `/api/foundry*` or
-  `backend/app/foundry/*`.
+- Do not add legacy Foundry runtime or proxy modules.
 - Any change to HITL decision logic must update:
   - `docs/design/hitl-approval-conditions.md`
-  - tests in `backend/tests/test_workflow.py` and/or eval cases in `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`
+  - workflow tests and/or deterministic evaluation cases
 - Do not remove or rename emitted event types without updating frontend/event consumers:
   - `workflow.stage`
   - `tool.call`
@@ -70,7 +71,7 @@ in one resource group with Foundry limited to models and evaluations.
 
 - Backend lint + tests: `make test`
 - Eval harness: `make eval-backend`
-- Foundry evaluator report (hosted/runtime changes): `make eval-foundry`
+- Foundry evaluator report (model/runtime changes): `make eval-foundry`
 - Playwright E2E: `make test-e2e`
 - Docker E2E profile: `make docker-test`
 - Deterministic review/test gate: `./scripts/skills/design-review-skill.sh`

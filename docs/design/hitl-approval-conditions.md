@@ -103,4 +103,6 @@ For non-HITL scenarios:
 - `backend/tests/test_workflow.py` includes:
   - low-risk path without HITL
   - high-risk path with HITL and resume
-- `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl` includes mixed HITL outcomes plus explicit approve/reject, explanation follow-up, and duplicate HITL idempotency assertions for app-hosted evaluation.
+- The deterministic evaluation dataset includes mixed HITL outcomes plus explicit
+  approve/reject, explanation follow-up, and duplicate HITL idempotency
+  assertions for app-hosted evaluation.

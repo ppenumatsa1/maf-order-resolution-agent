@@ -1,15 +1,14 @@
-# Backend - Shared MAF Order Resolution
+# Backend - MAF Order Resolution
 
-## Runtime status
+## Runtime
 
-| Stage | Status | Runtime behavior |
-| --- | --- | --- |
-| Local FastAPI host | Implemented | Runs the shared MAF workflow and exposes stable API/SSE/HITL contracts. |
-| Azure app-hosted | Implemented | Same FastAPI host pattern on ACA/Postgres/App Insights. |
+FastAPI is the sole application host for the MAF workflow. The same workflow
+runs locally and in the planned Azure Container Apps deployment. Foundry is
+used only for triage model inference and report-only evaluation.
 
-There is one business workflow path rooted at `backend/app/maf/workflows/order_resolution.py`,
-with modular internals in `backend/app/maf/prompts/`, `agents/`, `tools/`, `executors/`,
-and `runner.py`.
+There is one business workflow rooted at
+`app/maf/workflows/order_resolution.py`, with prompts, agents, tools,
+executors, runner, and workflow kept as separate concerns.
 
 ## Run locally
 
@@ -22,32 +21,9 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Recommended local provider settings:
-
-```bash
-export STORE_PROVIDER=postgres
-export MEMORY_PROVIDER=postgres
-```
-
-Model client selection:
-
-- Set `FOUNDRY_PROJECTS_ENDPOINT` and `FOUNDRY_MODEL_DEPLOYMENT_NAME` to use Foundry models for triage agents.
-- If those values are absent, only the deterministic triage summary fallback is used (the workflow path itself remains MAF).
-
-Telemetry:
-
-- `APPLICATIONINSIGHTS_CONNECTION_STRING` enables Azure Monitor/Application Insights export.
-- `ENABLE_TELEMETRY=false` disables telemetry.
-- `ENABLE_INSTRUMENTATION` controls MAF/OpenTelemetry instrumentation when telemetry is enabled.
-- `OTEL_RECORD_CONTENT=false` keeps prompt/payload content out of span attributes.
-
-Evaluation:
-
-- `make eval-backend` runs deterministic contract assertions against `backend/.foundry/datasets/order-resolution-hosted-cases.jsonl`.
-- `make eval-foundry` captures the canonical low-risk (`ORD-1001`) and approved
-  high-risk (`ORD-1009`) FastAPI workflows, then runs the report-only relevance
-  evaluator and writes `backend/.foundry/results/foundry-report.json`. The full
-  ten-case dataset remains the deterministic `make eval-backend` contract gate.
+Set `FOUNDRY_PROJECTS_ENDPOINT` and `FOUNDRY_MODEL_DEPLOYMENT_NAME` to enable
+model inference. Without them, only deterministic triage falls back; MAF
+orchestration does not change.
 
 ## APIs
 
@@ -61,41 +37,19 @@ Evaluation:
 - `GET /api/sessions/{session_id}/messages`
 - `GET /health` and `GET /api/health`
 
-## Internal boundaries
+## Stable SSE event types
 
-- `app/api/v1/routers/*` owns HTTP/SSE routes.
-- `app/api/v1/schemas/*` owns API contracts.
-- `app/modules/order_resolution/*` owns service/domain seams, HITL policy logic, internal workflow models, ports, and projections.
-- `app/core/*` owns config, database, telemetry, and composition.
-- `app/infrastructure/*` is the repository-pattern/adapters namespace.
-- `app/maf/*` owns the MAF runtime namespace.
+`workflow.stage`, `tool.call`, `checkpoint.created`, `hitl.request`,
+`hitl.response`, and `workflow.output`.
 
-Legacy shims and `app/foundry/*` adapter paths are removed.
+## HITL conditions
 
-Delivery ownership and verification gate authority are defined in `docs/design/engineering-operating-model.md`.
+HITL is required when the amount/risk is at least 100, the issue is
+`damaged_item`, or policy requires `manual_review`. `ORD-1009` requires HITL;
+`ORD-1001` normally does not.
 
-## Event contract (SSE)
+## Evaluation
 
-Stable emitted event types:
-
-- `workflow.stage`
-- `tool.call`
-- `checkpoint.created`
-- `hitl.request`
-- `hitl.response`
-- `workflow.output`
-
-The rich stream (`/api/chat/stream/{thread_id}/rich`) is additive and preserves native event payloads.
-
-## HITL trigger conditions
-
-The workflow emits `hitl.request` when any condition is true:
-
-- amount/risk `>= 100`
-- issue type `damaged_item`
-- policy contains `manual_review`
-
-Baselines:
-
-- `ORD-1009` delayed: HITL expected.
-- `ORD-1001` late delivery: no HITL expected.
+`make eval-backend` is the deterministic contract gate. `make eval-foundry`
+captures canonical FastAPI workflow results for a non-blocking, report-only
+Foundry evaluation.

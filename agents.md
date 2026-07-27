@@ -5,9 +5,11 @@ This file describes expected behavior for coding agents working in this reposito
 ## Project Context
 
 - Backend: FastAPI + MAF SDK workflow path (single primary workflow story).
-- Azure runtime: two public Container Apps (FastAPI/MAF backend and React/Nginx
-  frontend) in one resource group. Foundry is used only for models and
-  report-only evaluations, not as an application host.
+- Azure target: two Container Apps (FastAPI/MAF backend and React/Nginx
+  frontend) in `rg-maf-ora-azure` in North Central US. Foundry is used only for
+  model inference and report-only evaluations, not as an application host.
+  East US is excluded because of the Azure PostgreSQL offer restriction. Do not
+  claim deployment until current validation evidence exists.
 - Frontend: React + Vite, consumes SSE workflow events.
 - Workflow checkpointing: Postgres-backed checkpoint storage via repository-pattern adapters.
 - Event streaming: legacy SSE remains the stable contract; additive rich events are exposed for AG-UI-compatible clients.
@@ -51,7 +53,7 @@ Run and report:
 
 - `make test`
 - `make eval-backend`
-- `make eval-foundry` (report-only for hosted/runtime changes)
+- `make eval-foundry` (report-only for model/runtime changes)
 - `make test-e2e`
 - `./scripts/skills/design-review-skill.sh` (consolidated deterministic review/test gate)
 
@@ -91,7 +93,8 @@ local (repository-owned) skills:
 - `postgres-psycopg-py`: PostgreSQL, Psycopg, and Azure PostgreSQL persistence.
 
 Legacy shim paths have been removed. Do not add code that imports or recreates `app/models.py`, `app/config.py`, `app/db.py`, `app/state.py`, `app/workflow_run_repository.py`, `app/rag_repository.py`, `workflows/*`, `tools/*`, or root `app/api/*` router shims.
-Also do not reintroduce removed Foundry adapter/proxy surfaces such as `/api/foundry*` or `backend/app/foundry/*`.
+Do not add a Foundry application runtime, proxy surface, or alternate
+orchestration path.
 
 ## HITL Testing Baseline
 

@@ -1,10 +1,8 @@
-# Infrastructure Scaffolding
+# Infrastructure
 
-This directory contains the one Azure app-hosted deployment package.
+`azure-apphosted/` is the single Azure package for the React frontend, FastAPI
+MAF backend, PostgreSQL, observability, ACR, and Foundry model and report-only
+evaluation resources.
 
-- `azure-apphosted/`: two public Container Apps, one ACR, Entra-only Azure
-  PostgreSQL, Application Insights, Log Analytics, and a Foundry
-  models/evaluations module in one resource group.
-
-The FastAPI/MAF backend is the only application host; Foundry is not a hosted
-agent runtime.
+The backend Container App is the only MAF application host. The planned target
+is `rg-maf-ora-azure` in North Central US; no deployment is claimed.

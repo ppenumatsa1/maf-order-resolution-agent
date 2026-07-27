@@ -107,17 +107,6 @@ module containerRegistry './modules/container-registry.bicep' = {
   }
 }
 
-module keyVault './modules/key-vault.bicep' = {
-  name: 'keyVault'
-  scope: rg
-  params: {
-    name: take('kv${resourceSuffix}${normalizedPrefix}', 24)
-    location: location
-    tags: commonTags
-  }
-}
-
-
 module foundry './modules/foundry.bicep' = {
   name: 'foundry'
   scope: rg
@@ -320,7 +309,7 @@ module backend './modules/container-app.bicep' = {
 var frontendEnv = [
   {
     name: 'API_BASE'
-    value: backend.outputs.url
+    value: ''
   }
   {
     name: 'NGINX_API_UPSTREAM'
@@ -401,7 +390,6 @@ module backendFoundryProjectUser './modules/foundry-project-user-role.bicep' = {
 
 output AZURE_RESOURCE_GROUP string = rg.name
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
-output AZURE_KEY_VAULT_NAME string = keyVault.outputs.name
 output FOUNDRY_ACCOUNT_NAME string = foundry.outputs.accountName
 output FOUNDRY_ACCOUNT_ENDPOINT string = foundry.outputs.accountEndpoint
 output FOUNDRY_PROJECT_NAME string = foundry.outputs.projectName

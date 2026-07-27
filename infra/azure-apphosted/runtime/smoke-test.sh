@@ -4,9 +4,10 @@ set -euo pipefail
 BASE_URL="${1:-http://localhost:8000}"
 FRONTEND_URL="${2:-}"
 
-curl --fail --silent "$BASE_URL/health" >/dev/null
+curl --fail --silent "$BASE_URL/api/health" >/dev/null
 if [[ -n "$FRONTEND_URL" ]]; then
   curl --fail --silent "$FRONTEND_URL/health" >/dev/null
+  curl --fail --silent "$FRONTEND_URL/api/health" >/dev/null
 fi
 
 RUN_RESPONSE="$(curl --silent --show-error -X POST "$BASE_URL/api/chat/run" \

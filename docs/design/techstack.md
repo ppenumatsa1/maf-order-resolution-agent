@@ -1,54 +1,24 @@
 # Tech Stack
 
-## Backend
+## Application
 
-- Python 3.10+
-- FastAPI + Uvicorn
-- Pydantic v2
-- httpx for MCP HTTP tool calls
-- OpenTelemetry SDK + OTLP exporter
+- Python, FastAPI, Uvicorn, and Pydantic v2
+- Microsoft Agent Framework (MAF) workflow runtime
+- React, Vite, and TypeScript
+- PostgreSQL with Psycopg for durable workflow state
+- MCP over streamable HTTP for optional integration
+- OpenTelemetry and Application Insights
 
-## Frontend
+## Azure target
 
-- React 18
-- Vite 5
-- TypeScript
+- Azure Container Apps for the frontend and FastAPI application
+- Azure Container Registry, Log Analytics, and Application Insights
+- Azure Database for PostgreSQL Flexible Server with managed-identity Entra
+  authentication
+- Foundry model deployments for inference and report-only evaluation only
 
-## Data and Durability
+## Skills
 
-- PostgreSQL as the durable source of truth for workflow runs, events, conversation messages, checkpoints, approvals, sessions, and eval records
-- Psycopg v3 + connection pooling for backend persistence access
-
-## Integration
-
-- MCP via streamable HTTP endpoint (`MCP_SERVER_URL`)
-- OTEL exporters configurable by environment variables
-- App Insights enabled by setting OTLP endpoint to Azure Monitor/OpenTelemetry collector
-
-## Skills Baseline
-
-Use only the task-specific skills below; do not load the full Microsoft skills catalog.
-The curated baseline contains five vendored Microsoft skills and two local
-(repository-owned) skills.
-
-| Skill | Use for | Source |
-|---|---|---|
-| `agent-framework-foundry-py` | This service's `FoundryChatClient`, `SequentialBuilder`, middleware, streamed telemetry, and checkpoint-backed HITL work | Repository-owned |
-| `azure-ai-projects-py` | Azure AI Foundry project, deployment, and evaluation work | Microsoft `skills` |
-| `azure-identity-py` | `DefaultAzureCredential`, managed identity, and Entra authentication | Microsoft `skills` |
-| `azure-monitor-opentelemetry-py` | Application Insights and Azure Monitor OpenTelemetry work | Microsoft `skills` |
-| `fastapi-router-py` | FastAPI HTTP route work | Microsoft `skills` |
-| `pydantic-models-py` | Pydantic v2 API contract work | Microsoft `skills` |
-| `postgres-psycopg-py` | PostgreSQL, Psycopg, pgvector, and Azure PostgreSQL persistence | Repository-owned |
-
-The five Microsoft skills are vendored from
-[`microsoft/skills`](https://github.com/microsoft/skills) commit
-`c33193b1b2dd14d5946e3c6213fd095ffa5b31df`. Refresh them deliberately from that
-source, preserving each complete skill directory and reviewing upstream changes before updating
-the pinned revision.
-
-`agent-framework-foundry-py` and `postgres-psycopg-py` are repository-owned because
-they encode this application's workflow and persistence boundaries. The MAF skill is
-grounded in current Microsoft Learn Agent Framework guidance and the installed
-`agent-framework-foundry` package; it intentionally does not target
-`agent-framework-azure-ai` or `AzureAIAgentsProvider`.
+Use task-specific repository skills. `agent-framework-foundry-py` covers the
+model client and MAF workflow integration; `azure-ai-projects-py` covers model
+deployments and evaluations. Neither authorizes a Foundry application host.

@@ -1,0 +1,59 @@
+name: Foundry Private Observability Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: foundry-private-observability-diagnostics
+  cancel-in-progress: false
+
+env:
+  AZD_ENVIRONMENT_NAME: foundry-private-env
+
+jobs:
+  diagnose:
+    runs-on:
+      - self-hosted
+      - foundry-private-v2
+    environment: foundry-private-env
+    defaults:
+      run:
+        shell: bash
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Authenticate with the runner's federated Azure identity
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Configure private azd environment
+        run: |
+          set -euo pipefail
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          azd config set auth.useAzCliAuth true
+          azd ext install azure.ai.agents --no-prompt
+          azd ext install azure.ai.connections --no-prompt
+          cd infra/foundry-hosted
+          AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+            azd env select "$AZD_ENVIRONMENT_NAME" --no-prompt
+
+      - name: Validate private runner target
+        run: ./scripts/foundry/validate_private_runner_environment.sh
+
+      - name: Diagnose hosted telemetry injection
+        run: ./scripts/foundry/diagnose_hosted_observability.sh

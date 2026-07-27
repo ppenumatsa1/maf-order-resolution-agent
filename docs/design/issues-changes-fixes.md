@@ -4,6 +4,63 @@ Date: 2026-07-07
 Scope: Foundry hosted-agent deployment from the private network path in
 `rg-maf-ora-foundry-v2`.
 
+## Latest execution update (2026-07-27, private ACA deployment and E2E evidence)
+
+### Completed
+
+1. Private runner deploy run
+   [`30269850423`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30269850423)
+   completed the following stages successfully:
+   - selected private AZD environment validation;
+   - private ACR target validation and backend/frontend ACA deployment;
+   - active revision image verification;
+   - hosted Foundry smoke;
+   - hosted browser E2E, including low-risk, high-risk HITL/resume, and
+     damaged-item HITL/resume scenarios.
+2. Live health remains confirmed:
+   - frontend:
+     `https://mafprv0722v3-private-frontend.livelydesert-231e6c70.eastus2.azurecontainerapps.io/`;
+   - frontend `/health`: HTTP 200;
+   - same-origin proxied `/api/health`: HTTP 200;
+   - frontend and internal backend ACA revisions: `Succeeded` and `Running`.
+3. The hosted-agent PostgreSQL readiness failure is resolved. The canonical
+   server credential and protected runtime-secret connection were synchronized,
+   the hosted agent refreshed, and the smoke gate passed.
+4. The live `ApplicationInsights` Foundry project connection was re-provisioned
+   with:
+   - category `AppInsights`;
+   - `ProjectManagedIdentity` authentication;
+   - `isSharedToAll: false`;
+   - the canonical Application Insights component resource ID in both `target`
+     and `metadata.ResourceId`;
+   - `metadata.location: eastus2`.
+
+### Current blocker
+
+The run failed only at the enforced Foundry trace-evaluation gate:
+
+- evaluation ID: `eval_0410df23db1840b0ad4b07a04d62efc6`;
+- evaluation run ID: `evalrun_ab1e5ca2795840d591cafdf7f0ddc405`;
+- exact hosted E2E conversation IDs:
+  - `conv_b49aef29c525c47300mJdIlhOEfUuAkkYzAGLz321q6ND1LcaV`;
+  - `conv_4808ac5fa423db44001r09OhQLYLzyPaWiN85pxUIqyKYntKeq`;
+  - `conv_9e1f49da5bc67bcc00TyJOgDWQSLsQITi6BfkpB56sPoj6QqfB`;
+- service response: `UserError: Application Insights resource id is required
+  for trace evaluations.`
+
+This is now a reproducible Foundry evaluation-service/project-association
+blocker, not an ACA, private DNS, PostgreSQL, hosted-agent readiness, or
+browser wiring failure. The connection’s non-secret control-plane configuration
+was read back after provisioning and matches the required project connection
+contract above.
+
+### Deferred until evaluation evidence is green
+
+Do **not** run PostgreSQL public-access lockdown yet. Fresh ACA and
+hosted-agent private-connectivity proof, telemetry verification, and final
+evidence publication remain required after the Foundry trace-evaluation
+association issue is resolved.
+
 ## Current status (2026-07-24, private runner recovery)
 
 - Private ACA infrastructure provision succeeded.

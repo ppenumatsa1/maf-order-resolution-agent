@@ -84,7 +84,7 @@ if grep -q '"applicationinsights_connection_string":{"present":true' <<<"$diagno
   exit 0
 fi
 
-if ! grep -q 'Hosted observability initialized:.*azure_monitor=True' <<<"$diagnostic_lines"; then
+if ! grep -q '"maf_monitor_instrumentation_key":{"present":true,"placeholder":false,"has_instrumentation_key":false,"length":36' <<<"$diagnostic_lines"; then
   echo "Hosted telemetry is not configured by either platform injection or the protected fallback."
   exit 1
 fi

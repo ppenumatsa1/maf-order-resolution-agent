@@ -92,8 +92,7 @@ browser E2E. The trace evaluator still failed with the same service response:
 - error: `Application Insights resource id is required for trace evaluations.`
 
 Therefore the remaining blocker is not missing project-identity telemetry write
-RBAC. It is a Foundry trace-evaluation project-association/telemetry-ingestion
-issue that requires platform-level investigation before the evaluation,
+RBAC. It requires platform-level investigation before the evaluation,
 telemetry, connectivity-proof, and PostgreSQL-lockdown gates can proceed.
 
 ### Live binding verification and diagnostics gate (2026-07-27)
@@ -126,6 +125,35 @@ diagnostics for that injection from the in-VNet runner. GitHub cannot dispatch
 a workflow that exists only on a feature branch, so this gate must be merged
 to the default branch before it can run. No deployment, provisioning, or
 runtime setting mutation is required.
+
+### Confirmed hosted telemetry platform defect (2026-07-27)
+
+Read-only private-runner diagnostic run
+[`30273723366`](https://github.com/ppenumatsa1/maf-order-resolution-agent/actions/runs/30273723366)
+reached the active hosted agent:
+
+- agent: `order-resolution-hosted`, version `23`, status `active`;
+- project connection: resolved to the canonical Application Insights resource;
+- startup diagnostic:
+  `applicationinsights_connection_string.present=false`.
+
+This is conclusive: Foundry did **not** inject the reserved
+`APPLICATIONINSIGHTS_CONNECTION_STRING` variable into the private hosted-agent
+container. That missing variable explains both zero hosted-flow telemetry and
+the trace evaluator's resource-ID failure.
+
+Current Microsoft hosted-agent guidance states that Foundry injects this
+platform-reserved variable when project monitoring is enabled and that an agent
+must not redeclare it in `agent.yaml`. The project connection and component
+already meet that documented precondition, so application code must not add a
+duplicate mapping or reconstruct the value.
+
+The previous public lane used an `ApiKey`, shared project connection and
+explicit connection-string environment mappings. That is not a permitted repair
+for this private lane: it would replace `ProjectManagedIdentity` and
+`isSharedToAll: false` with a secret-bearing configuration. Preserve the
+private identity contract and escalate the platform discrepancy with the
+project connection ID, hosted version `23`, and diagnostic run ID above.
 
 ### Deferred until evaluation evidence is green
 

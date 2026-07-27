@@ -13,6 +13,9 @@ concurrency:
 
 env:
   AZD_ENVIRONMENT_NAME: foundry-private-env
+  TARGET_RESOURCE_GROUP: rg-maf-ora-foundry-v2
+  TARGET_FOUNDRY_PROJECT: order-resolution
+  TARGET_POSTGRES_DATABASE: maf_workflow
 
 jobs:
   diagnose:

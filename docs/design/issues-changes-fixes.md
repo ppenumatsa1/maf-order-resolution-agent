@@ -96,6 +96,37 @@ RBAC. It is a Foundry trace-evaluation project-association/telemetry-ingestion
 issue that requires platform-level investigation before the evaluation,
 telemetry, connectivity-proof, and PostgreSQL-lockdown gates can proceed.
 
+### Live binding verification and diagnostics gate (2026-07-27)
+
+The canonical Application Insights resource ID is confirmed in the live
+control plane:
+
+```text
+/subscriptions/4f18d577-3506-4a11-85e5-a83b14727a84/resourceGroups/rg-maf-ora-foundry-v2/providers/Microsoft.Insights/components/mafprv0722v3-mon-4aiw7fw5gjdo4-appi
+```
+
+The `ApplicationInsights` project connection's `target` and
+`metadata.ResourceId` both equal that ID. It remains `AppInsights` with
+`ProjectManagedIdentity`, `isSharedToAll: false`, and `eastus2` metadata. A
+direct ARM read also confirms that this component is workspace-based and linked
+to `mafprv0722v3-mon-4aiw7fw5gjdo4-law`; the project identity has `Log
+Analytics Reader` at both required scopes.
+
+Current Foundry documentation confirms that the conversation-ID evaluation
+payload already used by this repository must not carry an Application Insights
+target. `APPINSIGHTS_RESOURCE_ID` is needed only by callers that manually
+query Application Insights to collect trace IDs. The remaining runtime
+contract is that Foundry monitoring injects the reserved
+`APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable into every hosted
+agent version.
+
+Commit `6ef5876` adds a read-only `Foundry Private Observability Diagnostics`
+workflow. It validates the live connection and inspects only sanitized startup
+diagnostics for that injection from the in-VNet runner. GitHub cannot dispatch
+a workflow that exists only on a feature branch, so this gate must be merged
+to the default branch before it can run. No deployment, provisioning, or
+runtime setting mutation is required.
+
 ### Deferred until evaluation evidence is green
 
 Do **not** run PostgreSQL public-access lockdown yet. Fresh ACA and

@@ -57,29 +57,17 @@ if [[ -z "$session_id" ]]; then
       --new-conversation \
       --new-session \
       --no-prompt >/dev/null
-  sessions_json="$(
-    AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
-      azd ai agent sessions list --agent-name "$AGENT_NAME" --limit 10 --output json --no-prompt
-  )"
-  session_id="$(
-    printf '%s' "$sessions_json" |
-      jq -r 'first(.. | objects | .id? | strings) // empty'
-  )"
-  if [[ -z "$session_id" ]]; then
-    echo "The low-risk diagnostic probe did not create a hosted-agent session."
-    exit 1
-  fi
 fi
 
+monitor_args=("$AGENT_NAME" --tail 250 --utc --no-prompt)
+if [[ -n "$session_id" ]]; then
+  monitor_args+=(--session-id "$session_id")
+fi
 diagnostic_lines="$(
   AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
-    azd ai agent monitor "$AGENT_NAME" \
-      --session-id "$session_id" \
-      --tail 250 \
-      --utc \
-      --no-prompt 2>&1 |
-    grep -E 'HOSTED_ENV_DIAGNOSTIC|Hosted observability initialized' |
-    tail -20 || true
+    azd ai agent monitor "${monitor_args[@]}" 2>&1 |
+      grep -E 'HOSTED_ENV_DIAGNOSTIC|Hosted observability initialized' |
+      tail -20 || true
 )"
 if [[ -z "$diagnostic_lines" ]]; then
   echo "The selected hosted-agent session has no startup observability diagnostic."
